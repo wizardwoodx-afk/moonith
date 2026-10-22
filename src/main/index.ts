@@ -1,0 +1,260 @@
+import {
+  app,
+  dialog,
+  Menu,
+  nativeImage,
+  Notification,
+  protocol,
+  Tray
+} from 'electron'
+import { promises as fs } from 'node:fs'
+import { join } from 'node:path'
+import { getPaths, taskWorkspace } from './paths'
+import { store } from './store'
+import { registerIpc } from './ipc'
+import { createMainWindow, getMainWindow, showMainWindow } from './window'
+import { subscribeTaskEvents } from './emitter'
+import { mcpManager } from './services/mcp'
+import { scheduler } from './services/scheduler'
+import { browserService } from './services/browser'
+import { tableService } from './services/table'
+import { channelService } from './services/channels'
+import { approvals } from './approvals'
+import { isWithin } from './security'
+import { mimeForPath } from './services/documents'
+
+let tray: Tray | null = null
+let isQuitting = false
+let trayNoticeShown = false
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'knight-file',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true
+    }
+  }
+])
+
+function iconPath(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'icon.png')
+    : join(__dirname, '../../resources/icon.png')
+}
+
+function setupMenu(): void {
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Open Knight Cowork',
+          accelerator: 'CmdOrCtrl+Shift+O',
+          click: () => showMainWindow()
+        },
+        { type: 'separator' },
+        { role: 'quit', label: 'Quit Knight Cowork' }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'Window',
+      submenu: [{ role: 'minimize' }, { role: 'close' }]
+    }
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
+function setupTray(): void {
+  const image = nativeImage.createFromPath(iconPath())
+  if (image.isEmpty()) {
+    console.warn('Tray icon missing at', iconPath())
+    return
+  }
+  tray = new Tray(image.resize({ width: 16, height: 16 }))
+  tray.setToolTip('Knight Cowork')
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Open Knight Cowork', click: () => showMainWindow() },
+      { type: 'separator' },
+      {
+        label: 'Quit',
+        click: () => {
+          isQuitting = true
+          app.quit()
+        }
+      }
+    ])
+  )
+  tray.on('click', () => showMainWindow())
+  tray.on('double-click', () => showMainWindow())
+}
+
+function notify(title: string, body: string): void {
+  if (!Notification.isSupported()) return
+  const notification = new Notification({ title, body, icon: iconPath() })
+  notification.on('click', () => showMainWindow())
+  notification.show()
+}
+
+function setupTaskNotifications(): void {
+  const previous = new Map<string, string>()
+  subscribeTaskEvents((event) => {
+    if (event.type !== 'task') return
+    const task = event.task
+    const before = previous.get(task.id)
+    previous.set(task.id, task.status)
+    if (!before || before === task.status) return
+    if (task.status !== 'done' && task.status !== 'error') return
+    const win = getMainWindow()
+    const visible = Boolean(win && win.isVisible() && win.isFocused())
+    if (visible) return
+    if (task.status === 'error') {
+      notify('Task needs attention', task.error || task.title)
+    } else {
+      notify('Task complete', task.title)
+    }
+  })
+}
+
+function registerFileProtocol(): void {
+  protocol.handle('knight-file', async (request) => {
+    try {
+      const url = new URL(request.url)
+      const segments = url.pathname
+        .split('/')
+        .filter(Boolean)
+        .map((segment) => decodeURIComponent(segment))
+      const taskId = segments.shift()
+      if (!taskId || !store.getTask(taskId)) {
+        return new Response('Not found', { status: 404 })
+      }
+      const workspace = taskWorkspace(taskId)
+      const target = join(workspace, ...segments)
+      if (!isWithin(workspace, target)) {
+        return new Response('Forbidden', { status: 403 })
+      }
+      const data = await fs.readFile(target)
+      const mime = mimeForPath(target) ?? 'application/octet-stream'
+      const headers: Record<string, string> = {
+        'content-type': mime,
+        'x-content-type-options': 'nosniff',
+        'cache-control': 'no-store',
+        'access-control-allow-origin': '*'
+      }
+      if (mime === 'text/html') {
+        headers['content-security-policy'] =
+          "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"
+      }
+      return new Response(new Uint8Array(data), { headers })
+    } catch {
+      return new Response('Not found', { status: 404 })
+    }
+  })
+}
+
+function setupWindowCloseBehavior(): void {
+  const win = getMainWindow()
+  if (!win) return
+  win.on('close', (event) => {
+    if (isQuitting) return
+    const hasSchedules = store.listSchedules().some((schedule) => schedule.enabled)
+    if (hasSchedules) {
+      event.preventDefault()
+      win.hide()
+      if (!trayNoticeShown) {
+        trayNoticeShown = true
+        notify(
+          'Knight Cowork is still running',
+          'Your scheduled tasks stay active. Open the app from the tray, or choose Quit in the tray menu.'
+        )
+      }
+    }
+  })
+}
+
+app.setAppUserModelId('com.knightcowork.app')
+
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => showMainWindow())
+
+  app.whenReady().then(async () => {
+    try {
+      await store.init()
+      registerIpc()
+      registerFileProtocol()
+      setupMenu()
+      setupTray()
+      setupTaskNotifications()
+
+      createMainWindow()
+      setupWindowCloseBehavior()
+
+      scheduler.init()
+      void mcpManager.startAll()
+      void channelService.start()
+
+      app.on('activate', () => {
+        if (getMainWindow()) showMainWindow()
+        else createMainWindow()
+        setupWindowCloseBehavior()
+      })
+    } catch (error) {
+      await dialog.showMessageBox({
+        type: 'error',
+        title: 'Knight Cowork could not start',
+        message: error instanceof Error ? error.message : String(error),
+        detail: `Data folder: ${getPaths().root}`
+      })
+      app.quit()
+    }
+  })
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit()
+  })
+
+  app.on('before-quit', () => {
+    isQuitting = true
+    scheduler.shutdown()
+    approvals.cancelAll()
+    browserService.disposeAll()
+    tableService.dispose()
+    channelService.dispose()
+    void mcpManager.closeAll()
+    tray?.destroy()
+    tray = null
+  })
+}

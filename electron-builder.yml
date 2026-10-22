@@ -1,0 +1,25 @@
+appId: com.knightcowork.app
+productName: Knight Cowork
+copyright: Copyright © 2026 Knight Cowork
+directories:
+  output: release
+  buildResources: resources
+extraResources:
+  - from: resources/icon.png
+    to: icon.png
+files:
+  - out/**/*
+  - package.json
+asar: true
+npmRebuild: false
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Knight Cowork
