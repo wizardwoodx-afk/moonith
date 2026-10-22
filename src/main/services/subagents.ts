@@ -17,7 +17,7 @@ class SubAgentService {
         ? {
             ...run,
             status: 'stopped' as const,
-            error: 'Interrupted when Knight closed.',
+            error: 'Interrupted when SelfImpulse closed.',
             endedAt: run.endedAt ?? nowIso()
           }
         : run

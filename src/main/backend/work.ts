@@ -4,7 +4,7 @@ import type { SecretStore } from './security'
 import type { BackendStore } from './store'
 
 /**
- * Microsoft integration for Knight Cowork.
+ * Microsoft integration for SelfImpulse.
  *
  * Two things live here:
  *
@@ -338,7 +338,7 @@ export class WorkAccount {
 
   /**
    * Start the device-code flow. The app shows the code, the user signs in on
-   * their own machine, and Knight polls for the token.
+   * their own machine, and SelfImpulse polls for the token.
    */
   async beginSignIn(clientId: string): Promise<WorkSignInPrompt> {
     if (!clientId) throw new Error('A work account app client id is required.')

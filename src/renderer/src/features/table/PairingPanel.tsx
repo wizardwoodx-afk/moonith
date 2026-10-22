@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import {
   ArrowRight,
-  ChessKnight,
   Handshake,
   KeyRound,
   LockKeyhole,
@@ -9,6 +8,7 @@ import {
   Users,
   X
 } from 'lucide-react'
+import { BrandMark } from '../../components/BrandMark'
 import { Button, Spin } from '../../components/ui'
 import { cn } from '../../lib/utils'
 import { getLocalProfile } from '../../lib/localProfile'
@@ -38,7 +38,7 @@ function EngineCard({
             : 'border-accent/25 bg-accent-soft/50 text-accent-ink'
         )}
       >
-        {waiting ? <Users size={15} strokeWidth={1.9} /> : <ChessKnight size={15} strokeWidth={1.9} />}
+        {waiting ? <Users size={15} strokeWidth={1.9} /> : <BrandMark size={15} strokeWidth={1.9} />}
       </div>
       <p className={cn('mt-2.5 truncate text-[12px] font-medium', waiting ? 'text-muted' : 'text-ink')}>
         {name}

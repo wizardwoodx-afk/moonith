@@ -6,7 +6,7 @@ const HELP_ROWS = [
   { id: 'shortcuts', label: 'Keyboard shortcuts', icon: Keyboard },
   { id: 'profile', label: 'Profile & usage', icon: UserRound },
   { id: 'mcp', label: 'Extension management', icon: Plug },
-  { id: 'about', label: 'About Knight Cowork', icon: Info }
+  { id: 'about', label: 'About SelfImpulse', icon: Info }
 ] as const
 
 export function HelpButton() {

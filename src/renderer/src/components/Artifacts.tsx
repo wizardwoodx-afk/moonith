@@ -67,7 +67,7 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
             </div>
             <p className="mt-3 text-[12.5px] font-medium">Files will appear here</p>
             <p className="mt-1 text-[11px] leading-relaxed text-faint">
-              Everything Knight creates lands in this task.
+              Everything SelfImpulse creates lands in this task.
             </p>
           </div>
         ) : null}

@@ -217,7 +217,7 @@ class McpStdioClient implements McpClient {
     const res = await this.request('initialize', {
       protocolVersion: '2024-11-05',
       capabilities: { tools: {} },
-      clientInfo: { name: 'knight-cowork', version: '0.1.0' }
+      clientInfo: { name: 'selfimpulse', version: '0.1.0' }
     })
     this.serverInfo = (isRecord(res) ? res.serverInfo ?? null : null) as McpServerInfo | null
     this.proc!.stdin.write(
@@ -280,7 +280,7 @@ class McpHttpClient implements McpClient {
     const res = await this.request('initialize', {
       protocolVersion: '2024-11-05',
       capabilities: { tools: {} },
-      clientInfo: { name: 'knight-cowork', version: '0.1.0' }
+      clientInfo: { name: 'selfimpulse', version: '0.1.0' }
     })
     this.serverInfo = (isRecord(res) ? res.serverInfo ?? null : null) as McpServerInfo | null
     return res

@@ -116,7 +116,7 @@ export function CaptainComposer({
 
   return (
     <div className={cn('w-full', className)}>
-      <div className="rounded-xl border border-line bg-surface px-3 pt-2.5 pb-2 shadow-[0_22px_50px_-38px_rgba(0,0,0,0.85)] transition-colors focus-within:border-line-strong">
+      <div className="rounded-xl border border-line bg-surface px-3 pt-2.5 pb-2 shadow-[0_32px_64px_-32px_rgba(0,0,0,0.9)] transition-all focus-within:border-line-strong focus-within:shadow-[0_32px_64px_-32px_rgba(0,0,0,0.9),0_0_0_1px_rgba(255,255,255,0.01)]">
         <textarea
           ref={textareaRef}
           value={draft}

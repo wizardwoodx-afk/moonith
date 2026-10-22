@@ -35,7 +35,7 @@ class BrowserService {
       width: 1280,
       height: 900,
       show: false,
-      title: 'Knight Browser',
+      title: 'SelfImpulse Browser',
       backgroundColor: '#f7f4ee',
       webPreferences: {
         sandbox: true,

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
-  ChessKnight,
   Circle,
   FolderOpen,
   Loader2,
@@ -15,6 +14,7 @@ import {
   Check,
   MonitorUp
 } from 'lucide-react'
+import { BrandMark } from '../components/BrandMark'
 import { toast } from 'sonner'
 import type { AttachmentRef, ChatMessage, Task, TaskStatus } from '@shared/types'
 import { useApp } from '../store'
@@ -126,7 +126,7 @@ function TaskHeader({
         </div>
         <div className="mt-0.5 flex items-center gap-1.5 truncate text-[10.5px] text-faint">
           <span className="inline-flex items-center gap-1">
-            {task.mode === 'cowork' ? <ChessKnight size={10} /> : <MessageCircle size={10} />}
+            {task.mode === 'cowork' ? <BrandMark size={10} /> : <MessageCircle size={10} />}
             {task.mode === 'cowork' ? 'Cowork' : 'Chat'}
           </span>
           <span>·</span>
@@ -319,9 +319,9 @@ export function TaskView() {
             {visible.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-line bg-surface text-accent">
-                  <ChessKnight size={19} />
+                  <BrandMark size={19} />
                 </div>
-                <p className="mt-3 text-[13px] font-medium">Knight is getting ready</p>
+                <p className="mt-3 text-[13px] font-medium">SelfImpulse is getting ready</p>
                 <p className="mt-1 max-w-sm text-[12px] leading-relaxed text-faint">
                   {task.objective || 'Send a message to begin this task.'}
                 </p>
@@ -358,7 +358,7 @@ export function TaskView() {
                 return (
                   <div key={message.id} className="message-in flex gap-3">
                     <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-accent">
-                      <ChessKnight size={12} />
+                      <BrandMark size={12} />
                     </div>
                     <div className="min-w-0 flex-1 pt-0.5">
                       <p className="mb-1.5 text-[10.5px] font-medium text-muted">Captain</p>

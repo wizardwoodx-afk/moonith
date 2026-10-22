@@ -26,7 +26,7 @@ export const SETTINGS_PANES = [
 
 export type SettingsPaneId = (typeof SETTINGS_PANES)[number]
 
-export type SettingsGroup = 'Personal' | 'Agents' | 'Integrations' | 'Knight'
+export type SettingsGroup = 'Personal' | 'Agents' | 'Integrations' | 'SelfImpulse'
 
 export type SettingsStatus = 'live' | 'preview' | 'planned'
 
@@ -324,14 +324,14 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   {
     id: 'about',
     label: 'About',
-    group: 'Knight',
+    group: 'SelfImpulse',
     summary: 'Version and storage.',
     keywords: ['version', 'platform', 'data folder', 'license', 'electron', 'storage'],
     status: 'live'
   }
 ]
 
-export const SETTINGS_GROUPS: SettingsGroup[] = ['Personal', 'Agents', 'Integrations', 'Knight']
+export const SETTINGS_GROUPS: SettingsGroup[] = ['Personal', 'Agents', 'Integrations', 'SelfImpulse']
 
 export function visibleSettingsNav(): SettingsNavItem[] {
   return SETTINGS_NAV.filter((item) => !item.hidden)

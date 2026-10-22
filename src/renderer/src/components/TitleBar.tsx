@@ -248,7 +248,7 @@ export function TitleBar({
             <div>
               <MenuAction
                 icon={<Info size={13} />}
-                label="About Knight Cowork"
+                label="About SelfImpulse"
                 onClick={() => openSettings('about')}
                 close={close}
               />

@@ -40,31 +40,31 @@
 /* Themes are applied on <html data-theme>. Moonlight is the house default. */
 :root,
 [data-theme='moonlight'] {
-  --c-canvas: #09090b;
-  --c-canvas-deep: #060608;
-  --c-sidebar: #101013;
-  --c-panel: #111114;
-  --c-panel-2: #0e0e11;
-  --c-surface: #151518;
-  --c-surface-2: #1a1a1e;
-  --c-surface-3: #202025;
-  --c-ink: #d8d8dc;
-  --c-muted: #929299;
-  --c-faint: #6c6c74;
-  --c-line: #242429;
-  --c-line-strong: #35353c;
-  --c-accent: #c2c2cb;
-  --c-accent-soft: #202027;
-  --c-accent-ink: #e6e6ec;
+  --c-canvas: #0a0a0c;
+  --c-canvas-deep: #050506;
+  --c-sidebar: #111113;
+  --c-panel: #121214;
+  --c-panel-2: #0f0f11;
+  --c-surface: #171719;
+  --c-surface-2: #1c1c20;
+  --c-surface-3: #232326;
+  --c-ink: #e4e4e7;
+  --c-muted: #9b9ba1;
+  --c-faint: #6e6e76;
+  --c-line: #27272b;
+  --c-line-strong: #3a3a3f;
+  --c-accent: #a5a5b3;
+  --c-accent-soft: #242428;
+  --c-accent-ink: #f4f4f5;
   --c-gold: #d9ccb0;
   --c-gold-soft: #2a261d;
-  --c-positive: #84c9a4;
-  --c-warn: #dfba7d;
-  --c-danger: #e08d80;
-  --c-ink-button: #d8d8dc;
-  --c-on-ink: #09090b;
-  --c-identity-a: #d59a82;
-  --c-identity-b: #93b6d8;
+  --c-positive: #86efac;
+  --c-warn: #fbbf24;
+  --c-danger: #f87171;
+  --c-ink-button: #e4e4e7;
+  --c-on-ink: #0a0a0c;
+  --c-identity-a: #f59e0b;
+  --c-identity-b: #60a5fa;
   color-scheme: dark;
 }
 
@@ -325,11 +325,12 @@ button:disabled {
   background-clip: content-box;
 }
 
-.composer-shadow {
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.03) inset,
-    0 28px 60px -36px rgba(0, 0, 0, 0.7);
-}
+  .composer-shadow {
+   box-shadow:
+     0 1px 0 rgba(255, 255, 255, 0.02) inset,
+     0 40px 80px -40px rgba(0, 0, 0, 0.8),
+     0 0 0 1px rgba(255, 255, 255, 0.01);
+  }
 
 .display {
   font-family: var(--font-display);

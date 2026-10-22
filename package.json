@@ -1,9 +1,10 @@
 {
-  "name": "knight-cowork",
+  "name": "selfimpulse",
+  "productName": "SelfImpulse",
   "version": "0.1.0",
-  "description": "Knight Cowork — a local-first agentic desktop workspace",
+  "description": "SelfImpulse — a local-first agentic desktop workspace",
   "main": "./out/main/index.js",
-  "author": "Knight Cowork",
+  "author": "SelfImpulse",
   "license": "MIT",
   "private": true,
   "scripts": {

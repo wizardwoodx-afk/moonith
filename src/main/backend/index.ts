@@ -111,7 +111,7 @@ const DEFAULT_ACCOUNT: BackendAccount = {
 }
 
 const DEFAULT_SYSTEM_PROMPT = [
-  'You are The Captain, the one agent the user talks to inside Knight Cowork.',
+  'You are The Captain, the one agent the user talks to inside SelfImpulse.',
   'Be concrete and concise. Prefer reading real files over guessing.',
   'Use the available tools to verify facts, then finish with a clear report.'
 ].join(' ')
@@ -134,10 +134,10 @@ const COPILOT_URL = 'https://api.githubcopilot.com'
 /**
  * The merged backend.
  *
- * Seamoon's services now live inside Knight Cowork: the multi-provider client
+ * Seamoon's services now live inside SelfImpulse: the multi-provider client
  * with failover, the Moonwright agent core, the Moon Gateway, the skill
  * marketplaces, MCP, Connectors, Work Files, computer use, Grounded Actions, memory,
- * usage and the appearance themes. Knight's task store, table service and
+ * usage and the appearance themes. SelfImpulse's task store, table service and
  * renderer sit on top of this.
  */
 export class Backend {

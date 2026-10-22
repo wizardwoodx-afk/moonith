@@ -441,7 +441,7 @@ class AgentRuntime {
     )
     const toolMap = new Map(allowed.map((tool) => [tool.name, tool]))
     const workspace = ensureTaskWorkspace(task.id)
-    const system = `You are ${name}, a Crew sub-agent inside Knight Cowork. The Captain delegated one focused job to you.
+    const system = `You are ${name}, a Crew sub-agent inside SelfImpulse. The Captain delegated one focused job to you.
 Do the job with the tools you have, verify what you can, then reply with a compact report: findings, file paths, and anything the Captain must know.
 You never address the user directly, never ask questions, and never claim work you did not do.
 Workspace: ${workspace}

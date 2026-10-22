@@ -25,10 +25,10 @@ const variantClasses: Record<ButtonVariant, string> = {
   accent:
     'bg-accent text-on-ink hover:brightness-110 border border-transparent disabled:opacity-40',
   secondary:
-    'bg-surface text-ink border border-line hover:bg-surface-2 disabled:opacity-45',
+    'bg-surface text-ink border border-line hover:bg-surface-2 hover:border-line-strong disabled:opacity-45',
   ghost:
     'bg-transparent text-muted border border-transparent hover:bg-surface-2 hover:text-ink disabled:opacity-40',
-  soft: 'bg-surface-2 text-ink border border-transparent hover:bg-line/60 disabled:opacity-45',
+  soft: 'bg-surface-2 text-ink border border-transparent hover:bg-surface-3 disabled:opacity-45',
   danger:
     'bg-transparent text-danger border border-danger/25 hover:bg-danger/10 disabled:opacity-40'
 }

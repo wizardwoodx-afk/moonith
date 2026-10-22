@@ -2,13 +2,13 @@ import { useState } from 'react'
 import {
   ArrowUpRight,
   CheckCircle2,
-  ChessKnight,
   FileText,
   Presentation,
   ShieldCheck,
   Sparkles,
   Table2
 } from 'lucide-react'
+import { BrandMark } from '../components/BrandMark'
 import type { AttachmentRef, PermissionMode, TaskMode } from '@shared/types'
 import { useApp } from '../store'
 import { cn, statusLabel, timeAgo } from '../lib/utils'
@@ -116,7 +116,7 @@ export function Home() {
         <div className="rise">
           <div className="mb-5 flex items-center gap-2.5 text-[11.5px] font-medium text-muted">
             <span className="flex h-7 w-7 items-center justify-center rounded-[9px] border border-line bg-surface/70 text-accent-ink">
-              <ChessKnight size={14} />
+              <BrandMark size={14} />
             </span>
             {greeting()}
           </div>
@@ -124,7 +124,7 @@ export function Home() {
             What should we <span className="italic text-accent">work</span> on?
           </h1>
           <p className="mt-3 max-w-[520px] text-[13.5px] leading-relaxed text-muted">
-            Describe an outcome. Knight plans it, does the work with real tools, and leaves finished
+            Describe an outcome. SelfImpulse plans it, does the work with real tools, and leaves finished
             files in your folder.
           </p>
         </div>
@@ -220,7 +220,7 @@ export function Home() {
                     {task.status === 'done' ? (
                       <CheckCircle2 size={14} className="text-positive" />
                     ) : (
-                      <ChessKnight size={14} />
+                      <BrandMark size={14} />
                     )}
                   </span>
                   <span className="min-w-0 flex-1">

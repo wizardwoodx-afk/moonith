@@ -143,7 +143,7 @@ export function SchedulesView() {
               Work that runs itself.
             </h1>
             <p className="mt-1.5 max-w-[540px] text-[12.5px] leading-relaxed text-muted">
-              Turn a recurring outcome into a schedule. Knight starts a fresh cowork task on your
+              Turn a recurring outcome into a schedule. SelfImpulse starts a fresh cowork task on your
               chosen rhythm and leaves the results in its workspace.
             </p>
           </div>
@@ -156,8 +156,8 @@ export function SchedulesView() {
         <div className="mt-6 flex items-start gap-2.5 rounded-xl border border-line bg-surface/50 px-3.5 py-3">
           <Info size={13} className="mt-0.5 shrink-0 text-muted" />
           <div className="min-w-0 flex-1 text-[11.5px] leading-relaxed text-muted">
-            Schedules fire while Knight Cowork is running. If you close the window while a schedule
-            is enabled, Knight stays in the tray so work can still start on time.
+            Schedules fire while SelfImpulse is running. If you close the window while a schedule
+            is enabled, SelfImpulse stays in the tray so work can still start on time.
           </div>
           {!hasProviders ? (
             <Button variant="secondary" size="sm" onClick={() => openSettings('providers')}>
@@ -179,7 +179,7 @@ export function SchedulesView() {
             <p className="mt-4 text-[14px] font-medium">Nothing scheduled yet</p>
             <p className="mt-1 max-w-md text-[12px] leading-relaxed text-faint">
               A Monday morning research brief. A Friday wrap-up. A monthly budget refresh. Set a
-              prompt once and let Knight repeat the work.
+              prompt once and let SelfImpulse repeat the work.
             </p>
             <div className="mt-5 flex flex-wrap justify-center gap-1.5">
               {[
@@ -391,7 +391,7 @@ function ScheduleModal({
   const submit = async (): Promise<void> => {
     setError(null)
     if (!prompt.trim()) {
-      setError('Describe what Knight should do each time this runs.')
+      setError('Describe what SelfImpulse should do each time this runs.')
       return
     }
     const fields = cronValue.split(/\s+/).filter(Boolean)
@@ -434,7 +434,7 @@ function ScheduleModal({
       width="max-w-[600px]"
       icon={<CalendarClock size={17} />}
       title={record ? 'Edit schedule' : 'New schedule'}
-      subtitle="Knight opens a fresh task and follows your prompt each time this fires."
+      subtitle="SelfImpulse opens a fresh task and follows your prompt each time this fires."
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onClose}>

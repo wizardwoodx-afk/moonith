@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { mkdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import { copyLegacyUserData } from './userDataMigration'
 
 export interface AppPaths {
   root: string
@@ -37,6 +38,17 @@ export function getPaths(): AppPaths {
   }
   cached = paths
   return paths
+}
+
+/**
+ * The rebrand moved `userData` from `knight-cowork` to `SelfImpulse`. Copy the
+ * previous profile once, before the store opens it.
+ */
+export function migrateLegacyUserData(): void {
+  const next = app.getPath('userData')
+  const legacy = join(app.getPath('appData'), 'knight-cowork')
+  if (resolve(legacy).toLowerCase() === resolve(next).toLowerCase()) return
+  copyLegacyUserData(legacy, next)
 }
 
 export function taskWorkspace(id: string): string {

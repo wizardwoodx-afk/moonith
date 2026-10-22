@@ -52,7 +52,7 @@ export const THEMES: Theme[] = [
   {
     id: 'moonlight',
     label: 'Moonlight',
-    description: 'Knight’s monochrome night: black glass, silver type, one cool light.',
+    description: 'SelfImpulse’s monochrome night: black glass, silver type, one cool light.',
     kind: 'dark',
     tokens: {
       ...base,
@@ -86,7 +86,7 @@ export const THEMES: Theme[] = [
   {
     id: 'bee',
     label: 'Bee',
-    description: 'Knight’s working warmth: smoked olive, honey gold, quiet amber.',
+    description: 'SelfImpulse’s working warmth: smoked olive, honey gold, quiet amber.',
     kind: 'dark',
     tokens: {
       ...base,

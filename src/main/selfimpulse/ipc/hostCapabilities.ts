@@ -227,7 +227,7 @@ export function capabilities(): CapabilityTable {
 }
 
 /**
- * The table for Knight Cowork's main process.
+ * The table for SelfImpulse's main process.
  *
  * There is no `window` here, so the renderer shape tests cannot answer. Each
  * `true` below is a capability this host really implements (see

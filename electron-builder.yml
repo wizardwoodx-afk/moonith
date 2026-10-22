@@ -1,6 +1,6 @@
-appId: com.knightcowork.app
-productName: Knight Cowork
-copyright: Copyright © 2026 Knight Cowork
+appId: com.selfimpulse.app
+productName: SelfImpulse
+copyright: Copyright © 2026 SelfImpulse
 directories:
   output: release
   buildResources: resources
@@ -17,9 +17,10 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: resources/icon.png
+  icon: resources/icon.ico
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
-  shortcutName: Knight Cowork
+  shortcutName: SelfImpulse
+  artifactName: SelfImpulse-Setup-${version}.${ext}

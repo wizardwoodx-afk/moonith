@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import {
   ArrowUp,
   Check,
-  ChessKnight,
   ChevronDown,
   Cpu,
   FileText,
@@ -16,6 +15,7 @@ import {
   X,
   Zap
 } from 'lucide-react'
+import { BrandMark } from './BrandMark'
 import { toast } from 'sonner'
 import type { AttachmentRef, PermissionMode, TaskMode } from '@shared/types'
 import { useApp } from '../store'
@@ -57,7 +57,7 @@ const PERMISSIONS: {
     value: 'manual',
     label: 'Manual',
     icon: Shield,
-    description: 'Knight asks before actions that change files or run commands.'
+    description: 'SelfImpulse asks before actions that change files or run commands.'
   },
   {
     value: 'auto',
@@ -178,7 +178,7 @@ export function Composer({
             (running
               ? 'Add instructions to steer this task…'
               : mode === 'cowork'
-                ? 'Describe an outcome. Knight will plan it and do the work…'
+                ? 'Describe an outcome. SelfImpulse will plan it and do the work…'
                 : 'Ask a question or think something through…')
           }
           rows={1}
@@ -234,7 +234,7 @@ export function Composer({
                     value: 'cowork',
                     label: (
                       <>
-                        <ChessKnight size={11} />
+                        <BrandMark size={11} />
                         Cowork
                       </>
                     ),
@@ -285,7 +285,7 @@ export function Composer({
                 </div>
                 {folders.length === 0 ? (
                   <div className="px-2 pt-1 pb-2 text-[12px] leading-relaxed text-muted">
-                    Without a folder, Knight works in an isolated task workspace. Add a folder to
+                    Without a folder, SelfImpulse works in an isolated task workspace. Add a folder to
                     work on your own files.
                   </div>
                 ) : (
@@ -476,7 +476,7 @@ export function Composer({
         {running ? (
           <span className="flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-accent breathing" />
-            Knight is working
+            SelfImpulse is working
           </span>
         ) : null}
       </div>

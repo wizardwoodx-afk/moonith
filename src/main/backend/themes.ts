@@ -1,5 +1,5 @@
 /**
- * Seamoon's interface styles, ported into Knight Cowork's backend.
+ * Seamoon's interface styles, ported into SelfImpulse's backend.
  *
  * One table, one source of truth: it generates the CSS custom-property blocks
  * AND drives the theme cards in Settings → Appearance, so a colour can never

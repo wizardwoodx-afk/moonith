@@ -114,7 +114,7 @@ export function cronDescription(cron: string): string {
 }
 
 export function countdownHint(): string {
-  return 'Runs while Knight Cowork is open'
+  return 'Runs while SelfImpulse is open'
 }
 
 export function truncate(value: string, max = 120): string {

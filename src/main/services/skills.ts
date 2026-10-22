@@ -282,7 +282,7 @@ class SkillService {
     try {
       json = JSON.parse(result.stdout) as { items?: Array<Record<string, unknown>> }
     } catch {
-      throw new Error('Marketplace returned a response Knight could not read.')
+      throw new Error('Marketplace returned a response SelfImpulse could not read.')
     }
     const results = (json.items ?? []).map((item) => {
       const identifier = String(item.identifier ?? '')

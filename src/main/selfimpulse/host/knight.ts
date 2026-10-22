@@ -1,10 +1,10 @@
 /**
- * KNIGHT HOST — the Electron main-process implementation of the SelfImpulse
+ * HOST BOUNDARY — the Electron main-process implementation of the SelfImpulse
  * engine's host boundary.
  *
  * The engine was written for a renderer: every native fact (storage, secrets,
  * notifications, app identity, provider calls) went through `window.*`. In
- * Knight Cowork the engine runs in the MAIN process, so this module is the one
+ * SelfImpulse the engine runs in the MAIN process, so this module is the one
  * place that answers those questions with Electron APIs. The vendored modules
  * (`app/desktop.ts`, `ipc/localDb.ts`, `persist/quotaSafe.ts`,
  * `selfimpulse/ipc/client.ts`) delegate here; no engine file talks to
@@ -333,7 +333,7 @@ export function knightShellExec(program: string, args: string[], cwd?: string, t
 
 export function knightAppInfo() {
   return {
-    name: app.getName() || 'Knight Cowork',
+    name: app.getName() || 'SelfImpulse',
     version: app.getVersion() || 'unknown',
     platform: process.platform,
     native: true
@@ -352,7 +352,7 @@ export function knightNotify(title: string, body: string) {
   }
 }
 
-/* ── the model call: Knight's provider is the one that spends the key ─────── */
+/* ── the model call: SelfImpulse's provider is the one that spends the key ─────── */
 
 export interface KnightChatRequest {
   provider: string
@@ -378,7 +378,7 @@ let chatImpl: ChatImpl | null = null
 
 /**
  * The wiring layer injects the provider here once, at boot. The engine never
- * reaches into Knight's settings itself — that keeps one owner for the key and
+ * reaches into SelfImpulse's settings itself — that keeps one owner for the key and
  * one place where failover happens.
  */
 export function setKnightChat(fn: ChatImpl | null): void {

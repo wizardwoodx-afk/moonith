@@ -1,4 +1,4 @@
-/* Knight Cowork runs this engine in the MAIN process. When there is no
+/* SelfImpulse runs this engine in the MAIN process. When there is no
  * `window`, these primitives are answered by the Electron host directly. */
 import {
   knightAppInfo,

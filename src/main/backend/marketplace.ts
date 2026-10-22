@@ -238,7 +238,7 @@ export class Marketplace {
       '--base-url',
       BASE_URL,
       '--name',
-      'Knight Cowork',
+      'SelfImpulse',
       '--source',
       'codex'
     ])

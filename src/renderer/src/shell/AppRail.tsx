@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from 'react'
 import {
   Building2,
   CalendarClock,
-  ChessKnight,
   Handshake,
   MessageSquare,
   Plus,
@@ -10,6 +9,7 @@ import {
   Settings,
   X
 } from 'lucide-react'
+import { BrandMark } from '../components/BrandMark'
 import type { TaskStatus } from '@shared/types'
 import { useApp } from '../store'
 import { cn, taskGroup, timeAgo } from '../lib/utils'
@@ -18,7 +18,7 @@ import { startNewTask } from '../lib/navigation'
 import { SURFACES, modeForSurface, type Surface } from './surfaces'
 
 const ICONS: Record<Surface, typeof MessageSquare> = {
-  chat: ChessKnight,
+  chat: MessageSquare,
   company: Building2,
   table: Handshake
 }
@@ -173,11 +173,11 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
         <div className="flex flex-col items-center pt-3">
           <button
             onClick={goHome}
-            title="Knight"
+            title="SelfImpulse"
             aria-label="Home"
             className="flex h-9 w-9 items-center justify-center rounded-xl text-ink transition-colors hover:bg-surface-3/60"
           >
-            <ChessKnight size={18} strokeWidth={1.7} />
+            <BrandMark size={18} strokeWidth={1.7} />
           </button>
           <div className="mt-1">
             <SwitchMode collapsed />
@@ -274,11 +274,11 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
             <button
               onClick={goHome}
               className="flex min-w-0 items-center gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
-              aria-label="Knight home"
+              aria-label="SelfImpulse home"
             >
-              <ChessKnight size={16} strokeWidth={1.8} className="shrink-0 text-ink" />
+              <BrandMark size={16} strokeWidth={1.8} className="shrink-0 text-ink" />
               <span className="truncate text-[13px] font-semibold tracking-[-0.015em] text-ink">
-                Knight
+                SelfImpulse
               </span>
             </button>
             <SwitchMode collapsed={false} />
@@ -287,7 +287,7 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
           <div className="px-3 pt-3">
             <button
               onClick={startNewTask}
-              className="group flex h-[36px] w-full items-center gap-2 rounded-[10px] bg-ink-button px-3 text-[12.5px] font-medium text-on-ink transition-transform duration-150 active:scale-[0.985]"
+              className="group flex h-[36px] w-full items-center gap-2 rounded-[10px] bg-ink-button px-3 text-[12.5px] font-medium text-on-ink transition-all duration-150 hover:brightness-110 active:scale-[0.985]"
             >
               <Plus size={15} strokeWidth={2.1} />
               <span className="flex-1 text-left">New task</span>

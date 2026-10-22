@@ -127,7 +127,7 @@ export function CaptainWelcome({
           </div>
         </div>
 
-        <div className="mx-auto mt-auto w-full max-w-[768px] pt-8">
+        <div className="mx-auto mt-auto w-full max-w-[768px] pt-10">
           <CaptainComposer
             draft={draft}
             onDraftChange={onDraftChange}
@@ -145,7 +145,7 @@ export function CaptainWelcome({
             busy={busy}
             autoFocus
           />
-          <p className="mt-1 flex items-center justify-center gap-1.5 pb-1 text-[10.5px] text-faint">
+          <p className="mt-2 flex items-center justify-center gap-1.5 pb-2 text-[10.5px] text-faint">
             <LockKeyhole size={10} />
             Local-first. Files stay on this machine.
           </p>

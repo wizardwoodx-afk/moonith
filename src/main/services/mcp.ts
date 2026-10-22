@@ -57,7 +57,7 @@ class McpManager {
     })
 
     const client = new Client(
-      { name: 'knight-cowork', version: '0.1.0' },
+      { name: 'selfimpulse', version: '0.1.0' },
       { capabilities: {} }
     )
 

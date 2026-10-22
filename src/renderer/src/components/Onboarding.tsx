@@ -28,7 +28,7 @@ export function Onboarding() {
             real work done.
           </h1>
           <p className="mt-3 max-w-[430px] text-[13px] leading-relaxed text-muted">
-            Knight Cowork plans the work, uses real tools on your computer, and leaves finished
+            SelfImpulse plans the work, uses real tools on your computer, and leaves finished
             files behind. Bring your own model.
           </p>
 
@@ -42,7 +42,7 @@ export function Onboarding() {
               {
                 icon: FolderOpen,
                 title: 'Works in your folders',
-                text: 'You choose exactly which folders Knight can touch.'
+                text: 'You choose exactly which folders SelfImpulse can touch.'
               },
               {
                 icon: KeyRound,

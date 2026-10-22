@@ -34,10 +34,11 @@ export function CaptainDoodle() {
         />
         <circle cx="112" cy="58" r="27" fill="none" stroke="var(--c-line-strong)" strokeOpacity="0.5" />
 
-        <path
-          d="M38 95c18-16 39-24 73-24 35 0 54 8 71 24l10 10H28l10-10Z"
-          fill="url(#knight-hill)"
-        />
+          <path
+            d="M38 95c18-16 39-24 73-24 35 0 54 8 71 24l10 10H28l10-10Z"
+            fill="url(#knight-hill)"
+            opacity="0.7"
+          />
         <path d="M38 105h144" stroke="var(--c-line-strong)" strokeOpacity="0.55" strokeLinecap="round" />
 
         <g transform="translate(72 27)">

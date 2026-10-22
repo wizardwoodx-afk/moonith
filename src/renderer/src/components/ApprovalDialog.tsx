@@ -25,7 +25,7 @@ export function ApprovalDialog() {
       onClose={() => void respond(false)}
       width="max-w-lg"
       icon={<ShieldCheck size={17} />}
-      title="Knight needs your permission"
+      title="SelfImpulse needs your permission"
       subtitle={task ? `For “${task.title}”` : 'To continue this task'}
       className="border-line-strong"
       footer={

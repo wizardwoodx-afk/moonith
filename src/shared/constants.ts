@@ -31,5 +31,5 @@ export const REA_SERVER_CONFIG = {
   toolAllowlist: REA_PRESET_TOOLS
 }
 
-export const APP_NAME = 'Knight Cowork'
+export const APP_NAME = 'SelfImpulse'
 export const APP_VERSION = '0.1.0'

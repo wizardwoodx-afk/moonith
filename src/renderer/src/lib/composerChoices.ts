@@ -10,7 +10,7 @@ export const PERMISSION_CHOICES: PermissionChoice[] = [
   {
     value: 'manual',
     label: 'Manual',
-    blurb: 'Knight asks before actions that change files or run commands.'
+    blurb: 'SelfImpulse asks before actions that change files or run commands.'
   },
   {
     value: 'auto',

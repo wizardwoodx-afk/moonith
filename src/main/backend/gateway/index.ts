@@ -77,7 +77,7 @@ export class MoonGateway {
     if (!this.store.get().agents.length) {
       this.store.upsertAgent({
         id: "main",
-        name: "Knight Cowork",
+        name: "SelfImpulse",
         enabled: true,
         createdAt: Date.now(),
       });

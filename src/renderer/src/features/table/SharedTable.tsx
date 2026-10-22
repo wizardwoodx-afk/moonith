@@ -438,7 +438,7 @@ function TableStatus({ state }: { state: TableState }) {
       ) : null}
 
       <p className="mt-2.5 text-[8.5px] leading-relaxed text-faint">
-        The table lives while Knight is open. No files, tools or provider keys cross the link.
+        The table lives while SelfImpulse is open. No files, tools or provider keys cross the link.
       </p>
     </section>
   )

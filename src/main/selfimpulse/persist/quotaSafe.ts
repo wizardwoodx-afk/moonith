@@ -62,7 +62,7 @@ export interface PersistNotice {
   detail: string;
 }
 
-/** Knight Cowork's main process has no localStorage; the engine's keys are files. */
+/** SelfImpulse's main process has no localStorage; the engine's keys are files. */
 import { nodeStorage } from "../host/knight";
 
 function resolveStorage(store?: Writable | null): Writable | null {

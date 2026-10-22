@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import {
   Activity,
   AlertTriangle,
@@ -12,7 +12,6 @@ import {
   Check,
   CheckCheck,
   CheckCircle2,
-  ChessKnight,
   ChevronRight,
   CircleUserRound,
   Clipboard,
@@ -47,6 +46,7 @@ import {
   X,
   Zap
 } from 'lucide-react'
+import { BrandMark } from '../components/BrandMark'
 import { toast } from 'sonner'
 import type {
   AppInfo,
@@ -86,7 +86,10 @@ import {
 } from './settings/CapabilityPanes'
 import { DesktopPane, GatewayPane, TiersPane, WorkFilesPane } from './settings/BackendPanes'
 
-const NAV_ICONS: Record<SettingsPaneId, typeof SlidersHorizontal> = {
+const NAV_ICONS: Record<
+  SettingsPaneId,
+  ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
+> = {
   profile: CircleUserRound,
   general: SlidersHorizontal,
   'mode-config': Waypoints,
@@ -99,7 +102,7 @@ const NAV_ICONS: Record<SettingsPaneId, typeof SlidersHorizontal> = {
   providers: Cpu,
   tiers: Zap,
   instructions: Brain,
-  agent: ChessKnight,
+  agent: BrandMark,
   'agent-team': Users,
   skills: Sparkles,
   'sub-agents': Bot,
@@ -913,7 +916,7 @@ function ProvidersTab({ settings }: { settings: PublicSettings }) {
             </div>
             <p className="mt-3 text-[13px] font-medium">No model provider yet</p>
             <p className="mt-1 max-w-sm text-[12px] leading-relaxed text-faint">
-              Add a key for a first-party model API, or point Knight at any
+              Add a key for a first-party model API, or point SelfImpulse at any
               chat-completion endpoint — hosted or running on your own machine.
             </p>
             <Button variant="primary" size="sm" className="mt-4" onClick={openCreate}>
@@ -1165,7 +1168,7 @@ function ProviderModal({
       width="max-w-[560px]"
       icon={<Icon size={17} />}
       title={provider ? 'Edit provider' : 'Add a model provider'}
-      subtitle="Knight talks to providers directly from this device."
+      subtitle="SelfImpulse talks to providers directly from this device."
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -1527,7 +1530,7 @@ function McpServerCard({
           {state === 'ready' ? (
             <span>
               {toolCount} tool{toolCount === 1 ? '' : 's'} available
-              {allowCount ? ` · ${allowCount} exposed to Knight` : ' · all tools exposed'}
+              {allowCount ? ` · ${allowCount} exposed to SelfImpulse` : ' · all tools exposed'}
             </span>
           ) : state === 'error' ? (
             <span className="text-danger">Could not start this server.</span>
@@ -1730,7 +1733,7 @@ function McpTab() {
               </span>
             </div>
             <p className="mt-1 max-w-[560px] text-[11.5px] leading-relaxed text-muted">
-              Inspect binaries, Electron apps, .NET assemblies, and websites. Knight exposes a
+              Inspect binaries, Electron apps, .NET assemblies, and websites. SelfImpulse exposes a
               curated set of 20 analysis tools by default. Only analyze software you are authorized
               to inspect.
             </p>
@@ -1861,7 +1864,7 @@ function McpServerModal({
       width="max-w-[560px]"
       icon={<Plug size={17} />}
       title={config ? 'Edit MCP server' : 'Add MCP server'}
-      subtitle="Knight launches the server over stdio and discovers its tools."
+      subtitle="SelfImpulse launches the server over stdio and discovers its tools."
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -1928,7 +1931,7 @@ function McpServerModal({
         <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-canvas/50 px-3.5 py-2.5">
           <div>
             <p className="text-[12px] font-medium">Start automatically</p>
-            <p className="text-[10.5px] text-faint">Connect this server when Knight launches.</p>
+            <p className="text-[10.5px] text-faint">Connect this server when SelfImpulse launches.</p>
           </div>
           <Toggle checked={enabled} onChange={setEnabled} label="Start server automatically" />
         </div>
@@ -2126,7 +2129,7 @@ function ModeConfigPane({ settings }: { settings: PublicSettings }) {
     {
       name: 'Self',
       tag: 'One machine',
-      icon: ChessKnight,
+      icon: BrandMark,
       blurb: 'One person. Chat and Company, private to this laptop.',
       points: [
         'Captain → Consul → Adept → Crew.',
@@ -2362,7 +2365,7 @@ const AGENT_SEATS = [
     name: 'Captain',
     role: 'The one voice',
     detail: 'The only seat you message. Holds the plan, speaks for the company, signs receipts.',
-    icon: ChessKnight,
+    icon: BrandMark,
     tag: 'You talk here'
   },
   {
@@ -2412,7 +2415,7 @@ function AgentPane({ settings }: { settings: PublicSettings }) {
         />
         <div className="relative flex flex-wrap items-start gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ink-button text-on-ink shadow-sm">
-            <ChessKnight size={19} />
+            <BrandMark size={19} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -2696,7 +2699,7 @@ function AboutTab() {
             <Sparkles size={20} />
           </div>
           <div>
-            <h2 className="display text-[26px] leading-tight">Knight Cowork</h2>
+            <h2 className="display text-[26px] leading-tight">SelfImpulse</h2>
             <p className="mt-1 max-w-[520px] text-[12px] leading-relaxed text-muted">
               A local-first desktop coworker. One Captain, one engine, your files on this machine.
             </p>
@@ -2735,7 +2738,7 @@ function AboutTab() {
       </SettingsSection>
 
       <p className="px-1 text-[10.5px] leading-relaxed text-faint">
-        Knight Cowork is an independent, local-first project. It is not affiliated with any model
+        SelfImpulse is an independent, local-first project. It is not affiliated with any model
         provider. Model names referenced in your own configuration remain the trademarks of their
         respective owners. Only analyze software you are authorized to inspect.
       </p>

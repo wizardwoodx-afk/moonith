@@ -308,7 +308,7 @@ export async function generateDocx(workspace: string, spec: DocSpec): Promise<Ge
   }
 
   const document = new docx.Document({
-    creator: 'Knight Cowork',
+    creator: 'SelfImpulse',
     title: spec.title || basename(target),
     sections: [
       {
@@ -333,7 +333,7 @@ export async function generateDocx(workspace: string, spec: DocSpec): Promise<Ge
 export async function generateSpreadsheet(workspace: string, spec: SheetSpec): Promise<GeneratedFile> {
   const target = await artifactTarget(workspace, spec.filename, 'workbook', '.xlsx')
   const workbook = new ExcelJS.Workbook()
-  workbook.creator = 'Knight Cowork'
+  workbook.creator = 'SelfImpulse'
   workbook.created = new Date()
 
   const previewParts: string[] = []
@@ -388,8 +388,8 @@ export async function generatePresentation(workspace: string, spec: SlideSpec): 
   const target = await artifactTarget(workspace, spec.filename, 'presentation', '.pptx')
   const pptx = new PptxGenJS()
   pptx.layout = 'LAYOUT_WIDE'
-  pptx.author = 'Knight Cowork'
-  pptx.company = 'Knight Cowork'
+  pptx.author = 'SelfImpulse'
+  pptx.company = 'SelfImpulse'
   pptx.title = spec.title || basename(target)
 
   const titleSlide = pptx.addSlide()
@@ -416,7 +416,7 @@ export async function generatePresentation(workspace: string, spec: SlideSpec): 
       color: 'D9CFC0'
     })
   }
-  titleSlide.addText('KNIGHT COWORK', {
+  titleSlide.addText('SELFIMPULSE', {
     x: 0.85,
     y: 6.8,
     w: 5,

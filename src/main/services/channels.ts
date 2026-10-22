@@ -279,7 +279,7 @@ class ChannelService {
           if (!waitingSince) waitingSince = Date.now()
           if (Date.now() - waitingSince > 45_000) {
             return finish(
-              'This task is waiting for your approval in Knight Cowork. Open the task to approve or deny the action, then send your message again.'
+              'This task is waiting for your approval in SelfImpulse. Open the task to approve or deny the action, then send your message again.'
             )
           }
         } else {
@@ -362,12 +362,12 @@ class ChannelService {
       const result = await this.deliver(channel, text, `tg:${chatId}`, TELEGRAM_TIMEOUT)
       const reply =
         result.reply ??
-        'The task is still running. Open Knight Cowork to follow it; I will not send a partial answer here.'
+        'The task is still running. Open SelfImpulse to follow it; I will not send a partial answer here.'
       await this.sendTelegram(token, chatId, reply)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       await store.updateChannel(channelId, { error: truncate(message, 300) })
-      await this.sendTelegram(token, chatId, `Knight could not complete that: ${message}`).catch(
+      await this.sendTelegram(token, chatId, `SelfImpulse could not complete that: ${message}`).catch(
         () => undefined
       )
     }

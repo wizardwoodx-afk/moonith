@@ -9,7 +9,7 @@ import {
 } from 'electron'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import { getPaths, taskWorkspace } from './paths'
+import { getPaths, migrateLegacyUserData, taskWorkspace } from './paths'
 import { store } from './store'
 import { initSelfImpulseEngine } from './selfimpulse/bridge/facade'
 import { registerIpc } from './ipc'
@@ -24,6 +24,9 @@ import { approvals } from './approvals'
 import { isWithin } from './security'
 import { mimeForPath } from './services/documents'
 import { setBackendEventTarget } from './backend/ipc'
+
+// Fixed before anything resolves `userData`, including the single-instance lock.
+app.setName('SelfImpulse')
 
 let tray: Tray | null = null
 let isQuitting = false
@@ -54,12 +57,12 @@ function setupMenu(): void {
       label: 'File',
       submenu: [
         {
-          label: 'Open Knight Cowork',
+          label: 'Open SelfImpulse',
           accelerator: 'CmdOrCtrl+Shift+O',
           click: () => showMainWindow()
         },
         { type: 'separator' },
-        { role: 'quit', label: 'Quit Knight Cowork' }
+        { role: 'quit', label: 'Quit SelfImpulse' }
       ]
     },
     {
@@ -103,10 +106,10 @@ function setupTray(): void {
     return
   }
   tray = new Tray(image.resize({ width: 16, height: 16 }))
-  tray.setToolTip('Knight Cowork')
+  tray.setToolTip('SelfImpulse')
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Open Knight Cowork', click: () => showMainWindow() },
+      { label: 'Open SelfImpulse', click: () => showMainWindow() },
       { type: 'separator' },
       {
         label: 'Quit',
@@ -196,7 +199,7 @@ function setupWindowCloseBehavior(): void {
       if (!trayNoticeShown) {
         trayNoticeShown = true
         notify(
-          'Knight Cowork is still running',
+          'SelfImpulse is still running',
           'Your scheduled tasks stay active. Open the app from the tray, or choose Quit in the tray menu.'
         )
       }
@@ -204,7 +207,7 @@ function setupWindowCloseBehavior(): void {
   })
 }
 
-app.setAppUserModelId('com.knightcowork.app')
+app.setAppUserModelId('com.selfimpulse.app')
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
@@ -214,6 +217,7 @@ if (!gotLock) {
 
   app.whenReady().then(async () => {
     try {
+      migrateLegacyUserData()
       await store.init()
       const engine = initSelfImpulseEngine()
       console.log(
@@ -241,10 +245,10 @@ if (!gotLock) {
         setupWindowCloseBehavior()
       })
     } catch (error) {
-      console.error('[startup] Knight Cowork could not start:', error)
+      console.error('[startup] SelfImpulse could not start:', error)
       await dialog.showMessageBox({
         type: 'error',
-        title: 'Knight Cowork could not start',
+        title: 'SelfImpulse could not start',
         message: error instanceof Error ? error.message : String(error),
         detail: `Data folder: ${getPaths().root}`
       })

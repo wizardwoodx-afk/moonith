@@ -18,7 +18,7 @@ import type { AgentTool } from './tools/types'
  * Moonwright's phase machine drives the turn — the budget, the four stop
  * gates, the skill and memory nudges and the post-turn review all come from
  * the transplanted core — while the tools, the approval flow, the artifact
- * registry and the plan live in Knight's runtime and are injected through the
+ * registry and the plan live in SelfImpulse's runtime and are injected through the
  * ports. One engine, one set of tools, one transcript.
  */
 
@@ -44,7 +44,7 @@ export interface EngineInput {
   emit: (event: string, payload: unknown) => void
 }
 
-/** Knight's tool schema, as the provider's function spec. */
+/** SelfImpulse's tool schema, as the provider's function spec. */
 export function toolToWireSpec(tool: AgentTool): ProviderToolSpec {
   const { $schema: _schema, ...parameters } = tool.inputSchema
   return {

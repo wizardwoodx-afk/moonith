@@ -1,13 +1,13 @@
 /**
- * KNIGHT'S TOOL PACK, handed to the SelfImpulse engine.
+ * THE HOST TOOL PACK, handed to the SelfImpulse engine.
  *
  * The engine shipped ten tools of its own (calculator, clock, search,
- * web_search, memory_*, preference_save, workspace_*, system_info). Knight
+ * web_search, memory_*, preference_save, workspace_*, system_info). The host
  * ships the working half of a desktop agent: real files, real documents, a
  * real browser, real shell, real web fetch, durable memory.
  *
  * This module is the seam. It does not reimplement any of them — it adapts
- * Knight's `AgentTool` contract to the engine's `SelfImpulseTool` contract and
+ * SelfImpulse's `AgentTool` contract to the engine's `SelfImpulseTool` contract and
  * registers the result in `SELFIMPULSE_TOOLS`, so the engine's own governed
  * execution throat (schema check → guardrail → human gate → capability →
  * receipt) still decides every call.
@@ -87,7 +87,7 @@ function describeFailure(error: unknown): string {
 }
 
 /**
- * Register Knight's tools under the engine's contract. Returns the names that
+ * Register SelfImpulse's tools under the engine's contract. Returns the names that
  * were added so the facade can state, in words, what the engine can now do.
  */
 export function registerKnightTools(ctx: ToolContext): string[] {
@@ -99,9 +99,9 @@ export function registerKnightTools(ctx: ToolContext): string[] {
     registerTool(tool.name, {
       name: tool.name,
       description: `${tool.title} — ${tool.description}${argHint(tool)}`,
-      /* Knight already encodes the human gate: `approval: 'policy'` means the
-       * side effect needs a decision. The engine's gate then pauses on exactly
-       * the tools Knight would have paused on. */
+      /* The host already encodes the human gate: `approval: 'policy'` means
+       * the side effect needs a decision. The engine's gate then pauses on
+       * exactly the tools the host would have paused on. */
       risky: tool.approval === 'policy',
       run: async (args) => {
         try {

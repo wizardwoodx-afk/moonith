@@ -41,7 +41,7 @@ describe('settings navigation', () => {
       'work-files',
       'desktop'
     ])
-    expect(groups.Knight).toEqual(['about'])
+    expect(groups.SelfImpulse).toEqual(['about'])
   })
 
   it('ships no placeholders and no beta badges', () => {

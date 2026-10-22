@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ChessKnight, RotateCw } from 'lucide-react'
+import { AlertTriangle, RotateCw } from 'lucide-react'
+import { BrandMark } from './components/BrandMark'
 import { Toaster } from 'sonner'
 import { useApp, type View } from './store'
 import { cn } from './lib/utils'
@@ -22,11 +23,13 @@ import { Button } from './components/ui'
 function Splash() {
   return (
     <div className="flex h-full flex-col items-center justify-center bg-canvas">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-surface text-accent shadow-sm">
-        <ChessKnight size={22} className="breathing" />
+      <div className="flex h-full flex-col items-center justify-center bg-canvas">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-surface text-accent shadow-[0_40px_80px_-40px_rgba(0,0,0,0.9)]">
+          <BrandMark size={22} className="breathing" />
+        </div>
+        <p className="display mt-4 text-[19px] text-ink">SelfImpulse</p>
+        <p className="mt-1 text-[11.5px] text-faint">Opening your workspace…</p>
       </div>
-      <p className="display mt-4 text-[19px] text-ink">Knight Cowork</p>
-      <p className="mt-1 text-[11.5px] text-faint">Opening your workspace…</p>
     </div>
   )
 }
@@ -38,7 +41,7 @@ function FatalScreen({ message }: { message: string }) {
         <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-danger/10 text-danger">
           <AlertTriangle size={19} />
         </div>
-        <h1 className="mt-4 text-[15px] font-semibold">Knight could not start</h1>
+        <h1 className="mt-4 text-[15px] font-semibold">SelfImpulse could not start</h1>
         <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">{message}</p>
         <Button variant="primary" className="mt-5" onClick={() => window.location.reload()}>
           <RotateCw size={13} />

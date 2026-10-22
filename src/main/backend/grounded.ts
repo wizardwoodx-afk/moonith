@@ -3,7 +3,7 @@ import { click, focusWindow, hotkey, screenshot, scroll, type as typeText } from
 import type { Screenshot } from './computer'
 
 /**
- * Grounded Actions, imported as a Knight Cowork capability.
+ * Grounded Actions, imported as a SelfImpulse capability.
  *
  * Grounded Actions is ByteDance's GUI agent: given a screenshot and an instruction it
  * grounds a target and emits one action from a fixed action space. It normally

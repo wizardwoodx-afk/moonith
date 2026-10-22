@@ -1,5 +1,5 @@
 /**
- * ExternalAgent and SkillRegistry — Knight Cowork's integration with the ExternalAgent ecosystem.
+ * ExternalAgent and SkillRegistry — SelfImpulse's integration with the ExternalAgent ecosystem.
  *
  * ExternalAgent (github.com/externalAgent/externalAgent) is an open-source, self-hosted agent
  * gateway; SkillRegistry (clawhub.ai) is its skill registry and package catalogue.
@@ -10,7 +10,7 @@
  *   ExternalAgent CLI       npx -y openclaw@latest {agent,agents,channels,automations}
  *
  * Skills installed through either registry land in the same workspace folder
- * Knight Cowork's own skill manager reads, so they are usable by the agent at once.
+ * SelfImpulse's own skill manager reads, so they are usable by the agent at once.
  *
  * Ported from Seamoon's `electron/backend/externalAgent.js`.
  */
@@ -419,7 +419,7 @@ export class ExternalAgent {
       enterprise: {
         available: false,
         note:
-          'ExternalAgent Enterprise is a hosted platform. It publishes no public API, so Knight Cowork ' +
+          'ExternalAgent Enterprise is a hosted platform. It publishes no public API, so SelfImpulse ' +
           'links to it and uses the open SkillRegistry registry and the ExternalAgent CLI instead.',
         url: `${EXTERNAL_AGENT_SITE}/blog/externalAgent-enterprise`
       }

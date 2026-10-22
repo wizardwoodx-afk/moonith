@@ -211,7 +211,7 @@ export class AgentRunner {
       input.agentId === 'knight'
         ? {
             id: 'knight',
-            name: 'Knight',
+            name: 'SelfImpulse',
             role: 'orchestrator',
             prompt: this.settings.systemPrompt,
             tools: null
@@ -733,7 +733,7 @@ export class AgentRunner {
     const base =
       agent.id === 'knight'
         ? this.settings.systemPrompt
-        : `${agent.prompt}\n\nYou are running as the "${agent.name}" sub-agent of Knight Cowork.`
+        : `${agent.prompt}\n\nYou are running as the "${agent.name}" sub-agent of SelfImpulse.`
     const tier = this.tier()
     const tierNote = tier.thinking
       ? `Think carefully before answering. Reasoning effort: ${tier.effort || 'high'}. Show your reasoning only if asked.`
@@ -806,7 +806,7 @@ export class AgentRunner {
     const memories = this.store.memories.all().slice(-12)
     if (!memories.length) return ''
     const lines = memories.map((memory) => `- [${memory.scope || 'global'}] ${memory.text}`)
-    return `Knight memory (facts worth remembering):\n${lines.join('\n')}`
+    return `SelfImpulse memory (facts worth remembering):\n${lines.join('\n')}`
   }
 
   /** Runs a sub-agent to completion and returns its report as a tool result. */

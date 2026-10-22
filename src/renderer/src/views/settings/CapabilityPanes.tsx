@@ -985,7 +985,7 @@ export function ChannelsPane() {
         title={editing === 'new' ? 'Add a channel' : 'Update channel'}
         subtitle={
           kind === 'webhook'
-            ? 'Knight issues the token and listens only on this machine.'
+            ? 'SelfImpulse issues the token and listens only on this machine.'
             : 'Paste the token BotFather gave your bot.'
         }
         footer={

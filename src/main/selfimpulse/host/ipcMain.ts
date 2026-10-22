@@ -2,7 +2,7 @@
  * THE MAIN-PROCESS `ipc` SEAM.
  *
  * The vendored engine's large renderer bridge (`ipc/client.ts`) answered every
- * verb through `window.selfImpulseDesktop`. In Knight Cowork the engine runs in
+ * verb through `window.selfImpulseDesktop`. In SelfImpulse the engine runs in
  * the main process, so the handful of verbs its execution core actually calls
  * are implemented here against `host/knight.ts` — and nothing else is invented.
  *

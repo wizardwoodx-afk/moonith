@@ -74,7 +74,7 @@ import {
 } from "./agui";
 
 /* ── storage (node-safe: probes run without a browser) ───────────────────── */
-/* Knight Cowork's main process has no localStorage, so the engine's durable
+/* SelfImpulse's main process has no localStorage, so the engine's durable
  * session, threads, facts and mission ledger are files under userData. */
 import {
   nodeStorage,
@@ -784,7 +784,7 @@ export function deregisterProbeTool(name: string): void {
 }
 
 /**
- * The host extension seam (Knight Cowork).
+ * The host extension seam (SelfImpulse).
  *
  * `registerProbeTool` is for tests and restores the previous entry on
  * deregistration. A HOST adds tools for the life of the process, so it gets a

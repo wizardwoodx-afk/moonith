@@ -1,14 +1,14 @@
 /**
- * THE FACADE — one engine, Knight's hands.
+ * THE FACADE — one engine, SelfImpulse's hands.
  *
  * Boot order in `main/index.ts`: `store.init()` → `initSelfImpulseEngine()` →
  * `registerIpc()` → window. By the time a renderer can talk, the engine has:
  *
  *   • a workspace on disk (`<userData>/selfimpulse/workspace`);
- *   • Knight's tool pack registered in `SELFIMPULSE_TOOLS`;
- *   • Knight's configured provider mirrored into the engine's own registry;
+ *   • SelfImpulse's tool pack registered in `SELFIMPULSE_TOOLS`;
+ *   • SelfImpulse's configured provider mirrored into the engine's own registry;
  *   • the provider key in the OS keychain under the engine's key ref;
- *   • a model caller that streams through Knight's `Provider` (one key, one
+ *   • a model caller that streams through SelfImpulse's `Provider` (one key, one
  *     failover path, one place that spends money).
  *
  * Nothing here fabricates readiness. No provider, key or model means the engine
@@ -42,7 +42,7 @@ import {
 } from '../selfimpulse/engine/selfimpulse'
 import { knightToolContext, registerKnightTools } from './knightTools'
 
-/** The registry id the engine sees. Knight's own provider keeps its own id. */
+/** The registry id the engine sees. SelfImpulse's own provider keeps its own id. */
 const ENGINE_PROVIDER_ID = 'knight'
 
 export interface SelfImpulseEngineStatus {
@@ -78,7 +78,7 @@ interface ChatBinding {
 }
 
 /**
- * One model call, through Knight's provider. The engine has already applied
+ * One model call, through SelfImpulse's provider. The engine has already applied
  * its egress guard and its tier routing before this runs; this function only
  * turns the request into a stream and sums the usage it actually received.
  */
@@ -178,7 +178,7 @@ export function initSelfImpulseEngine(): SelfImpulseEngineStatus {
   }
 
   /* The engine's own contract checks `providerHasKey` before it plans. Its key
-   * store is the same OS keychain Knight's `SecretStore` uses, so this is the
+   * store is the same OS keychain SelfImpulse's `SecretStore` uses, so this is the
    * real credential, encrypted, not a placeholder flag. */
   const keyWrite = setProviderKey(ENGINE_PROVIDER_ID, apiKey, kind)
   if (!keyWrite.ok) {
