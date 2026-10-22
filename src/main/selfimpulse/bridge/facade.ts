@@ -137,6 +137,11 @@ export function initSelfImpulseEngine(): SelfImpulseEngineStatus {
   const model = settings.defaultModel || stored?.models?.[0] || ''
 
   if (!stored || !apiKey || !model) {
+    /* A removed provider must not leave the engine routing to its last key.
+     * Disable the tier route and drop the caller, so the next step refuses
+     * with the reason below instead of reaching a stale endpoint. */
+    setModelPrefs({ enabled: false })
+    setKnightChat(null)
     const unwired: SelfImpulseEngineStatus = {
       wired: false,
       providerId: providerId ?? null,
@@ -210,6 +215,16 @@ export function initSelfImpulseEngine(): SelfImpulseEngineStatus {
   status = ready
   startSelfImpulseBroadcast()
   return ready
+}
+
+/**
+ * Re-bind after the user changes provider settings. The chat seam, key and
+ * tier route are all derived state, so they are rebuilt from the same
+ * `initSelfImpulseEngine` path rather than patched piecemeal.
+ */
+export function refreshSelfImpulseEngine(): SelfImpulseEngineStatus {
+  status = null
+  return initSelfImpulseEngine()
 }
 
 export function selfImpulseEngineStatus(): SelfImpulseEngineStatus {

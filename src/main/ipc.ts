@@ -26,7 +26,7 @@ import type {
 } from '@shared/types'
 import { agentRuntime } from './agent/runtime'
 import { fetchProviderModels, verifyProvider } from './agent/providers'
-import { selfImpulseEngineStatus } from './selfimpulse/bridge/facade'
+import { refreshSelfImpulseEngine, selfImpulseEngineStatus } from './selfimpulse/bridge/facade'
 import {
   newSelfImpulseThread,
   resolveSelfImpulseApproval,
@@ -126,11 +126,23 @@ export function registerIpc(): void {
   }))
 
   ipcMain.handle(IPC.settingsSave, async (_event, patch: SettingsPatch) => {
-    const before = JSON.stringify(store.getPublicSettings().mcpServers)
+    const previous = store.getPublicSettings()
     const settings = await store.saveSettings(patch)
     applyTitleBarTheme()
-    if (JSON.stringify(settings.mcpServers) !== before) {
+    if (JSON.stringify(settings.mcpServers) !== JSON.stringify(previous.mcpServers)) {
       void restartMcp()
+    }
+    /* Provider and permission changes are inputs to the engine's binding.
+     * Rebuild it now, so the user does not have to restart the app to make
+     * the agent they just configured actually reachable. */
+    if (
+      previous.defaultProviderId !== settings.defaultProviderId ||
+      previous.defaultModel !== settings.defaultModel ||
+      previous.allowShell !== settings.allowShell ||
+      JSON.stringify(previous.providers) !== JSON.stringify(settings.providers)
+    ) {
+      const engine = refreshSelfImpulseEngine()
+      console.log(`[selfimpulse] engine re-bound: wired=${engine.wired} tools=${engine.tools.length}`)
     }
     return settings
   })
