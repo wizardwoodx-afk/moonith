@@ -8,14 +8,14 @@ import type { BackendStore } from './store'
  *
  * Two things live here:
  *
- *   1. GitHub Copilot as a *model provider* and as an *MCP server*.
- *      The Copilot API (api.githubcopilot.com) is OpenAI-compatible and speaks
+ *   1. GitHub SubscriptionAccount as a *model provider* and as an *MCP server*.
+ *      The SubscriptionAccount API (api.githubsubscription.com) is OpenAI-compatible and speaks
  *      the same protocol as the models endpoint, and the same host serves the
  *      official GitHub MCP Server (repositories, issues, pull requests, code
  *      search). Authentication is the user's own GitHub token.
  *
- *   2. Microsoft 365 Copilot data through the Microsoft Graph API — the surface
- *      Copilot 365 itself reasons over: OneDrive and SharePoint files, Word and
+ *   2. Work Files SubscriptionAccount data through the Microsoft Graph API — the surface
+ *      SubscriptionAccount 365 itself reasons over: OneDrive and SharePoint files, Word and
  *      Excel documents, Outlook mail, the calendar and Teams chats. Graph is
  *      reached with an OAuth 2.0 device-code flow, so the user signs in with
  *      their own Microsoft account and no secret ever touches the app.
@@ -23,17 +23,17 @@ import type { BackendStore } from './store'
  * Ported from Seamoon's `electron/backend/microsoft.js`.
  */
 
-export const COPILOT_API = 'https://api.githubcopilot.com'
-export const COPILOT_MCP = 'https://api.githubcopilot.com/mcp/'
+export const SUBSCRIPTION_API = 'https://api.githubcopilot.com'
+export const SUBSCRIPTION_MCP = 'https://api.githubcopilot.com/mcp/'
 const GRAPH = 'https://graph.microsoft.com/v1.0'
 const LOGIN = 'https://login.microsoftonline.com/common/oauth2/v2.0'
-export const MS_LEARN_MCP = 'https://learn.microsoft.com/api/mcp'
+export const KNOWLEDGE_MCP = 'https://learn.microsoft.com/api/mcp'
 
 /* ------------------------------------------------------------------ */
-/* GitHub Copilot                                                      */
+/* GitHub SubscriptionAccount                                                      */
 /* ------------------------------------------------------------------ */
 
-export interface CopilotModel {
+export interface SubscriptionAccountModel {
   id?: string
   label?: string
   family: string
@@ -41,7 +41,7 @@ export interface CopilotModel {
   output: number
 }
 
-export interface CopilotChatResponse {
+export interface SubscriptionAccountChatResponse {
   choices?: Array<{
     message?: { role?: string; content?: string | null }
     finish_reason?: string
@@ -51,7 +51,7 @@ export interface CopilotChatResponse {
   [key: string]: unknown
 }
 
-export interface CopilotChatOptions {
+export interface SubscriptionAccountChatOptions {
   model?: string
   temperature?: number
   maxTokens?: number
@@ -68,7 +68,7 @@ export interface McpConnector {
   source: string
 }
 
-interface CopilotModelEntry {
+interface SubscriptionAccountModelEntry {
   id?: string
   name?: string
   label?: string
@@ -81,7 +81,7 @@ interface CopilotModelEntry {
   }
 }
 
-export class Copilot {
+export class SubscriptionAccount {
   readonly store: BackendStore
   /** The keychain, when one is available. The token is preferred there. */
   readonly secrets?: SecretStore
@@ -93,9 +93,9 @@ export class Copilot {
 
   /** The user's own GitHub token: the keychain, else the stored one, else the gh CLI's. */
   token(): string {
-    const sealed = this.secrets?.get('copilotToken')
+    const sealed = this.secrets?.get('subscriptionToken')
     if (sealed) return sealed
-    const stored = this.store.settings.all().copilotToken
+    const stored = this.store.settings.all().subscriptionToken
     if (typeof stored === 'string' && stored) return stored
     try {
       const t = execFileSync('gh', ['auth', 'token'], { encoding: 'utf8', timeout: 8000 }).trim()
@@ -119,13 +119,13 @@ export class Copilot {
     }
   }
 
-  /** The live model catalogue the user's Copilot subscription can reach. */
-  async models(): Promise<CopilotModel[]> {
-    const res = await fetch(`${COPILOT_API}/models`, { headers: this.headers() })
+  /** The live model catalogue the user's SubscriptionAccount subscription can reach. */
+  async models(): Promise<SubscriptionAccountModel[]> {
+    const res = await fetch(`${SUBSCRIPTION_API}/models`, { headers: this.headers() })
     if (!res.ok) {
-      throw new Error(`Copilot models failed: ${res.status} ${(await res.text()).slice(0, 200)}`)
+      throw new Error(`SubscriptionAccount models failed: ${res.status} ${(await res.text()).slice(0, 200)}`)
     }
-    const json = (await res.json()) as { data?: CopilotModelEntry[] }
+    const json = (await res.json()) as { data?: SubscriptionAccountModelEntry[] }
     return (json.data || []).map((m) => ({
       id: m.id || m.name,
       label: m.label || m.id || m.name,
@@ -135,12 +135,12 @@ export class Copilot {
     }))
   }
 
-  /** A working chat completion against the Copilot API. */
+  /** A working chat completion against the SubscriptionAccount API. */
   async chat(
     messages: WireMessage[],
-    { model, temperature, maxTokens, signal }: CopilotChatOptions = {}
-  ): Promise<CopilotChatResponse> {
-    const res = await fetch(`${COPILOT_API}/chat/completions`, {
+    { model, temperature, maxTokens, signal }: SubscriptionAccountChatOptions = {}
+  ): Promise<SubscriptionAccountChatResponse> {
+    const res = await fetch(`${SUBSCRIPTION_API}/chat/completions`, {
       method: 'POST',
       headers: this.headers(),
       body: JSON.stringify({
@@ -153,20 +153,20 @@ export class Copilot {
       signal
     })
     if (!res.ok) {
-      throw new Error(`Copilot chat failed: ${res.status} ${(await res.text()).slice(0, 200)}`)
+      throw new Error(`SubscriptionAccount chat failed: ${res.status} ${(await res.text()).slice(0, 200)}`)
     }
-    return (await res.json()) as CopilotChatResponse
+    return (await res.json()) as SubscriptionAccountChatResponse
   }
 
   /** The official GitHub MCP Server, as a connector definition. */
   mcpConnector(): McpConnector {
     return {
-      id: 'github-copilot-mcp',
-      name: 'GitHub MCP Server (Copilot)',
-      url: COPILOT_MCP,
+      id: 'github-subscription-mcp',
+      name: 'Code Repository MCP Server',
+      url: SUBSCRIPTION_MCP,
       headers: { Authorization: `Bearer ${this.token()}` },
       enabled: true,
-      source: 'copilot'
+      source: 'subscription'
     }
   }
 
@@ -174,8 +174,8 @@ export class Copilot {
   learnConnector(): McpConnector {
     return {
       id: 'microsoft-learn-mcp',
-      name: 'Microsoft Learn',
-      url: MS_LEARN_MCP,
+      name: 'Knowledge Base',
+      url: KNOWLEDGE_MCP,
       headers: {},
       enabled: true,
       source: 'microsoft'
@@ -184,13 +184,13 @@ export class Copilot {
 }
 
 /* ------------------------------------------------------------------ */
-/* Microsoft 365 (Graph)                                                */
+/* Work Files (Graph)                                                */
 /* ------------------------------------------------------------------ */
 
-export const M365_SCOPES = 'User.Read Files.ReadWrite Mail.ReadWrite Calendars.ReadWrite Chat.Read'
+export const Work_SCOPES = 'User.Read Files.ReadWrite Mail.ReadWrite Calendars.ReadWrite Chat.Read'
 
 /** The Microsoft account record, as kept in the settings collection. */
-export type M365Account = {
+export type WorkAccountInfo = {
   clientId?: string
   deviceCode?: string
   interval?: number
@@ -201,14 +201,14 @@ export type M365Account = {
   [key: string]: unknown
 }
 
-export interface M365SignInPrompt {
+export interface WorkSignInPrompt {
   userCode?: string
   verificationUri?: string
   message?: string
   expiresIn?: number
 }
 
-export type M365SignInResult = { pending: true } | { pending: false; connected: true }
+export type WorkSignInResult = { pending: true } | { pending: false; connected: true }
 
 export interface GraphOptions {
   method?: string
@@ -216,13 +216,13 @@ export interface GraphOptions {
   query?: Record<string, unknown>
 }
 
-export interface M365SendMailInput {
+export interface WorkSendMailInput {
   to?: string
   subject?: string
   body?: string
 }
 
-export interface M365SearchHit {
+export interface WorkSearchHit {
   name?: string
   webUrl?: string
   size?: number
@@ -231,12 +231,12 @@ export interface M365SearchHit {
   [key: string]: unknown
 }
 
-export interface M365SearchContainer {
-  hits?: M365SearchHit[]
+export interface WorkSearchContainer {
+  hits?: WorkSearchHit[]
   [key: string]: unknown
 }
 
-export interface M365File {
+export interface WorkFile {
   id?: string
   name?: string
   type: 'folder' | 'file'
@@ -245,7 +245,7 @@ export interface M365File {
   modified?: string
 }
 
-export interface M365FileContent {
+export interface WorkFileContent {
   name?: string
   webUrl?: string
   size?: number
@@ -253,7 +253,7 @@ export interface M365FileContent {
   content: string
 }
 
-export interface M365MailMessage {
+export interface WorkMailMessage {
   id?: string
   subject?: string
   from?: string
@@ -262,7 +262,7 @@ export interface M365MailMessage {
   preview?: string
 }
 
-export interface M365CalendarEvent {
+export interface WorkCalendarEvent {
   subject?: string
   start?: string
   end?: string
@@ -270,7 +270,7 @@ export interface M365CalendarEvent {
   location?: string
 }
 
-export interface M365Chat {
+export interface WorkChat {
   id?: string
   topic: string
 }
@@ -312,15 +312,15 @@ function flag(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined
 }
 
-export class M365 {
+export class WorkAccount {
   readonly store: BackendStore
 
   constructor(store: BackendStore) {
     this.store = store
   }
 
-  get account(): M365Account {
-    return (this.store.settings.get('m365') ?? {}) as M365Account
+  get account(): WorkAccountInfo {
+    return (this.store.settings.get('work') ?? {}) as WorkAccountInfo
   }
 
   connected(): boolean {
@@ -332,20 +332,20 @@ export class M365 {
   }
 
   /** Write the account back, merged with whatever is already stored. */
-  private persist(patch: M365Account): void {
-    this.store.settings.set('m365', { ...this.account, ...patch })
+  private persist(patch: WorkAccountInfo): void {
+    this.store.settings.set('work', { ...this.account, ...patch })
   }
 
   /**
    * Start the device-code flow. The app shows the code, the user signs in on
    * their own machine, and Knight polls for the token.
    */
-  async beginSignIn(clientId: string): Promise<M365SignInPrompt> {
-    if (!clientId) throw new Error('A Microsoft Entra app client id is required.')
+  async beginSignIn(clientId: string): Promise<WorkSignInPrompt> {
+    if (!clientId) throw new Error('A work account app client id is required.')
     const res = await fetch(`${LOGIN}/devicecode`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ client_id: clientId, scope: M365_SCOPES }).toString()
+      body: new URLSearchParams({ client_id: clientId, scope: Work_SCOPES }).toString()
     })
     if (!res.ok) {
       throw new Error(`Microsoft sign-in failed: ${res.status} ${(await res.text()).slice(0, 200)}`)
@@ -367,7 +367,7 @@ export class M365 {
   }
 
   /** Poll for the token the device code will produce. */
-  async completeSignIn(): Promise<M365SignInResult> {
+  async completeSignIn(): Promise<WorkSignInResult> {
     const { clientId, deviceCode } = this.account
     if (!clientId || !deviceCode) throw new Error('Start the sign-in first.')
     const res = await fetch(`${LOGIN}/token`, {
@@ -416,7 +416,7 @@ export class M365 {
         client_id: clientId,
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
-        scope: M365_SCOPES
+        scope: Work_SCOPES
       }).toString()
     })
     const json = (await res.json()) as TokenResponse
@@ -432,7 +432,7 @@ export class M365 {
 
   async graph(path: string, { method = 'GET', body, query }: GraphOptions = {}): Promise<Record<string, unknown>> {
     const token = await this.token()
-    if (!token) throw new Error('Microsoft 365 is not connected.')
+    if (!token) throw new Error('Work Files is not connected.')
     const url = new URL(`${GRAPH}${path.startsWith('/') ? path : `/${path}`}`)
     for (const [k, v] of Object.entries(query || {})) {
       if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v))
@@ -469,7 +469,7 @@ export class M365 {
   }
 
   /** Files across OneDrive and SharePoint. */
-  async searchFiles(query: string | undefined, limit = 25): Promise<M365SearchContainer[]> {
+  async searchFiles(query: string | undefined, limit = 25): Promise<WorkSearchContainer[]> {
     const json = await this.graph('/search/query', {
       method: 'POST',
       body: {
@@ -486,10 +486,10 @@ export class M365 {
     })
     const first = toArray(json.value)[0]
     const containers = isRecord(first) ? first.hitsContainers : undefined
-    return toArray(containers) as M365SearchContainer[]
+    return toArray(containers) as WorkSearchContainer[]
   }
 
-  async listFiles(folder = 'root', limit = 50): Promise<M365File[]> {
+  async listFiles(folder = 'root', limit = 50): Promise<WorkFile[]> {
     const json = await this.graph(`/me/drive/root/children`, { query: { $top: limit } })
     return toArray(json.value).map((entry) => {
       const file = isRecord(entry) ? entry : {}
@@ -505,7 +505,7 @@ export class M365 {
   }
 
   /** The text of a drive item (Word, Excel, text, markdown…). */
-  async readFile(itemId: string | undefined): Promise<M365FileContent> {
+  async readFile(itemId: string | undefined): Promise<WorkFileContent> {
     const meta = await this.graph(`/me/drive/items/${itemId}?$select=id,name,size,webUrl,file`)
     const content = await this.graph(`/me/drive/items/${itemId}/content`)
     const text = typeof content === 'string' ? content : JSON.stringify(content)
@@ -519,7 +519,7 @@ export class M365 {
     }
   }
 
-  async listMail(folder = 'inbox', limit = 20): Promise<M365MailMessage[]> {
+  async listMail(folder = 'inbox', limit = 20): Promise<WorkMailMessage[]> {
     const json = await this.graph(`/me/mailFolders/${folder}/messages`, {
       query: { $top: limit, $select: 'subject,from,receivedDateTime,isRead,bodyPreview' }
     })
@@ -538,7 +538,7 @@ export class M365 {
     })
   }
 
-  async sendMail({ to, subject, body }: M365SendMailInput): Promise<{ ok: true; sent: boolean }> {
+  async sendMail({ to, subject, body }: WorkSendMailInput): Promise<{ ok: true; sent: boolean }> {
     const json = await this.graph('/me/sendMail', {
       method: 'POST',
       body: {
@@ -556,7 +556,7 @@ export class M365 {
     startIso: string | undefined,
     endIso: string | undefined,
     limit = 25
-  ): Promise<M365CalendarEvent[]> {
+  ): Promise<WorkCalendarEvent[]> {
     const json = await this.graph('/me/calendarView', {
       query: {
         startDateTime: startIso,
@@ -582,7 +582,7 @@ export class M365 {
     })
   }
 
-  async listChats(limit = 20): Promise<M365Chat[]> {
+  async listChats(limit = 20): Promise<WorkChat[]> {
     const json = await this.graph('/me/chats', { query: { $top: limit } })
     return toArray(json.value).map((entry) => {
       const chat = isRecord(entry) ? entry : {}
@@ -595,30 +595,30 @@ export class M365 {
 /* The tools the agent can call                                        */
 /* ------------------------------------------------------------------ */
 
-export interface M365ToolParameter {
+export interface WorkToolParameter {
   type: 'string' | 'number' | 'boolean'
   description?: string
 }
 
-export type M365ToolParameters = {
+export type WorkToolParameters = {
   type: 'object'
-  properties: Record<string, M365ToolParameter>
+  properties: Record<string, WorkToolParameter>
   required?: string[]
 }
 
-export interface M365ToolFunction {
+export interface WorkToolFunction {
   name: string
   description: string
-  parameters: M365ToolParameters
+  parameters: WorkToolParameters
 }
 
 /** An OpenAI-style function spec, with the flat fields the provider expects. */
-export interface M365ToolSpec extends M365ToolFunction {
+export interface WorkToolSpec extends WorkToolFunction {
   type: 'function'
-  function: M365ToolFunction
+  function: WorkToolFunction
 }
 
-export type M365ToolArgs = {
+export type WorkToolArgs = {
   query?: string
   limit?: number
   folder?: string
@@ -631,19 +631,19 @@ export type M365ToolArgs = {
   [key: string]: unknown
 }
 
-export type M365ToolResult =
-  | { ok: true; hits: M365SearchContainer[] }
-  | { ok: true; files: M365File[] }
-  | { ok: true; file: M365FileContent }
-  | { ok: true; messages: M365MailMessage[] }
+export type WorkToolResult =
+  | { ok: true; hits: WorkSearchContainer[] }
+  | { ok: true; files: WorkFile[] }
+  | { ok: true; file: WorkFileContent }
+  | { ok: true; messages: WorkMailMessage[] }
   | { ok: true; sent: boolean }
-  | { ok: true; events: M365CalendarEvent[] }
-  | { ok: true; chats: M365Chat[] }
+  | { ok: true; events: WorkCalendarEvent[] }
+  | { ok: true; chats: WorkChat[] }
   | { ok: false; error: string }
 
-export type M365ToolRunner = (name: string, args: M365ToolArgs) => Promise<M365ToolResult>
+export type WorkToolRunner = (name: string, args: WorkToolArgs) => Promise<WorkToolResult>
 
-function toolSpec(name: string, description: string, parameters: M365ToolParameters): M365ToolSpec {
+function toolSpec(name: string, description: string, parameters: WorkToolParameters): WorkToolSpec {
   return {
     type: 'function',
     function: { name, description, parameters },
@@ -653,69 +653,69 @@ function toolSpec(name: string, description: string, parameters: M365ToolParamet
   }
 }
 
-export function m365ToolSpecs(): M365ToolSpec[] {
+export function workToolSpecs(): WorkToolSpec[] {
   return [
     toolSpec(
-      'm365_search_files',
-      "Search the user's OneDrive and SharePoint files (the Microsoft 365 Copilot surface).",
+      'work_search_files',
+      "Search the user's OneDrive and SharePoint files (the Work Files SubscriptionAccount surface).",
       {
         type: 'object',
         properties: { query: { type: 'string' }, limit: { type: 'number' } },
         required: ['query']
       }
     ),
-    toolSpec('m365_list_files', "List the files in the user's OneDrive root.", {
+    toolSpec('work_list_files', "List the files in the user's OneDrive root.", {
       type: 'object',
       properties: { folder: { type: 'string' } }
     }),
     toolSpec(
-      'm365_read_file',
-      'Read the contents of a Microsoft 365 document by its drive item id.',
+      'work_read_file',
+      'Read the contents of a Work Files document by its drive item id.',
       {
         type: 'object',
         properties: { itemId: { type: 'string' } },
         required: ['itemId']
       }
     ),
-    toolSpec('m365_list_mail', 'List mail from a folder (inbox by default).', {
+    toolSpec('work_list_mail', 'List mail from a folder (inbox by default).', {
       type: 'object',
       properties: { folder: { type: 'string' }, limit: { type: 'number' } }
     }),
-    toolSpec('m365_send_mail', "Send an email from the user's account.", {
+    toolSpec('work_send_mail', "Send an email from the user's account.", {
       type: 'object',
       properties: { to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } },
       required: ['to', 'subject', 'body']
     }),
-    toolSpec('m365_list_calendar', 'List calendar events between two ISO timestamps.', {
+    toolSpec('work_list_calendar', 'List calendar events between two ISO timestamps.', {
       type: 'object',
       properties: { start: { type: 'string' }, end: { type: 'string' }, limit: { type: 'number' } },
       required: ['start', 'end']
     }),
-    toolSpec('m365_list_chats', "List the user's Teams chats.", {
+    toolSpec('work_list_chats', "List the user's Teams chats.", {
       type: 'object',
       properties: { limit: { type: 'number' } }
     })
   ]
 }
 
-/** The dispatcher the agent uses for the m365_* tools. */
-export function makeM365Runner(m365: M365): M365ToolRunner {
+/** The dispatcher the agent uses for the work_* tools. */
+export function makeWorkRunner(work: WorkAccount): WorkToolRunner {
   return async (name, args) => {
     switch (name) {
-      case 'm365_search_files':
-        return { ok: true, hits: await m365.searchFiles(args.query, args.limit || 25) }
-      case 'm365_list_files':
-        return { ok: true, files: await m365.listFiles(args.folder || 'root') }
-      case 'm365_read_file':
-        return { ok: true, file: await m365.readFile(args.itemId) }
-      case 'm365_list_mail':
-        return { ok: true, messages: await m365.listMail(args.folder || 'inbox', args.limit || 20) }
-      case 'm365_send_mail':
-        return await m365.sendMail(args)
-      case 'm365_list_calendar':
-        return { ok: true, events: await m365.listCalendar(args.start, args.end, args.limit || 25) }
-      case 'm365_list_chats':
-        return { ok: true, chats: await m365.listChats(args.limit || 20) }
+      case 'work_search_files':
+        return { ok: true, hits: await work.searchFiles(args.query, args.limit || 25) }
+      case 'work_list_files':
+        return { ok: true, files: await work.listFiles(args.folder || 'root') }
+      case 'work_read_file':
+        return { ok: true, file: await work.readFile(args.itemId) }
+      case 'work_list_mail':
+        return { ok: true, messages: await work.listMail(args.folder || 'inbox', args.limit || 20) }
+      case 'work_send_mail':
+        return await work.sendMail(args)
+      case 'work_list_calendar':
+        return { ok: true, events: await work.listCalendar(args.start, args.end, args.limit || 25) }
+      case 'work_list_chats':
+        return { ok: true, chats: await work.listChats(args.limit || 20) }
       default:
         return { ok: false, error: `Unknown tool "${name}"` }
     }

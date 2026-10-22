@@ -45,7 +45,7 @@ async function listModels(input: ProviderInput, key: string): Promise<string[]> 
   }
 
   const base = (input.baseUrl || '').replace(/\/+$/, '')
-  if (!base) throw new Error('A base URL is required for OpenAI-compatible providers.')
+  if (!base) throw new Error('A base URL is required for chat-completion providers.')
   const response = await fetch(`${base}/models`, {
     headers: { Authorization: `Bearer ${key}` }
   })

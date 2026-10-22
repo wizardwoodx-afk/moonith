@@ -3,15 +3,15 @@ import { click, focusWindow, hotkey, screenshot, scroll, type as typeText } from
 import type { Screenshot } from './computer'
 
 /**
- * UI-TARS, imported as a Knight Cowork capability.
+ * Grounded Actions, imported as a Knight Cowork capability.
  *
- * UI-TARS is ByteDance's GUI agent: given a screenshot and an instruction it
+ * Grounded Actions is ByteDance's GUI agent: given a screenshot and an instruction it
  * grounds a target and emits one action from a fixed action space. It normally
  * ships as its own desktop application; here its core — the action space, the
  * system prompt, the action parser and the observe→act loop — is a capability
  * inside the backend, driven by the same computer-use operator.
  *
- * Recovered with REA from github.com/bytedance/UI-TARS-desktop
+ * Recovered with REA from github.com/bytedance/Grounded Actions-desktop
  * (multimodal/gui-agent/{shared,action-parser}, multimodal/agent-tars/core).
  *
  * Ported from Seamoon's `electron/backend/uitars.js`.
@@ -242,9 +242,9 @@ export interface UiTarsConfig {
   maxSteps?: number
 }
 
-/** The backend settings bag; the UI-TARS configuration lives under `uiTars`. */
+/** The backend settings bag; the Grounded Actions configuration lives under `groundedActions`. */
 export interface UiTarsSettings {
-  uiTars?: UiTarsConfig
+  groundedActions?: UiTarsConfig
   [key: string]: unknown
 }
 
@@ -310,7 +310,7 @@ export interface UiTarsRunOptions {
   onStep?: (step: UiTarsStep) => void
 }
 
-export class UITars {
+export class GroundedActions {
   settings: UiTarsSettings
   emit: UiTarsEmit | undefined
 
@@ -320,7 +320,7 @@ export class UITars {
   }
 
   get config(): UiTarsConfig {
-    return this.settings.uiTars || {}
+    return this.settings.groundedActions || {}
   }
 
   get enabled(): boolean {
@@ -363,7 +363,7 @@ export class UITars {
         max_tokens: c.maxTokens ?? 512
       })
     })
-    if (!res.ok) throw new Error(`UI-TARS model ${res.status}: ${(await res.text()).slice(0, 240)}`)
+    if (!res.ok) throw new Error(`Grounded Actions model ${res.status}: ${(await res.text()).slice(0, 240)}`)
     const json = (await res.json()) as {
       choices?: Array<{ message?: { content?: unknown } }>
     }
@@ -372,7 +372,7 @@ export class UITars {
 
   /** Runs the observe -> think -> act loop until the model says finished. */
   async run({ instruction, maxSteps = 12, onStep }: UiTarsRunOptions = {}): Promise<UiTarsRunResult> {
-    if (!this.enabled) throw new Error('UI-TARS is not configured. Add its endpoint and model in Settings.')
+    if (!this.enabled) throw new Error('Grounded Actions is not configured. Add its endpoint and model in Settings.')
     const history: string[] = []
     const steps: UiTarsStep[] = []
     for (let i = 0; i < maxSteps; i++) {

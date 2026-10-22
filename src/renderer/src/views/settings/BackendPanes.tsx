@@ -13,8 +13,8 @@ import {
 import { toast } from 'sonner'
 import type {
   BackendGatewayState,
-  BackendM365File,
-  BackendM365Mail,
+  BackendWorkFile,
+  BackendWorkMail,
   BackendProviderInfo,
   BackendTierInfo
 } from '@shared/types'
@@ -24,8 +24,8 @@ import { SettingsSection } from './SettingsSection'
 
 /**
  * The panes that surface the transplanted Seamoon backend: the model tiers and
- * the provider registry, the Moon Gateway, Microsoft 365, and the desktop
- * capabilities (computer use and the UI-TARS grounding model).
+ * the provider registry, the Moon Gateway, Work Files, and the desktop
+ * capabilities (computer use and the grounded action model).
  */
 
 const TIER_ACCENT: Record<string, string> = {
@@ -136,7 +136,9 @@ export function TiersPane() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[12.5px] font-medium text-ink">{provider.name}</p>
                 <p className="truncate text-[11px] text-faint">
-                  {provider.baseUrl || 'reads the base URL from the environment'}
+                  {provider.available
+                    ? 'credential found in the environment'
+                    : 'no credential found in the environment'}
                 </p>
               </div>
               <span
@@ -252,21 +254,21 @@ function Stat({ label, value }: { label: string; value: number }) {
   )
 }
 
-export function MicrosoftPane() {
+export function WorkFilesPane() {
   const [connected, setConnected] = useState(false)
   const [email, setEmail] = useState<string | undefined>()
   const [prompt, setPrompt] = useState('')
-  const [files, setFiles] = useState<BackendM365File[]>([])
-  const [mail, setMail] = useState<BackendM365Mail[]>([])
+  const [files, setFiles] = useState<BackendWorkFile[]>([])
+  const [mail, setMail] = useState<BackendWorkMail[]>([])
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
-    const status = await window.knight.backend.m365Status()
+    const status = await window.knight.backend.workStatus()
     setConnected(status.connected)
     setEmail(status.account?.email)
     if (status.connected) {
-      setFiles(await window.knight.backend.m365Files())
-      setMail(await window.knight.backend.m365Mail())
+      setFiles(await window.knight.backend.workFiles())
+      setMail(await window.knight.backend.workMail())
     }
   }, [])
 
@@ -277,7 +279,7 @@ export function MicrosoftPane() {
   const begin = async (): Promise<void> => {
     setBusy(true)
     try {
-      const result = await window.knight.backend.m365BeginSignIn()
+      const result = await window.knight.backend.workBeginSignIn()
       setPrompt(result.prompt)
     } catch (error) {
       toast.error(errorMessage(error))
@@ -289,12 +291,12 @@ export function MicrosoftPane() {
   const complete = async (): Promise<void> => {
     setBusy(true)
     try {
-      const result = await window.knight.backend.m365CompleteSignIn()
+      const result = await window.knight.backend.workCompleteSignIn()
       if (!result.ok) {
         toast.error(result.error ?? 'The sign-in is not finished yet.')
         return
       }
-      toast.success('Microsoft 365 connected.')
+      toast.success('Work Files connected.')
       await load()
     } catch (error) {
       toast.error(errorMessage(error))
@@ -304,17 +306,17 @@ export function MicrosoftPane() {
   }
 
   const disconnect = async (): Promise<void> => {
-    await window.knight.backend.m365Disconnect()
+    await window.knight.backend.workDisconnect()
     setConnected(false)
     setFiles([])
     setMail([])
-    toast.success('Microsoft 365 disconnected.')
+    toast.success('Work Files disconnected.')
   }
 
   return (
     <div className="space-y-6">
       <SettingsSection
-        title="Microsoft 365"
+        title="Work Files"
         description="When connected, the Captain can read files, mail and the calendar through Graph, and the M365 tools join every turn."
         action={
           connected ? (
@@ -390,13 +392,13 @@ export function MicrosoftPane() {
 
 export function DesktopPane() {
   const [computer, setComputer] = useState(false)
-  const [uiTars, setUiTars] = useState({ enabled: false, model: '', baseUrl: '' })
+  const [groundedActions, setUiTars] = useState({ enabled: false, model: '', baseUrl: '' })
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
     const [computerStatus, tarsStatus] = await Promise.all([
       window.knight.backend.computerStatus(),
-      window.knight.backend.uiTarsStatus()
+      window.knight.backend.groundedActionsStatus()
     ])
     setComputer(computerStatus.enabled)
     setUiTars(tarsStatus)
@@ -440,8 +442,8 @@ export function DesktopPane() {
       </SettingsSection>
 
       <SettingsSection
-        title="UI-TARS"
-        description="A grounded action model for GUI tasks. Point it at an OpenAI-compatible endpoint and the Captain can hand it a desktop instruction."
+        title="Grounded Actions"
+        description="A grounded action model for GUI tasks. Point it at any chat-completion endpoint and the Captain can hand it a desktop instruction."
       >
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-4">
@@ -450,20 +452,20 @@ export function DesktopPane() {
               <span className="text-[12.5px] text-ink">Grounded actions</span>
             </div>
             <Toggle
-              checked={uiTars.enabled}
+              checked={groundedActions.enabled}
               disabled={busy}
               onChange={(checked) =>
-                void save({ uiTars: { ...uiTars, enabled: checked } })
+                void save({ groundedActions: { ...groundedActions, enabled: checked } })
               }
-              label="UI-TARS"
+              label="Grounded Actions"
             />
           </div>
           <div className="grid gap-2.5 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-[11px] font-medium text-muted">Base URL</span>
               <input
-                value={uiTars.baseUrl}
-                onChange={(event) => setUiTars({ ...uiTars, baseUrl: event.target.value })}
+                value={groundedActions.baseUrl}
+                onChange={(event) => setUiTars({ ...groundedActions, baseUrl: event.target.value })}
                 placeholder="https://your-endpoint/v1"
                 className="w-full rounded-lg border border-line bg-canvas px-3 py-2 text-[12px] text-ink outline-none focus:border-accent"
               />
@@ -471,9 +473,9 @@ export function DesktopPane() {
             <label className="block">
               <span className="mb-1 block text-[11px] font-medium text-muted">Model</span>
               <input
-                value={uiTars.model}
-                onChange={(event) => setUiTars({ ...uiTars, model: event.target.value })}
-                placeholder="UI-TARS-7B"
+                value={groundedActions.model}
+                onChange={(event) => setUiTars({ ...groundedActions, model: event.target.value })}
+                placeholder="grounded-v1"
                 className="w-full rounded-lg border border-line bg-canvas px-3 py-2 text-[12px] text-ink outline-none focus:border-accent"
               />
             </label>
@@ -482,9 +484,9 @@ export function DesktopPane() {
             variant="secondary"
             size="sm"
             disabled={busy}
-            onClick={() => void save({ uiTars })}
+            onClick={() => void save({ groundedActions })}
           >
-            Save UI-TARS
+            Save Grounded Actions
           </Button>
         </div>
       </SettingsSection>

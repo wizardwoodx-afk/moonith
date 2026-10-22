@@ -1,18 +1,18 @@
 /**
- * OpenClaw and ClawHub — Knight Cowork's integration with the OpenClaw ecosystem.
+ * ExternalAgent and SkillRegistry — Knight Cowork's integration with the ExternalAgent ecosystem.
  *
- * OpenClaw (github.com/openclaw/openclaw) is an open-source, self-hosted agent
- * gateway; ClawHub (clawhub.ai) is its skill registry and package catalogue.
+ * ExternalAgent (github.com/externalAgent/externalAgent) is an open-source, self-hosted agent
+ * gateway; SkillRegistry (clawhub.ai) is its skill registry and package catalogue.
  * Both are real services, and this module talks to them directly:
  *
- *   ClawHub REST API   https://clawhub.ai/api/v1/{search,skills,packages}
- *   ClawHub CLI        npx -y clawhub@latest {search,install,list,uninstall,update}
- *   OpenClaw CLI       npx -y openclaw@latest {agent,agents,channels,automations}
+ *   SkillRegistry REST API   https://clawhub.ai/api/v1/{search,skills,packages}
+ *   SkillRegistry CLI        npx -y clawhub@latest {search,install,list,uninstall,update}
+ *   ExternalAgent CLI       npx -y openclaw@latest {agent,agents,channels,automations}
  *
  * Skills installed through either registry land in the same workspace folder
  * Knight Cowork's own skill manager reads, so they are usable by the agent at once.
  *
- * Ported from Seamoon's `electron/backend/openclaw.js`.
+ * Ported from Seamoon's `electron/backend/externalAgent.js`.
  */
 import { execFile, type ExecException } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
@@ -20,12 +20,12 @@ import { join } from 'node:path'
 import { isSafeRef, scrubEnv } from './security'
 import type { BackendStore } from './store'
 
-export const CLAWHUB_API = 'https://clawhub.ai/api/v1'
-export const CLAWHUB_SITE = 'https://clawhub.ai'
-export const OPENCLAW_SITE = 'https://openclaw.ai'
+export const SKILL_REGISTRY_API = 'https://clawhub.ai/api/v1'
+export const SKILL_REGISTRY_SITE = 'https://clawhub.ai'
+export const EXTERNAL_AGENT_SITE = 'https://openclaw.ai'
 
-const CLAWHUB_CLI = 'clawhub@latest'
-const OPENCLAW_CLI = 'openclaw@latest'
+const SKILL_REGISTRY_CLI = 'clawhub@latest'
+const EXTERNAL_AGENT_CLI = 'openclaw@latest'
 
 interface RunOptions {
   timeout?: number
@@ -39,8 +39,8 @@ interface RunResult {
   error: ExecException | null
 }
 
-/** A search hit as the ClawHub registry returns it. */
-interface ClawHubSearchPayload {
+/** A search hit as the SkillRegistry registry returns it. */
+interface SkillRegistrySearchPayload {
   id?: string
   canonicalUrl?: string
   displayName?: string
@@ -55,8 +55,8 @@ interface ClawHubSearchPayload {
   stats?: { downloads?: number; installs?: number }
 }
 
-/** A skill entry as the ClawHub registry returns it. */
-interface ClawHubSkillPayload {
+/** A skill entry as the SkillRegistry registry returns it. */
+interface SkillRegistrySkillPayload {
   ownerHandle?: string
   slug?: string
   displayName?: string
@@ -66,8 +66,8 @@ interface ClawHubSkillPayload {
   stats?: { downloads?: number }
 }
 
-/** A package entry as the ClawHub registry returns it. */
-interface ClawHubPackagePayload {
+/** A package entry as the SkillRegistry registry returns it. */
+interface SkillRegistryPackagePayload {
   name?: string
   id?: string
   displayName?: string
@@ -80,7 +80,7 @@ interface ClawHubPackagePayload {
   latestVersion?: string
 }
 
-export interface ClawHubSearchItem {
+export interface SkillRegistrySearchItem {
   id: string | undefined
   ref: string | undefined
   name: string | undefined
@@ -93,12 +93,12 @@ export interface ClawHubSearchItem {
   url: string
 }
 
-export interface ClawHubSearchResult {
+export interface SkillRegistrySearchResult {
   total: number
-  items: ClawHubSearchItem[]
+  items: SkillRegistrySearchItem[]
 }
 
-export interface ClawHubExploreItem {
+export interface SkillRegistryExploreItem {
   id: string
   ref: string
   name: string | undefined
@@ -109,12 +109,12 @@ export interface ClawHubExploreItem {
   updated: string | undefined
 }
 
-export interface ClawHubExploreResult {
+export interface SkillRegistryExploreResult {
   cursor: string | null
-  items: ClawHubExploreItem[]
+  items: SkillRegistryExploreItem[]
 }
 
-export interface ClawHubPackageItem {
+export interface SkillRegistryPackageItem {
   id: string | undefined
   name: string | undefined
   summary: string
@@ -125,44 +125,44 @@ export interface ClawHubPackageItem {
   version: string
 }
 
-export interface ClawHubPackagesResult {
-  items: ClawHubPackageItem[]
+export interface SkillRegistryPackagesResult {
+  items: SkillRegistryPackageItem[]
 }
 
-export interface ClawHubInstallResult {
+export interface SkillRegistryInstallResult {
   ok: boolean
   ref: string
   output: string
   dir: string
 }
 
-export interface ClawHubListResult {
+export interface SkillRegistryListResult {
   raw: string
   entries: string[]
 }
 
-export interface ClawHubRemoveResult {
+export interface SkillRegistryRemoveResult {
   ok: boolean
   ref: string
 }
 
-export interface ClawHubStatus {
+export interface SkillRegistryStatus {
   version: string
   site: string
 }
 
-export interface OpenClawAgentResult {
+export interface ExternalAgentAgentResult {
   ok: boolean
   output: string
   code: number | string
 }
 
-export interface OpenClawChannelsResult {
+export interface ExternalAgentChannelsResult {
   ok: boolean
   output: string
 }
 
-export interface OpenClawStatus {
+export interface ExternalAgentStatus {
   version: string
   site: string
   gatewayReachable: boolean
@@ -215,7 +215,7 @@ function run(cli: string, args: string[], { timeout = 300000, cwd }: RunOptions 
         shell: process.platform === 'win32',
         // The CLI knows its own registry; overriding it with the API path breaks
         // its routes, so only the site is pinned. Credentials never leak to it.
-        env: scrubEnv({ CLAWHUB_SITE })
+        env: scrubEnv({ SKILL_REGISTRY_SITE })
       },
       (err, stdout, stderr) => {
         resolve({ code: err ? err.code ?? 1 : 0, stdout: stdout || '', stderr: stderr || '', error: err })
@@ -233,11 +233,11 @@ async function getJson(url: string): Promise<unknown> {
   } catch {
     json = { raw: text.slice(0, 300) }
   }
-  if (!res.ok) throw new Error(`ClawHub ${res.status}: ${JSON.stringify(json).slice(0, 200)}`)
+  if (!res.ok) throw new Error(`SkillRegistry ${res.status}: ${JSON.stringify(json).slice(0, 200)}`)
   return json
 }
 
-export class ClawHub {
+export class SkillRegistry {
   readonly store: BackendStore
   readonly workspace: string
 
@@ -251,12 +251,12 @@ export class ClawHub {
   }
 
   /** The live registry search. */
-  async search(query?: string, limit = 24): Promise<ClawHubSearchResult> {
-    const url = new URL(`${CLAWHUB_API}/search`)
+  async search(query?: string, limit = 24): Promise<SkillRegistrySearchResult> {
+    const url = new URL(`${SKILL_REGISTRY_API}/search`)
     if (query) url.searchParams.set('q', query)
     url.searchParams.set('limit', String(limit))
     const json = await getJson(url.toString())
-    const results = pickList<ClawHubSearchPayload>(json, ['results', 'items'])
+    const results = pickList<SkillRegistrySearchPayload>(json, ['results', 'items'])
     return {
       total: results.length,
       items: results.map((r) => ({
@@ -269,17 +269,17 @@ export class ClawHub {
         installs: r.stats?.installs ?? 0,
         featured: Boolean(r.featured),
         version: latestVersionString(r.latestVersion),
-        url: r.canonicalUrl ? `${CLAWHUB_SITE}${r.canonicalUrl}` : ''
+        url: r.canonicalUrl ? `${SKILL_REGISTRY_SITE}${r.canonicalUrl}` : ''
       }))
     }
   }
 
   /** The live "latest updated" feed. */
-  async explore(limit = 30): Promise<ClawHubExploreResult> {
-    const url = new URL(`${CLAWHUB_API}/skills`)
+  async explore(limit = 30): Promise<SkillRegistryExploreResult> {
+    const url = new URL(`${SKILL_REGISTRY_API}/skills`)
     url.searchParams.set('limit', String(limit))
     const json = await getJson(url.toString())
-    const items = pickList<ClawHubSkillPayload>(json, ['items'])
+    const items = pickList<SkillRegistrySkillPayload>(json, ['items'])
     const record = asRecord(json)
     return {
       cursor: truthyString(record.nextCursor) ?? null,
@@ -296,12 +296,12 @@ export class ClawHub {
     }
   }
 
-  /** The OpenClaw package catalogue. */
-  async packages(limit = 40): Promise<ClawHubPackagesResult> {
-    const url = new URL(`${CLAWHUB_API}/packages`)
+  /** The ExternalAgent package catalogue. */
+  async packages(limit = 40): Promise<SkillRegistryPackagesResult> {
+    const url = new URL(`${SKILL_REGISTRY_API}/packages`)
     url.searchParams.set('limit', String(limit))
     const json = await getJson(url.toString())
-    const items = pickList<ClawHubPackagePayload>(json, ['items'])
+    const items = pickList<SkillRegistryPackagePayload>(json, ['items'])
     return {
       items: items.map((p) => ({
         id: p.name || p.id,
@@ -317,11 +317,11 @@ export class ClawHub {
   }
 
   /** Installs a skill for real, through the official CLI. */
-  async install(ref: string): Promise<ClawHubInstallResult> {
+  async install(ref: string): Promise<SkillRegistryInstallResult> {
     if (!isSafeRef(ref)) throw new Error(`Invalid skill reference: ${ref}`)
     mkdirSync(this.skillsDir, { recursive: true })
     const res = await run(
-      CLAWHUB_CLI,
+      SKILL_REGISTRY_CLI,
       ['install', ref, '--workdir', this.workspace, '--dir', '.agents/skills', '--force', '--no-input'],
       { cwd: this.workspace }
     )
@@ -332,10 +332,10 @@ export class ClawHub {
     return { ok: true, ref, output: output.slice(0, 800), dir: this.skillsDir }
   }
 
-  /** The skills ClawHub has installed into this workspace. */
-  async list(): Promise<ClawHubListResult> {
+  /** The skills SkillRegistry has installed into this workspace. */
+  async list(): Promise<SkillRegistryListResult> {
     const res = await run(
-      CLAWHUB_CLI,
+      SKILL_REGISTRY_CLI,
       ['list', '--workdir', this.workspace, '--dir', '.agents/skills', '--no-input'],
       { cwd: this.workspace }
     )
@@ -347,10 +347,10 @@ export class ClawHub {
     return { raw: res.stdout.slice(0, 2000), entries: lines }
   }
 
-  async remove(ref: string): Promise<ClawHubRemoveResult> {
+  async remove(ref: string): Promise<SkillRegistryRemoveResult> {
     if (!isSafeRef(ref)) throw new Error(`Invalid skill reference: ${ref}`)
     const res = await run(
-      CLAWHUB_CLI,
+      SKILL_REGISTRY_CLI,
       ['uninstall', ref, '--workdir', this.workspace, '--dir', '.agents/skills', '--no-input'],
       { cwd: this.workspace }
     )
@@ -358,9 +358,9 @@ export class ClawHub {
     return { ok: true, ref }
   }
 
-  async status(): Promise<ClawHubStatus> {
-    const res = await run(CLAWHUB_CLI, ['--cli-version'])
-    return { version: (res.stdout || '').trim(), site: CLAWHUB_SITE }
+  async status(): Promise<SkillRegistryStatus> {
+    const res = await run(SKILL_REGISTRY_CLI, ['--cli-version'])
+    return { version: (res.stdout || '').trim(), site: SKILL_REGISTRY_SITE }
   }
 
   /**
@@ -369,7 +369,7 @@ export class ClawHub {
    */
   async warm(): Promise<boolean> {
     try {
-      await run(CLAWHUB_CLI, ['--cli-version'], { timeout: 120000 })
+      await run(SKILL_REGISTRY_CLI, ['--cli-version'], { timeout: 120000 })
       return true
     } catch {
       return false
@@ -377,7 +377,7 @@ export class ClawHub {
   }
 }
 
-export class OpenClaw {
+export class ExternalAgent {
   readonly store: BackendStore
   readonly workspace: string
 
@@ -387,41 +387,41 @@ export class OpenClaw {
   }
 
   async version(): Promise<string> {
-    const res = await run(OPENCLAW_CLI, ['--version'])
+    const res = await run(EXTERNAL_AGENT_CLI, ['--version'])
     return (res.stdout || res.stderr || '').trim().split('\n')[0]
   }
 
   /**
-   * Runs one agent turn on a running OpenClaw gateway. This is the real CLI
+   * Runs one agent turn on a running ExternalAgent gateway. This is the real CLI
    * path; if no gateway is running the CLI's own error is surfaced verbatim.
    */
-  async agent(prompt: string, { timeout = 300000 }: { timeout?: number } = {}): Promise<OpenClawAgentResult> {
+  async agent(prompt: string, { timeout = 300000 }: { timeout?: number } = {}): Promise<ExternalAgentAgentResult> {
     // the prompt is passed as an argument, never interpolated into a shell string
-    const res = await run(OPENCLAW_CLI, ['agent', '--prompt', String(prompt ?? ''), '--no-input'], { timeout })
+    const res = await run(EXTERNAL_AGENT_CLI, ['agent', '--prompt', String(prompt ?? ''), '--no-input'], { timeout })
     const output = `${res.stdout}${res.stderr}`.trim()
     return { ok: res.code === 0, output: output.slice(0, 4000), code: res.code }
   }
 
   /** The channels the gateway has connected, when it is running. */
-  async channels(): Promise<OpenClawChannelsResult> {
-    const res = await run(OPENCLAW_CLI, ['channels', 'list', '--no-input'], { timeout: 120000 })
+  async channels(): Promise<ExternalAgentChannelsResult> {
+    const res = await run(EXTERNAL_AGENT_CLI, ['channels', 'list', '--no-input'], { timeout: 120000 })
     return { ok: res.code === 0, output: `${res.stdout}${res.stderr}`.trim().slice(0, 2000) }
   }
 
-  async status(): Promise<OpenClawStatus> {
+  async status(): Promise<ExternalAgentStatus> {
     const version = await this.version().catch(() => '')
     const channels = await this.channels().catch(() => ({ ok: false, output: '' }))
     return {
       version,
-      site: OPENCLAW_SITE,
+      site: EXTERNAL_AGENT_SITE,
       gatewayReachable: channels.ok,
       detail: channels.output,
       enterprise: {
         available: false,
         note:
-          'OpenClaw Enterprise is a hosted platform. It publishes no public API, so Knight Cowork ' +
-          'links to it and uses the open ClawHub registry and the OpenClaw CLI instead.',
-        url: `${OPENCLAW_SITE}/blog/openclaw-enterprise`
+          'ExternalAgent Enterprise is a hosted platform. It publishes no public API, so Knight Cowork ' +
+          'links to it and uses the open SkillRegistry registry and the ExternalAgent CLI instead.',
+        url: `${EXTERNAL_AGENT_SITE}/blog/externalAgent-enterprise`
       }
     }
   }

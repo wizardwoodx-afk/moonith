@@ -1,12 +1,12 @@
 /**
- * Composio client — the real tool-integration platform (250+ apps / 1000+ tools).
+ * Connectors client — the real tool-integration platform (250+ apps / 1000+ tools).
  *
- * Authenticates with the user's own Composio API key, which they add in
+ * Authenticates with the user's own Connectors API key, which they add in
  * Settings → Connectors. Nothing is faked: without a key the app shows the
  * real "not connected" state, and with one it lists the live toolkits and
- * executes their tools through Composio's v3 API.
+ * executes their tools through Connectors's v3 API.
  *
- * Ported from Seamoon's `electron/backend/composio.js`.
+ * Ported from Seamoon's `electron/backend/connectors.js`.
  */
 import type { BackendStore } from './store'
 
@@ -14,14 +14,14 @@ export const API = 'https://backend.composio.dev/api/v3'
 
 type QueryValue = string | number | boolean | null | undefined
 
-interface ComposioRequestOptions {
+interface ConnectorsRequestOptions {
   method?: string
   body?: unknown
   query?: Record<string, QueryValue>
 }
 
-/** A toolkit entry as Composio's v3 API returns it. */
-interface ComposioToolkitPayload {
+/** A toolkit entry as Connectors's v3 API returns it. */
+interface ConnectorsToolkitPayload {
   slug?: string
   key?: string
   name?: string
@@ -33,8 +33,8 @@ interface ComposioToolkitPayload {
   connected_accounts?: unknown[]
 }
 
-/** A tool entry as Composio's v3 API returns it. */
-interface ComposioToolPayload {
+/** A tool entry as Connectors's v3 API returns it. */
+interface ConnectorsToolPayload {
   slug?: string
   name?: string
   toolkit?: { slug?: string }
@@ -46,7 +46,7 @@ interface ComposioToolPayload {
   inputParameters?: Record<string, unknown>
 }
 
-export interface ComposioToolkit {
+export interface ConnectorsToolkit {
   id: string | undefined
   name: string | undefined
   description: string
@@ -55,7 +55,7 @@ export interface ComposioToolkit {
   connected: boolean
 }
 
-export interface ComposioTool {
+export interface ConnectorsTool {
   name: string | undefined
   toolkit: string
   description: string
@@ -63,19 +63,19 @@ export interface ComposioTool {
   parameters: Record<string, unknown>
 }
 
-export interface ComposioToolkitPage {
-  items: ComposioToolkit[]
+export interface ConnectorsToolkitPage {
+  items: ConnectorsToolkit[]
   total: number
   nextCursor: string | null
 }
 
-export interface ComposioToolPage {
-  items: ComposioTool[]
+export interface ConnectorsToolPage {
+  items: ConnectorsTool[]
   total: number
   nextCursor: string | null
 }
 
-export interface ComposioToolDefinition {
+export interface ConnectorsToolDefinition {
   type: 'function'
   function: {
     name: string
@@ -84,25 +84,25 @@ export interface ComposioToolDefinition {
   }
 }
 
-export interface ComposioExecuteResult {
+export interface ConnectorsExecuteResult {
   ok: boolean
   data: unknown
   successful: boolean
 }
 
-export interface ComposioToolkitsOptions {
+export interface ConnectorsToolkitsOptions {
   category?: string
   limit?: number
   cursor?: string
 }
 
-export interface ComposioToolsOptions {
+export interface ConnectorsToolsOptions {
   toolkit?: string
   limit?: number
   cursor?: string
 }
 
-export interface ComposioExecuteOptions {
+export interface ConnectorsExecuteOptions {
   tool: string
   args?: Record<string, unknown>
   entityId?: string
@@ -125,7 +125,7 @@ function truthyString(value: unknown): string | undefined {
   return value ? String(value) : undefined
 }
 
-export class Composio {
+export class Connectors {
   readonly store: BackendStore
 
   constructor(store: BackendStore) {
@@ -133,7 +133,7 @@ export class Composio {
   }
 
   get apiKey(): string {
-    const raw = this.store.settings.all().composioApiKey
+    const raw = this.store.settings.all().connectorsApiKey
     return raw ? String(raw) : ''
   }
 
@@ -148,8 +148,8 @@ export class Composio {
     }
   }
 
-  async request(path: string, { method = 'GET', body, query }: ComposioRequestOptions = {}): Promise<unknown> {
-    if (!this.apiKey) throw new Error('Add your Composio API key in Settings → Connectors first.')
+  async request(path: string, { method = 'GET', body, query }: ConnectorsRequestOptions = {}): Promise<unknown> {
+    if (!this.apiKey) throw new Error('Add your Connectors API key in Settings → Connectors first.')
     const url = new URL(`${API}${path}`)
     for (const [k, v] of Object.entries(query ?? {})) {
       if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v))
@@ -170,18 +170,18 @@ export class Composio {
       const record = asRecord(json)
       const error = asRecord(record.error)
       const msg =
-        truthyString(error.message) ?? truthyString(record.message) ?? `Composio responded ${res.status}`
+        truthyString(error.message) ?? truthyString(record.message) ?? `Connectors responded ${res.status}`
       throw new Error(String(msg).slice(0, 300))
     }
     return json
   }
 
-  /** Live toolkit catalogue (Composio calls them "toolkits" in v3). */
-  async toolkits({ category = 'all', limit = 60, cursor }: ComposioToolkitsOptions = {}): Promise<ComposioToolkitPage> {
+  /** Live toolkit catalogue (Connectors calls them "toolkits" in v3). */
+  async toolkits({ category = 'all', limit = 60, cursor }: ConnectorsToolkitsOptions = {}): Promise<ConnectorsToolkitPage> {
     const json = await this.request('/toolkits', {
       query: { category, limit, cursor, managedBy: 'user' }
     })
-    const items = pickList<ComposioToolkitPayload>(json, ['items', 'toolkits', 'data'])
+    const items = pickList<ConnectorsToolkitPayload>(json, ['items', 'toolkits', 'data'])
     const record = asRecord(json)
     return {
       items: items.map((t) => ({
@@ -198,11 +198,11 @@ export class Composio {
   }
 
   /** Live tool catalogue, optionally filtered by toolkit. */
-  async tools({ toolkit, limit = 100, cursor }: ComposioToolsOptions = {}): Promise<ComposioToolPage> {
+  async tools({ toolkit, limit = 100, cursor }: ConnectorsToolsOptions = {}): Promise<ConnectorsToolPage> {
     const json = await this.request('/tools', {
       query: { toolkitSlug: toolkit, limit, cursor, scopes: 'all' }
     })
-    const items = pickList<ComposioToolPayload>(json, ['items', 'tools', 'data'])
+    const items = pickList<ConnectorsToolPayload>(json, ['items', 'tools', 'data'])
     const record = asRecord(json)
     return {
       items: items.map((t) => ({
@@ -217,8 +217,8 @@ export class Composio {
     }
   }
 
-  /** Execute a Composio tool on behalf of the agent. */
-  async execute({ tool, args = {}, entityId = 'default' }: ComposioExecuteOptions): Promise<ComposioExecuteResult> {
+  /** Execute a Connectors tool on behalf of the agent. */
+  async execute({ tool, args = {}, entityId = 'default' }: ConnectorsExecuteOptions): Promise<ConnectorsExecuteResult> {
     const json = await this.request(`/tools/execute/${encodeURIComponent(tool)}`, {
       method: 'POST',
       body: { arguments: args, entity_id: entityId, connected_account_id: 'default' }
@@ -232,14 +232,14 @@ export class Composio {
     }
   }
 
-  /** The tool specs handed to the model as Composio-backed tools. */
-  async toolDefinitions({ limit = 40 }: { limit?: number } = {}): Promise<ComposioToolDefinition[]> {
+  /** The tool specs handed to the model as Connectors-backed tools. */
+  async toolDefinitions({ limit = 40 }: { limit?: number } = {}): Promise<ConnectorsToolDefinition[]> {
     const { items } = await this.tools({ limit })
     return items.map((t) => ({
       type: 'function',
       function: {
-        name: `composio_${String(t.name).replace(/[^a-zA-Z0-9_]/g, '_')}`,
-        description: `[${t.toolkit || 'Composio'}] ${t.description || t.name}`,
+        name: `connectors_${String(t.name).replace(/[^a-zA-Z0-9_]/g, '_')}`,
+        description: `[${t.toolkit || 'Connectors'}] ${t.description || t.name}`,
         parameters: Object.keys(t.parameters).length ? t.parameters : { type: 'object', properties: {} }
       }
     }))

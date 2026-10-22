@@ -49,7 +49,7 @@ export interface ProviderInput {
   removeKey?: boolean
 }
 
-export interface ComposioPublic {
+export interface ConnectorsPublic {
   hasKey: boolean
   enabled: boolean
   toolkits: string[]
@@ -86,7 +86,7 @@ export interface ChannelState {
   port: number | null
 }
 
-export interface ComposioToolkitInfo {
+export interface ConnectorsToolkitInfo {
   slug: string
   name: string
   description: string
@@ -96,7 +96,7 @@ export interface ComposioToolkitInfo {
   enabled: boolean
 }
 
-export interface ComposioToolInfo {
+export interface ConnectorsToolInfo {
   slug: string
   name: string
   description: string
@@ -104,29 +104,29 @@ export interface ComposioToolInfo {
   enabled: boolean
 }
 
-export interface ComposioState {
+export interface ConnectorsState {
   configured: boolean
   enabled: boolean
-  toolkits: ComposioToolkitInfo[]
-  tools: ComposioToolInfo[]
+  toolkits: ConnectorsToolkitInfo[]
+  tools: ConnectorsToolInfo[]
   error?: string
 }
 
-export interface ComposioInput {
+export interface ConnectorsInput {
   apiKey?: string
   removeKey?: boolean
   enabled?: boolean
   toolkits?: string[]
 }
 
-export type SkillRegistry = 'clawhub' | 'lobehub'
+export type SkillSource = 'registry' | 'marketplace'
 
 export interface SkillSummary {
   id: string
   name: string
   description: string
   source: 'local' | 'installed'
-  registry?: SkillRegistry
+  registry?: SkillSource
   files: number
   updatedAt?: string
 }
@@ -149,7 +149,7 @@ export interface SkillMarketResult {
   version: string
   downloads: number
   url: string
-  registry: SkillRegistry
+  registry: SkillSource
 }
 
 export type MemoryScope = 'global' | 'workspace'
@@ -203,7 +203,7 @@ export interface SubAgentRun {
 export interface PublicSettings {
   providers: ProviderPublic[]
   mcpServers: McpServerConfig[]
-  composio: ComposioPublic
+  connectors: ConnectorsPublic
   channels: ChannelRecord[]
   defaultProviderId?: string
   defaultModel?: string
@@ -218,7 +218,7 @@ export interface PublicSettings {
 export interface SettingsPatch {
   providers?: ProviderInput[]
   mcpServers?: McpServerConfig[]
-  composio?: ComposioInput
+  connectors?: ConnectorsInput
   defaultProviderId?: string
   defaultModel?: string
   defaultPermissionMode?: PermissionMode
@@ -545,7 +545,6 @@ export type BackendPermissionRule = 'allow' | 'deny' | 'ask'
 export interface BackendProviderInfo {
   id: string
   name: string
-  baseUrl: string
   defaultModel: string
   available: boolean
   keyEnv: string | null
@@ -573,7 +572,7 @@ export interface BackendAccountPublic {
   creditBudget: number
 }
 
-export interface BackendUiTarsPublic {
+export interface BackendGroundedActionsPublic {
   enabled: boolean
   baseUrl: string
   apiKey: string
@@ -605,7 +604,7 @@ export interface BackendSettingsPublic {
   computerUse: boolean
   avatar: string
   appIcon: string
-  uiTars: BackendUiTarsPublic
+  groundedActions: BackendGroundedActionsPublic
   mode: string
   account: BackendAccountPublic
   providers: BackendProviderInfo[]
@@ -665,19 +664,19 @@ export interface BackendGatewayState {
   channels: unknown[]
 }
 
-export interface BackendM365State {
+export interface BackendWorkState {
   connected: boolean
   account: { email?: string; name?: string } | null
 }
 
-export interface BackendM365File {
+export interface BackendWorkFile {
   id: string
   name: string
   size?: number
   modified?: string
 }
 
-export interface BackendM365Mail {
+export interface BackendWorkMail {
   id: string
   subject: string
   from?: string
@@ -711,19 +710,19 @@ export interface BackendApi {
   stopGateway: () => Promise<BackendGatewayState>
   gatewayStatus: () => Promise<BackendGatewayState>
   gatewayToken: () => Promise<string>
-  copilotStatus: () => Promise<{ connected: boolean }>
-  copilotModels: () => Promise<string[]>
-  m365Status: () => Promise<BackendM365State>
-  m365BeginSignIn: (clientId?: string) => Promise<{ prompt: string }>
-  m365CompleteSignIn: () => Promise<{ ok: boolean; email?: string; error?: string }>
-  m365Disconnect: () => Promise<{ ok: boolean }>
-  m365Files: () => Promise<BackendM365File[]>
-  m365Mail: () => Promise<BackendM365Mail[]>
+  subscriptionStatus: () => Promise<{ connected: boolean }>
+  subscriptionModels: () => Promise<string[]>
+  workStatus: () => Promise<BackendWorkState>
+  workBeginSignIn: (clientId?: string) => Promise<{ prompt: string }>
+  workCompleteSignIn: () => Promise<{ ok: boolean; email?: string; error?: string }>
+  workDisconnect: () => Promise<{ ok: boolean }>
+  workFiles: () => Promise<BackendWorkFile[]>
+  workMail: () => Promise<BackendWorkMail[]>
   computerStatus: () => Promise<{ enabled: boolean }>
-  uiTarsStatus: () => Promise<{ enabled: boolean; model: string; baseUrl: string }>
-  lobeSearch: (query: string) => Promise<unknown[]>
-  lobeInstall: (id: string) => Promise<{ ok: boolean }>
-  clawHubSearch: (query: string) => Promise<unknown[]>
+  groundedActionsStatus: () => Promise<{ enabled: boolean; model: string; baseUrl: string }>
+  marketplaceSearch: (query: string) => Promise<unknown[]>
+  marketplaceInstall: (id: string) => Promise<{ ok: boolean }>
+  registrySearch: (query: string) => Promise<unknown[]>
   openClawStatus: () => Promise<{ installed: boolean; version?: string }>
   answerPermission: (id: string, allowed: boolean) => Promise<{ ok: boolean }>
   onEvent: (cb: (event: BackendEvent) => void) => () => void
@@ -767,8 +766,8 @@ export interface KnightApi {
   addReaPreset: () => Promise<McpServerStatus[]>
 
   listSkills: () => Promise<SkillSummary[]>
-  searchSkills: (query: string, registry?: SkillRegistry) => Promise<SkillMarketResult[]>
-  installSkill: (ref: string, registry?: SkillRegistry) => Promise<SkillSummary[]>
+  searchSkills: (query: string, registry?: SkillSource) => Promise<SkillMarketResult[]>
+  installSkill: (ref: string, registry?: SkillSource) => Promise<SkillSummary[]>
   readSkill: (id: string) => Promise<SkillDetail | null>
   createSkill: (draft: SkillDraft) => Promise<SkillSummary[]>
   removeSkill: (id: string) => Promise<SkillSummary[]>
@@ -780,8 +779,8 @@ export interface KnightApi {
 
   getUsageSummary: () => Promise<UsageSummary>
 
-  composioState: (refresh?: boolean) => Promise<ComposioState>
-  saveComposio: (input: ComposioInput) => Promise<ComposioState>
+  connectorsState: (refresh?: boolean) => Promise<ConnectorsState>
+  saveConnectors: (input: ConnectorsInput) => Promise<ConnectorsState>
 
   channelState: () => Promise<ChannelState>
   upsertChannel: (input: ChannelInput) => Promise<ChannelState>

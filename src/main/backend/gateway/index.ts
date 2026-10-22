@@ -1,7 +1,7 @@
 /**
  * Moon Gateway — the native desktop gateway.
  *
- * This is Seamoon's own implementation of the OpenClaw gateway concept: a
+ * This is Seamoon's own implementation of the ExternalAgent gateway concept: a
  * local service that receives messages from channels, routes each one to an
  * agent, runs the turn through Moonwright, and sends the reply back out. It
  * runs inside Seamoon's main process — no CLI, no external service.

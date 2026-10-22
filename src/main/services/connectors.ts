@@ -1,4 +1,4 @@
-import type { ComposioState, ComposioToolInfo, ComposioToolkitInfo } from '@shared/types'
+import type { ConnectorsState, ConnectorsToolInfo, ConnectorsToolkitInfo } from '@shared/types'
 import type { AgentTool } from '../agent/tools/types'
 import { store } from '../store'
 import { truncate } from '../util'
@@ -26,7 +26,7 @@ interface ToolkitCache {
   }>
 }
 
-class ComposioManager {
+class ConnectorsManager {
   private toolkitCache: ToolkitCache | null = null
   private toolCache = new Map<string, { at: number; items: MarketTool[] }>()
   private accountCache: { at: number; items: Map<string, string> } | null = null
@@ -41,8 +41,8 @@ class ComposioManager {
     path: string,
     options: { method?: string; body?: unknown; query?: Record<string, string | number | undefined> } = {}
   ): Promise<unknown> {
-    const config = store.getComposioConfig()
-    if (!config.apiKey) throw new Error('Add a Composio API key first.')
+    const config = store.getConnectorsConfig()
+    if (!config.apiKey) throw new Error('Add a Connectors API key first.')
     const url = new URL(`${API}${path}`)
     for (const [key, value] of Object.entries(options.query ?? {})) {
       if (value !== undefined && value !== '') url.searchParams.set(key, String(value))
@@ -69,7 +69,7 @@ class ComposioManager {
       const message =
         nested?.message ||
         (typeof record?.message === 'string' ? record.message : '') ||
-        `Composio responded ${response.status}`
+        `Connectors responded ${response.status}`
       throw new Error(truncate(message, 300))
     }
     return json
@@ -100,7 +100,7 @@ class ComposioManager {
         if (!items.has(toolkit)) items.set(toolkit, id)
       }
     } catch {
-      // Some Composio plans do not expose connected accounts; tool calls then rely on defaults.
+      // Some Connectors plans do not expose connected accounts; tool calls then rely on defaults.
       items = new Map()
     }
     this.accountCache = { at: Date.now(), items }
@@ -164,8 +164,8 @@ class ComposioManager {
     return items
   }
 
-  async getState(force = false): Promise<ComposioState> {
-    const config = store.getComposioConfig()
+  async getState(force = false): Promise<ConnectorsState> {
+    const config = store.getConnectorsConfig()
     if (!config.apiKey) {
       return {
         configured: false,
@@ -186,8 +186,8 @@ class ComposioManager {
       const toolkits = await this.toolkits(force)
       const accounts = await this.connectedAccounts(force)
       const enabled = new Set(config.toolkits)
-      const toolkitInfos: ComposioToolkitInfo[] = []
-      const tools: ComposioToolInfo[] = []
+      const toolkitInfos: ConnectorsToolkitInfo[] = []
+      const tools: ConnectorsToolInfo[] = []
       for (const toolkit of toolkits) {
         const isEnabled = enabled.has(toolkit.slug)
         let count = 0
@@ -229,7 +229,7 @@ class ComposioManager {
   }
 
   async getAgentTools(): Promise<AgentTool[]> {
-    const config = store.getComposioConfig()
+    const config = store.getConnectorsConfig()
     if (!config.apiKey || !config.enabled || !config.toolkits.length) return []
     const accounts = await this.connectedAccounts(false).catch(() => new Map<string, string>())
     const tools: AgentTool[] = []
@@ -242,14 +242,14 @@ class ComposioManager {
       }
       for (const tool of list) {
         if (tools.length >= 80) break
-        const name = `composio_${tool.slug.replace(/[^a-zA-Z0-9_]/g, '_')}`
+        const name = `connectors_${tool.slug.replace(/[^a-zA-Z0-9_]/g, '_')}`
         const schema =
           tool.parameters && typeof tool.parameters === 'object' && Object.keys(tool.parameters).length
             ? tool.parameters
             : { type: 'object', properties: {}, additionalProperties: true }
         tools.push({
           name,
-          title: `Composio · ${slug} · ${tool.name}`,
+          title: `Connectors · ${slug} · ${tool.name}`,
           description: `[${tool.toolkit || slug}] ${tool.description || tool.name}`,
           inputSchema: schema,
           sideEffect: 'network',
@@ -271,7 +271,7 @@ class ComposioManager {
               }
             } catch (error) {
               return {
-                content: `Composio tool error: ${error instanceof Error ? error.message : String(error)}`,
+                content: `Connectors tool error: ${error instanceof Error ? error.message : String(error)}`,
                 isError: true
               }
             }
@@ -285,4 +285,4 @@ class ComposioManager {
   }
 }
 
-export const composioManager = new ComposioManager()
+export const connectorsManager = new ConnectorsManager()

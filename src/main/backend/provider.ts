@@ -96,45 +96,45 @@ function readEnvConfig(): { baseUrl: string; apiKey: string; model: string } {
  */
 export const BUILTIN_PROVIDERS: ProviderDefinition[] = [
   {
-    id: 'copilot',
-    name: 'GitHub Copilot',
+    id: 'subscription',
+    name: 'Subscription Account',
     baseUrl: 'https://api.githubcopilot.com',
     apiKeyEnv: [],
     defaultModel: 'gpt-4o',
     extraHeaders: { 'Copilot-Integration-Id': 'knight', 'Editor-Version': 'vscode/1.95.0' },
-    note: 'Uses your own GitHub token (gh auth token).'
+    note: 'Uses the token from your own account.'
   },
   {
     id: 'gemini',
-    name: 'Google Gemini',
+    name: 'Cloud Provider',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
     apiKeyEnv: ['GEMINI_API_KEY_1', 'GEMINI_API_KEY_2', 'GEMINI_API_KEY_3', 'GEMINI_API_KEY'],
     defaultModel: 'models/gemini-2.5-flash'
   },
   {
     id: 'mistral',
-    name: 'Mistral',
+    name: 'Fast Cloud Provider',
     baseUrl: 'https://api.mistral.ai/v1',
     apiKeyEnv: ['MISTRAL_API_KEY_3', 'MISTRAL_API_KEY_1', 'MISTRAL_API_KEY'],
     defaultModel: 'codestral-2508'
   },
   {
     id: 'cohere',
-    name: 'Cohere',
+    name: 'Enterprise Cloud',
     baseUrl: 'https://api.cohere.com/compatibility/v1',
     apiKeyEnv: ['COHERE_API_KEY', 'COHERE_API_KEY_2'],
     defaultModel: 'command-a-03-2025'
   },
   {
     id: 'cerebras',
-    name: 'Cerebras',
+    name: 'Accelerated Cloud',
     baseUrl: 'https://api.cerebras.ai/v1',
     apiKeyEnv: ['CEREBRAS_API_KEY_2', 'CEREBRAS_API_KEY_5', 'CEREBRAS_API_KEY'],
     defaultModel: 'gpt-oss-120b'
   },
   {
     id: 'openai',
-    name: 'OpenAI-compatible (env)',
+    name: 'Environment Endpoint',
     baseUrl: '',
     apiKeyEnv: ['OPENAI_API_KEY'],
     defaultModel: ''
@@ -155,8 +155,8 @@ export function availableProviders(): AvailableProvider[] {
       ...provider,
       hasKey: Boolean(key),
       keyEnv: env,
-      // Copilot's key comes from the user's GitHub token, not an env var.
-      available: provider.id === 'copilot' ? true : Boolean(key) || !provider.apiKeyEnv?.length
+      // SubscriptionAccount's key comes from the user's GitHub token, not an env var.
+      available: provider.id === 'subscription' ? true : Boolean(key) || !provider.apiKeyEnv?.length
     }
   })
 }

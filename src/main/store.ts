@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import type {
   ChannelInput,
   ChannelRecord,
-  ComposioInput,
+  ConnectorsInput,
   CreateScheduleInput,
   CreateTaskInput,
   McpServerConfig,
@@ -31,7 +31,7 @@ interface StoredProvider {
   secret?: string
 }
 
-interface StoredComposio {
+interface StoredConnectors {
   enabled: boolean
   toolkits: string[]
   secret?: string
@@ -53,7 +53,7 @@ interface StoredChannel {
 interface StoredSettings {
   providers: StoredProvider[]
   mcpServers: McpServerConfig[]
-  composio: StoredComposio
+  connectors: StoredConnectors
   channels: StoredChannel[]
   defaultProviderId?: string
   defaultModel?: string
@@ -66,7 +66,7 @@ interface StoredSettings {
 const DEFAULT_SETTINGS: StoredSettings = {
   providers: [],
   mcpServers: [],
-  composio: { enabled: true, toolkits: [] },
+  connectors: { enabled: true, toolkits: [] },
   channels: [],
   defaultPermissionMode: 'manual',
   customInstructions: '',
@@ -133,14 +133,14 @@ class Store {
     this.settings.mcpServers = Array.isArray(rawSettings.mcpServers)
       ? rawSettings.mcpServers.map(sanitizeMcpServer)
       : []
-    this.settings.composio = {
-      enabled: rawSettings.composio?.enabled !== false,
-      toolkits: Array.isArray(rawSettings.composio?.toolkits)
-        ? rawSettings.composio.toolkits.map(String).filter(Boolean)
+    this.settings.connectors = {
+      enabled: rawSettings.connectors?.enabled !== false,
+      toolkits: Array.isArray(rawSettings.connectors?.toolkits)
+        ? rawSettings.connectors.toolkits.map(String).filter(Boolean)
         : [],
       secret:
-        typeof rawSettings.composio?.secret === 'string'
-          ? rawSettings.composio.secret
+        typeof rawSettings.connectors?.secret === 'string'
+          ? rawSettings.connectors.secret
           : undefined
     }
     this.settings.channels = Array.isArray(rawSettings.channels)
@@ -149,7 +149,7 @@ class Store {
           .map((channel) => ({
             id: String(channel.id),
             kind: channel.kind,
-            name: channel.name?.trim() || (channel.kind === 'webhook' ? 'Local webhook' : 'Telegram'),
+            name: channel.name?.trim() || (channel.kind === 'webhook' ? 'Local webhook' : 'Chat channel'),
             enabled: channel.enabled !== false,
             secret: typeof channel.secret === 'string' ? channel.secret : undefined,
             port: typeof channel.port === 'number' ? channel.port : undefined,
@@ -215,10 +215,10 @@ class Store {
     return {
       providers: settings.providers.map((p) => this.toPublicProvider(p)),
       mcpServers: settings.mcpServers,
-      composio: {
-        hasKey: Boolean(settings.composio.secret),
-        enabled: settings.composio.enabled,
-        toolkits: settings.composio.toolkits
+      connectors: {
+        hasKey: Boolean(settings.connectors.secret),
+        enabled: settings.connectors.enabled,
+        toolkits: settings.connectors.toolkits
       },
       channels: settings.channels.map((channel) => this.toPublicChannel(channel)),
       defaultProviderId: settings.defaultProviderId,
@@ -230,22 +230,22 @@ class Store {
     }
   }
 
-  getComposioConfig(): { apiKey?: string; enabled: boolean; toolkits: string[] } {
+  getConnectorsConfig(): { apiKey?: string; enabled: boolean; toolkits: string[] } {
     const settings = this.getSettings()
     return {
-      apiKey: openSecret(settings.composio.secret),
-      enabled: settings.composio.enabled,
-      toolkits: [...settings.composio.toolkits]
+      apiKey: openSecret(settings.connectors.secret),
+      enabled: settings.connectors.enabled,
+      toolkits: [...settings.connectors.toolkits]
     }
   }
 
-  async saveComposio(input: ComposioInput): Promise<PublicSettings> {
+  async saveConnectors(input: ConnectorsInput): Promise<PublicSettings> {
     const settings = this.getSettings()
-    const composio = settings.composio
-    if (input.removeKey) composio.secret = undefined
-    if (input.apiKey?.trim()) composio.secret = sealSecret(input.apiKey.trim())
-    if (input.enabled !== undefined) composio.enabled = input.enabled
-    if (input.toolkits) composio.toolkits = [...new Set(input.toolkits.map(String).filter(Boolean))]
+    const connectors = settings.connectors
+    if (input.removeKey) connectors.secret = undefined
+    if (input.apiKey?.trim()) connectors.secret = sealSecret(input.apiKey.trim())
+    if (input.enabled !== undefined) connectors.enabled = input.enabled
+    if (input.toolkits) connectors.toolkits = [...new Set(input.toolkits.map(String).filter(Boolean))]
     await atomicWriteJson(getPaths().settingsFile, settings)
     return this.getPublicSettings()
   }
@@ -277,7 +277,7 @@ class Store {
     const channel: StoredChannel = {
       id,
       kind,
-      name: input.name.trim() || (kind === 'webhook' ? 'Local webhook' : 'Telegram'),
+      name: input.name.trim() || (kind === 'webhook' ? 'Local webhook' : 'Chat channel'),
       enabled: input.enabled,
       secret,
       port: existing?.port,
@@ -343,12 +343,12 @@ class Store {
       settings.mcpServers = patch.mcpServers.map(sanitizeMcpServer)
     }
 
-    if (patch.composio) {
-      if (patch.composio.removeKey) settings.composio.secret = undefined
-      if (patch.composio.apiKey?.trim()) settings.composio.secret = sealSecret(patch.composio.apiKey.trim())
-      if (patch.composio.enabled !== undefined) settings.composio.enabled = patch.composio.enabled
-      if (patch.composio.toolkits) {
-        settings.composio.toolkits = [...new Set(patch.composio.toolkits.map(String).filter(Boolean))]
+    if (patch.connectors) {
+      if (patch.connectors.removeKey) settings.connectors.secret = undefined
+      if (patch.connectors.apiKey?.trim()) settings.connectors.secret = sealSecret(patch.connectors.apiKey.trim())
+      if (patch.connectors.enabled !== undefined) settings.connectors.enabled = patch.connectors.enabled
+      if (patch.connectors.toolkits) {
+        settings.connectors.toolkits = [...new Set(patch.connectors.toolkits.map(String).filter(Boolean))]
       }
     }
 

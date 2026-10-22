@@ -1,13 +1,13 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { Computer } from './computer'
-import { Composio } from './composio'
-import { ClawHub, OpenClaw } from './openclaw'
-import { LobeSkills } from './lobe'
+import { Connectors } from './connectors'
+import { SkillRegistry, ExternalAgent } from './external-agent'
+import { Marketplace } from './marketplace'
 import { McpManager } from './mcp'
 import { Memory } from './memory'
-import { Copilot, M365, m365ToolSpecs, makeM365Runner } from './microsoft'
-import { UITars } from './uitars'
+import { SubscriptionAccount, WorkAccount, workToolSpecs, makeWorkRunner } from './work'
+import { GroundedActions } from './grounded'
 import { Provider, availableProviders, resolveConfig, DEFAULT_TIER_CONFIG, type ProviderSettings, type TierConfig } from './provider'
 import { AgentRunner, BUILTIN_ROLES } from './runner'
 import { GatewayToken, PermissionBroker, SecretStore } from './security'
@@ -60,7 +60,7 @@ export interface BackendSettings extends ProviderSettings {
   permissionMode: string
   computerUse: boolean
   avatar: string
-  uiTars: UiTarsSettings
+  groundedActions: UiTarsSettings
   mode: string
   account: BackendAccount
   extraHeaders?: Record<string, string>
@@ -136,7 +136,7 @@ const COPILOT_URL = 'https://api.githubcopilot.com'
  *
  * Seamoon's services now live inside Knight Cowork: the multi-provider client
  * with failover, the Moonwright agent core, the Moon Gateway, the skill
- * marketplaces, MCP, Composio, Microsoft 365, computer use, UI-TARS, memory,
+ * marketplaces, MCP, Connectors, Work Files, computer use, Grounded Actions, memory,
  * usage and the appearance themes. Knight's task store, table service and
  * renderer sit on top of this.
  */
@@ -148,14 +148,14 @@ export class Backend {
   readonly memory: Memory
   readonly usage: Usage
   readonly mcp: McpManager
-  readonly composio: Composio
-  readonly copilot: Copilot
-  readonly m365: M365
+  readonly connectors: Connectors
+  readonly subscription: SubscriptionAccount
+  readonly work: WorkAccount
   readonly computer: Computer
-  readonly uitars: UITars
-  readonly lobe: LobeSkills
-  readonly clawhub: ClawHub
-  readonly openclaw: OpenClaw
+  readonly uitars: GroundedActions
+  readonly marketplace: Marketplace
+  readonly clawhub: SkillRegistry
+  readonly externalAgent: ExternalAgent
   readonly secrets: SecretStore
   readonly gatewayToken: GatewayToken
   readonly permissions: PermissionBroker
@@ -181,24 +181,24 @@ export class Backend {
     this.memory = new Memory(this.store)
     this.usage = new Usage(this.store)
     this.mcp = new McpManager(this.store)
-    this.composio = new Composio(this.store)
+    this.connectors = new Connectors(this.store)
     // Secrets live encrypted with the OS keychain, never in the plain settings file.
     this.secrets = new SecretStore(join(this.root, 'secrets.json'))
-    this.copilot = new Copilot(this.store, this.secrets)
-    this.m365 = new M365(this.store)
+    this.subscription = new SubscriptionAccount(this.store, this.secrets)
+    this.work = new WorkAccount(this.store)
     this.computer = new Computer({
       enabled: this.settings.computerUse,
       emit: (evt, payload) => this.emitter(evt, payload)
     })
-    this.uitars = new UITars({
+    this.uitars = new GroundedActions({
       settings: this.settings,
       emit: (evt, payload) => this.emitter(evt, payload)
     })
     this.workspace = this.settings.workspace || backendWorkspace()
     mkdirSync(this.workspace, { recursive: true })
-    this.lobe = new LobeSkills(this.store, this.workspace)
-    this.clawhub = new ClawHub(this.store, this.workspace)
-    this.openclaw = new OpenClaw(this.store, this.workspace)
+    this.marketplace = new Marketplace(this.store, this.workspace)
+    this.clawhub = new SkillRegistry(this.store, this.workspace)
+    this.externalAgent = new ExternalAgent(this.store, this.workspace)
 
     this.gatewayToken = new GatewayToken(this.secrets)
     this.permissions = new PermissionBroker({
@@ -216,16 +216,16 @@ export class Backend {
       settings: this.settings,
       workspace: this.workspace,
       integrations: {
-        lobe: this.lobe,
-        composio: this.composio,
+        marketplace: this.marketplace,
+        connectors: this.connectors,
         computer: this.computer,
         mcp: this.mcp,
         uitars: this.uitars,
         permissions: this.permissions,
-        m365: {
-          connected: () => this.m365.connected(),
-          tools: () => m365ToolSpecs(),
-          run: makeM365Runner(this.m365)
+        work: {
+          connected: () => this.work.connected(),
+          tools: () => workToolSpecs(),
+          run: makeWorkRunner(this.work)
         }
       }
     })
@@ -257,15 +257,15 @@ export class Backend {
       permissionMode: (saved.permissionMode as string) ?? 'full-access',
       computerUse: (saved.computerUse as boolean) ?? false,
       avatar: (saved.avatar as string) ?? 'initial',
-      uiTars: {
-        enabled: (saved.uiTars as UiTarsSettings | undefined)?.enabled ?? false,
-        baseUrl: (saved.uiTars as UiTarsSettings | undefined)?.baseUrl ?? '',
-        apiKey: (saved.uiTars as UiTarsSettings | undefined)?.apiKey ?? '',
-        model: (saved.uiTars as UiTarsSettings | undefined)?.model ?? '',
-        language: (saved.uiTars as UiTarsSettings | undefined)?.language ?? 'en',
-        temperature: (saved.uiTars as UiTarsSettings | undefined)?.temperature ?? 0,
-        maxTokens: (saved.uiTars as UiTarsSettings | undefined)?.maxTokens ?? 512,
-        maxSteps: (saved.uiTars as UiTarsSettings | undefined)?.maxSteps ?? 12
+      groundedActions: {
+        enabled: (saved.groundedActions as UiTarsSettings | undefined)?.enabled ?? false,
+        baseUrl: (saved.groundedActions as UiTarsSettings | undefined)?.baseUrl ?? '',
+        apiKey: (saved.groundedActions as UiTarsSettings | undefined)?.apiKey ?? '',
+        model: (saved.groundedActions as UiTarsSettings | undefined)?.model ?? '',
+        language: (saved.groundedActions as UiTarsSettings | undefined)?.language ?? 'en',
+        temperature: (saved.groundedActions as UiTarsSettings | undefined)?.temperature ?? 0,
+        maxTokens: (saved.groundedActions as UiTarsSettings | undefined)?.maxTokens ?? 512,
+        maxSteps: (saved.groundedActions as UiTarsSettings | undefined)?.maxSteps ?? 12
       },
       mode: (saved.mode as string) ?? 'coding',
       account: {
@@ -273,20 +273,20 @@ export class Backend {
         ...((saved.account as BackendAccount) || {})
       }
     }
-    return this.applyCopilot(base)
+    return this.applySubscriptionAccount(base)
   }
 
   persistSettings(patch: Partial<BackendSettings>): BackendSettings {
     const next: BackendSettings = { ...this.settings, ...patch }
     next.permissions = { ...this.settings.permissions, ...(patch.permissions || {}) }
-    for (const key of ['apiKey', 'composioApiKey', 'copilotToken'] as const) {
+    for (const key of ['apiKey', 'connectorsApiKey', 'subscriptionToken'] as const) {
       const value = (patch as Record<string, unknown>)[key]
       if (value !== undefined) {
         this.writeSecret(key, String(value))
         delete (next as Record<string, unknown>)[key]
       }
     }
-    this.settings = this.applyCopilot(next)
+    this.settings = this.applySubscriptionAccount(next)
     this.store.settings.set('settings', this.settings as unknown as Record<string, unknown>)
     this.provider.settings = this.settings
     this.runner.settings = this.settings
@@ -300,20 +300,20 @@ export class Backend {
   }
 
   /**
-   * The Copilot provider is configured from the user's own GitHub token, so the
+   * The SubscriptionAccount provider is configured from the user's own GitHub token, so the
    * key and the integration headers are refreshed whenever settings change.
-   * Switching away from Copilot also clears the URL it installed, otherwise the
-   * next provider would be called against the Copilot endpoint.
+   * Switching away from SubscriptionAccount also clears the URL it installed, otherwise the
+   * next provider would be called against the SubscriptionAccount endpoint.
    */
-  applyCopilot(settings: BackendSettings): BackendSettings {
-    if (settings.providerId !== 'copilot') {
+  applySubscriptionAccount(settings: BackendSettings): BackendSettings {
+    if (settings.providerId !== 'subscription') {
       if (settings.baseUrl === COPILOT_URL) {
         const { baseUrl: _baseUrl, apiKey: _apiKey, extraHeaders: _headers, ...rest } = settings
         return rest as BackendSettings
       }
       return settings
     }
-    const token = this.copilot?.token?.()
+    const token = this.subscription?.token?.()
     if (!token) return settings
     return {
       ...settings,
@@ -353,7 +353,7 @@ export class Backend {
   /** Move the secret settings out of the plain file and into the keychain. */
   restoreSecrets(): void {
     const saved = this.store.settings.all() as Record<string, unknown>
-    for (const key of ['apiKey', 'composioApiKey', 'copilotToken']) {
+    for (const key of ['apiKey', 'connectorsApiKey', 'subscriptionToken']) {
       const value = saved[key]
       if (typeof value === 'string' && value) {
         this.secrets.put(key, value)
@@ -372,8 +372,8 @@ export class Backend {
     delete saved[key]
     this.store.settings.set('settings', saved)
     if (key === 'apiKey') this.settings.apiKey = value
-    if (key === 'composioApiKey') this.settings.composioApiKey = value
-    if (key === 'copilotToken') this.settings.copilotToken = value
+    if (key === 'connectorsApiKey') this.settings.connectorsApiKey = value
+    if (key === 'subscriptionToken') this.settings.subscriptionToken = value
   }
 
   /** The settings as the renderer may see them: no secrets, only what is safe. */

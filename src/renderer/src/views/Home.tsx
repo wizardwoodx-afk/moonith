@@ -137,7 +137,7 @@ export function Home() {
             <div className="min-w-0 flex-1">
               <p className="text-[12.5px] font-medium text-ink">Connect a model to get started</p>
               <p className="text-[11.5px] text-muted">
-                Add an Anthropic, OpenAI, or compatible endpoint in Settings.
+                Add a model endpoint in Settings.
               </p>
             </div>
             <Button variant="primary" size="sm" onClick={() => openSettings('providers')}>

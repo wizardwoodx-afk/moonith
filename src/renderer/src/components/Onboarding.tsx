@@ -29,7 +29,7 @@ export function Onboarding() {
           </h1>
           <p className="mt-3 max-w-[430px] text-[13px] leading-relaxed text-muted">
             Knight Cowork plans the work, uses real tools on your computer, and leaves finished
-            files behind. Bring your own Anthropic or OpenAI model.
+            files behind. Bring your own model.
           </p>
 
           <div className="mt-6 space-y-2.5">
@@ -47,7 +47,7 @@ export function Onboarding() {
               {
                 icon: KeyRound,
                 title: 'Your keys, your models',
-                text: 'Anthropic, OpenAI, or any OpenAI-compatible endpoint.'
+                text: 'Any chat-completion endpoint.'
               }
             ].map((item) => {
               const Icon = item.icon

@@ -16,10 +16,10 @@ export const SETTINGS_PANES = [
   'skills',
   'sub-agents',
   'mcp',
-  'composio',
+  'connectors',
   'channels',
   'gateway',
-  'microsoft',
+  'work-files',
   'desktop',
   'about'
 ] as const
@@ -165,7 +165,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     label: 'Models',
     group: 'Personal',
     summary: 'Endpoints and keys.',
-    keywords: ['api key', 'models', 'anthropic', 'openai', 'compatible', 'endpoint', 'llm', 'local'],
+    keywords: ['api key', 'models', 'direct', 'hosted', 'compatible', 'endpoint', 'llm', 'local'],
     status: 'live'
   },
   {
@@ -231,7 +231,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     label: 'Skills',
     group: 'Agents',
     summary: 'Procedures the Captain can load.',
-    keywords: ['skill', 'skills', 'clawhub', 'bundle', 'playbook', 'marketplace', 'install', 'skill.md'],
+    keywords: ['skill', 'skills', 'registry', 'bundle', 'playbook', 'marketplace', 'install', 'skill.md'],
     status: 'live'
   },
   {
@@ -251,11 +251,11 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     status: 'live'
   },
   {
-    id: 'composio',
-    label: 'Composio',
+    id: 'connectors',
+    label: 'Connectors',
     group: 'Integrations',
     summary: 'App toolkits for the Captain.',
-    keywords: ['composio', 'apps', 'integrations', 'toolkit', 'github', 'gmail', 'slack', 'tools', 'extensions'],
+    keywords: ['connectors', 'apps', 'integrations', 'toolkit', 'tasks', 'mail', 'docs', 'tools', 'extensions'],
     status: 'live'
   },
   {
@@ -286,12 +286,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     status: 'live'
   },
   {
-    id: 'microsoft',
-    label: 'Microsoft 365',
+    id: 'work-files',
+    label: 'Work Files',
     group: 'Integrations',
     summary: 'Files, mail and the calendar.',
     keywords: [
-      'microsoft',
+      'work-files',
       '365',
       'office',
       'outlook',
@@ -314,8 +314,8 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
       'screen',
       'mouse',
       'keyboard',
-      'ui-tars',
-      'uitars',
+      'grounded',
+      'actions',
       'grounding',
       'automation'
     ],

@@ -3,9 +3,9 @@ import { IPC } from '@shared/ipc'
 import type {
   BackendCredits,
   BackendGatewayState,
-  BackendM365File,
-  BackendM365Mail,
-  BackendM365State,
+  BackendWorkFile,
+  BackendWorkMail,
+  BackendWorkState,
   BackendMemoryNote,
   BackendModeInfo,
   BackendProviderInfo,
@@ -23,7 +23,7 @@ import { styles } from './themes'
  *
  * Everything the renderer can ask the backend for goes through here: the
  * provider registry and model tiers, the memory ledger, the usage ledger, the
- * Moon Gateway, the skill marketplaces, Microsoft 365, computer use, UI-TARS
+ * Moon Gateway, the skill marketplaces, Work Files, computer use, Grounded Actions
  * and the appearance styles.
  */
 
@@ -142,7 +142,6 @@ export function registerBackendIpc(): void {
       (provider): BackendProviderInfo => ({
         id: provider.id,
         name: provider.name,
-        baseUrl: provider.baseUrl,
         defaultModel: provider.defaultModel,
         available: provider.available,
         keyEnv: provider.keyEnv
@@ -209,50 +208,50 @@ export function registerBackendIpc(): void {
 
   ipcMain.handle(IPC.backendGatewayToken, () => backend.gatewayToken.ensure())
 
-  ipcMain.handle(IPC.backendCopilotStatus, () => ({
-    connected: backend.copilot.connected()
+  ipcMain.handle(IPC.backendSubscriptionAccountStatus, () => ({
+    connected: backend.subscription.connected()
   }))
 
-  ipcMain.handle(IPC.backendCopilotModels, async () => {
-    const models = await backend.copilot.models()
+  ipcMain.handle(IPC.backendSubscriptionAccountModels, async () => {
+    const models = await backend.subscription.models()
     return models.map((model) => model.id)
   })
 
-  ipcMain.handle(IPC.backendM365Status, () => {
-    const account = backend.m365.account
+  ipcMain.handle(IPC.backendWorkStatus, () => {
+    const account = backend.work.account
     return {
-      connected: backend.m365.connected(),
+      connected: backend.work.connected(),
       account: account ? { email: account.email, name: account.name } : null
-    } as BackendM365State
+    } as BackendWorkState
   })
 
-  ipcMain.handle(IPC.backendM365BeginSignIn, async (_event, clientId?: string) => {
-    const prompt = await backend.m365.beginSignIn(clientId ?? backend.m365.clientId())
+  ipcMain.handle(IPC.backendWorkBeginSignIn, async (_event, clientId?: string) => {
+    const prompt = await backend.work.beginSignIn(clientId ?? backend.work.clientId())
     return {
       prompt:
         prompt.message ||
-        `Open ${prompt.verificationUri ?? 'the Microsoft sign-in page'} and enter the code ${prompt.userCode ?? ''}.`
+        `Open ${prompt.verificationUri ?? 'the sign-in page'} and enter the code ${prompt.userCode ?? ''}.`
     }
   })
 
-  ipcMain.handle(IPC.backendM365CompleteSignIn, async () => {
-    const result = await backend.m365.completeSignIn()
+  ipcMain.handle(IPC.backendWorkCompleteSignIn, async () => {
+    const result = await backend.work.completeSignIn()
     if (result.pending) {
       return { ok: false, error: 'The sign-in is not finished yet.' }
     }
-    const account = backend.m365.account
+    const account = backend.work.account
     return { ok: true, email: account?.email }
   })
 
-  ipcMain.handle(IPC.backendM365Disconnect, async () => {
-    await backend.m365.disconnect()
+  ipcMain.handle(IPC.backendWorkDisconnect, async () => {
+    await backend.work.disconnect()
     return { ok: true }
   })
 
-  ipcMain.handle(IPC.backendM365Files, async () => {
-    const files = await backend.m365.listFiles('root', 50)
+  ipcMain.handle(IPC.backendWorkFiles, async () => {
+    const files = await backend.work.listFiles('root', 50)
     return files.map(
-      (file): BackendM365File => ({
+      (file): BackendWorkFile => ({
         id: file.id ?? '',
         name: file.name ?? '',
         size: file.size,
@@ -261,10 +260,10 @@ export function registerBackendIpc(): void {
     )
   })
 
-  ipcMain.handle(IPC.backendM365Mail, async () => {
-    const mail = await backend.m365.listMail('inbox', 20)
+  ipcMain.handle(IPC.backendWorkMail, async () => {
+    const mail = await backend.work.listMail('inbox', 20)
     return mail.map(
-      (message): BackendM365Mail => ({
+      (message): BackendWorkMail => ({
         id: message.id ?? '',
         subject: message.subject ?? '',
         from: message.from,
@@ -277,29 +276,29 @@ export function registerBackendIpc(): void {
     enabled: backend.computer.enabled
   }))
 
-  ipcMain.handle(IPC.backendUiTarsStatus, () => ({
+  ipcMain.handle(IPC.backendGroundedActionsStatus, () => ({
     enabled: backend.uitars.enabled,
     model: backend.uitars.config.model,
     baseUrl: backend.uitars.config.baseUrl
   }))
 
-  ipcMain.handle(IPC.backendLobeSearch, async (_event, query: string) => {
-    const result = await backend.lobe.search({ q: query })
+  ipcMain.handle(IPC.backendMarketplaceSearch, async (_event, query: string) => {
+    const result = await backend.marketplace.search({ q: query })
     return result.items ?? []
   })
 
-  ipcMain.handle(IPC.backendLobeInstall, async (_event, id: string) => {
-    const result = await backend.lobe.install({ id })
+  ipcMain.handle(IPC.backendMarketplaceInstall, async (_event, id: string) => {
+    const result = await backend.marketplace.install({ id })
     return { ok: Boolean(result.ok ?? true) }
   })
 
-  ipcMain.handle(IPC.backendClawHubSearch, async (_event, query: string) => {
+  ipcMain.handle(IPC.backendRegistrySearch, async (_event, query: string) => {
     const result = await backend.clawhub.search(query)
     return result.items ?? []
   })
 
-  ipcMain.handle(IPC.backendOpenClawStatus, async () => {
-    const status = await backend.openclaw.status()
+  ipcMain.handle(IPC.backendExternalAgentStatus, async () => {
+    const status = await backend.externalAgent.status()
     return { installed: status.gatewayReachable, version: status.version }
   })
 

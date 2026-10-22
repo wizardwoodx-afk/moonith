@@ -1,14 +1,14 @@
 /**
- * Moon Gateway — the native desktop replacement for the OpenClaw gateway.
+ * Moon Gateway — the native desktop replacement for the ExternalAgent gateway.
  *
- * The contracts below are ported from the OpenClaw source (MIT):
+ * The contracts below are ported from the ExternalAgent source (MIT):
  *   routing/session-key.ts              → sessionKey.ts
  *   routing/resolve-route.ts            → routing.ts
  *   channels/plugins/types.adapters.ts   → channels.ts
  *   cron/store/row-codec.ts             → automations.ts
  *   sessions/session-controller.contracts.ts → types.ts
  *
- * Unlike OpenClaw, nothing here shells out: the gateway runs inside Seamoon's
+ * Unlike ExternalAgent, nothing here shells out: the gateway runs inside Seamoon's
  * own process, talks to Moonwright directly, and persists to the local store.
  */
 
@@ -86,7 +86,7 @@ export type OutboundMessage = {
   text: string;
 };
 
-/** The link state of a channel account, as OpenClaw models it. */
+/** The link state of a channel account, as ExternalAgent models it. */
 export type ChannelAccountLinkState = "linked" | "not-linked" | "unknown";
 
 export type ChannelStatus = {
@@ -99,7 +99,7 @@ export type ChannelStatus = {
 };
 
 /**
- * A channel adapter. OpenClaw splits this across many narrow interfaces
+ * A channel adapter. ExternalAgent splits this across many narrow interfaces
  * (auth, status, secrets, heartbeat, directory, allowlist, approval); Seamoon
  * keeps one adapter with optional capabilities, which is enough for a native
  * desktop gateway.

@@ -11,7 +11,7 @@ import {
 function provider(overrides: Partial<ProviderPublic> = {}): ProviderPublic {
   return {
     id: 'p1',
-    name: 'Anthropic',
+    name: 'Direct API',
     kind: 'anthropic',
     models: ['claude-sonnet', 'claude-haiku'],
     enabled: true,
@@ -79,7 +79,7 @@ describe('composer model selection', () => {
     }
     expect(resolveComposerModel(settings)).toMatchObject({
       providerId: 'p2',
-      providerName: 'Anthropic',
+      providerName: 'Direct API',
       model: 'a'
     })
   })

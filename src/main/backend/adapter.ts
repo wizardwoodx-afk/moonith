@@ -121,7 +121,7 @@ export function parseSkillMarkdown(text: string, id: string): SkillBundle | null
 
 /**
  * The skills port: a bundle is a directory with a SKILL.md.
- * LobeHub installs `<id>/SKILL.md`, ClawHub installs `<owner>/<slug>/SKILL.md` —
+ * Marketplace installs `<id>/SKILL.md`, SkillRegistry installs `<owner>/<slug>/SKILL.md` —
  * both layouts are read.
  */
 export function makeSkillsPort(skillsDir: string): SkillsPort {
@@ -154,7 +154,7 @@ export function makeSkillsPort(skillsDir: string): SkillsPort {
           read(entry.name, direct)
           continue
         }
-        // ClawHub installs under <owner>/<slug>/SKILL.md
+        // SkillRegistry installs under <owner>/<slug>/SKILL.md
         let nested: Array<{ name: string; isDirectory: () => boolean }> = []
         try {
           nested = readdirSync(dir, { withFileTypes: true })

@@ -1,7 +1,7 @@
 /**
  * Moon Gateway — channels.
  *
- * Ported from OpenClaw's channels/plugins/types.adapters.ts. OpenClaw defines a
+ * Ported from ExternalAgent's channels/plugins/types.adapters.ts. ExternalAgent defines a
  * dozen narrow adapter interfaces (auth, status, secrets, heartbeat, directory,
  * allowlist, approval…); Seamoon keeps one adapter with optional capabilities,
  * which is what a native desktop gateway actually needs.

@@ -1,5 +1,5 @@
 /**
- * LobeHub Skills Marketplace client.
+ * Marketplace Skills Marketplace client.
  *
  * Uses the marketplace's official CLI (@lobehub/market-cli) against
  * https://market.lobehub.com — the same protocol the marketplace documents
@@ -7,7 +7,7 @@
  * cached; search and install run through the CLI so we always speak the
  * marketplace's own protocol.
  *
- * Ported from Seamoon's `electron/backend/lobe.js`.
+ * Ported from Seamoon's `electron/backend/marketplace.js`.
  */
 import { exec } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
@@ -20,13 +20,13 @@ export const BASE_URL = 'https://market.lobehub.com'
 
 const CLI = '@lobehub/market-cli'
 
-export interface LobeCredentials {
+export interface MarketplaceCredentials {
   clientId: string
   clientSecret: string
   [key: string]: unknown
 }
 
-export interface LobeSkillSummary {
+export interface MarketplaceSkillSummary {
   id: string
   name: string
   description: string
@@ -39,50 +39,50 @@ export interface LobeSkillSummary {
   validated: boolean
   tags: string[]
   stars: number
-  source: 'lobehub'
+  source: 'marketplacehub'
 }
 
-export interface LobeSearchResult {
-  items: LobeSkillSummary[]
+export interface MarketplaceSearchResult {
+  items: MarketplaceSkillSummary[]
   total: number
   categories: unknown[]
 }
 
-export interface LobeMcpSummary {
+export interface MarketplaceMcpSummary {
   id: string
   name: string
   description: string
   author: string
   installs: number
-  source: 'lobehub-mcp'
+  source: 'marketplacehub-mcp'
 }
 
-export interface LobeMcpSearchResult {
-  items: LobeMcpSummary[]
+export interface MarketplaceMcpSearchResult {
+  items: MarketplaceMcpSummary[]
   total: number
 }
 
-export interface LobeResolvedSkill {
+export interface MarketplaceResolvedSkill {
   id: string
   name: string
   description: string
 }
 
-export interface LobeInstalledSkill {
+export interface MarketplaceInstalledSkill {
   id: string
   name: string
   description: string
   dir: string
 }
 
-export interface LobeInstallResult {
+export interface MarketplaceInstallResult {
   ok: boolean
   id: string
   dir: string
   output: string
 }
 
-export interface LobeSearchOptions {
+export interface MarketplaceSearchOptions {
   q?: string
   category?: string
   page?: number
@@ -91,18 +91,18 @@ export interface LobeSearchOptions {
   order?: string
 }
 
-export interface LobeMcpSearchOptions {
+export interface MarketplaceMcpSearchOptions {
   q?: string
   page?: number
   pageSize?: number
 }
 
-export interface LobeInstallOptions {
+export interface MarketplaceInstallOptions {
   id: string
   agent?: string
 }
 
-export interface LobeResolveOptions {
+export interface MarketplaceResolveOptions {
   id: string
   name?: string
 }
@@ -150,7 +150,7 @@ function num(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
-function toCredentials(value: unknown): LobeCredentials | null {
+function toCredentials(value: unknown): MarketplaceCredentials | null {
   if (!isRecord(value)) return null
   const clientId = value.clientId
   const clientSecret = value.clientSecret
@@ -202,10 +202,10 @@ function parseJson(text: string): unknown {
   }
 }
 
-export class LobeSkills {
+export class Marketplace {
   private readonly store: BackendStore
   private readonly workspace: string
-  private cache: Map<string, { at: number; value: LobeSearchResult }> | null = null
+  private cache: Map<string, { at: number; value: MarketplaceSearchResult }> | null = null
 
   constructor(store: BackendStore, workspace: string) {
     this.store = store
@@ -217,13 +217,13 @@ export class LobeSkills {
   }
 
   /** Cached marketplace credentials (registered once). */
-  credentials(): LobeCredentials | null {
-    const saved = this.store.settings.all().lobe
+  credentials(): MarketplaceCredentials | null {
+    const saved = this.store.settings.all().marketplace
     const fromStore = toCredentials(saved)
     if (fromStore) return fromStore
     // the CLI persists its own credentials on disk
     try {
-      const file = join(homedir(), '.lobehub-market', 'credentials.json')
+      const file = join(homedir(), '.marketplacehub-market', 'credentials.json')
       const json = JSON.parse(readFileSync(file, 'utf8')) as unknown
       return toCredentials(json)
     } catch {
@@ -232,7 +232,7 @@ export class LobeSkills {
     return null
   }
 
-  async register(): Promise<LobeCredentials> {
+  async register(): Promise<MarketplaceCredentials> {
     await runCli([
       'register',
       '--base-url',
@@ -243,8 +243,8 @@ export class LobeSkills {
       'codex'
     ])
     const creds = this.credentials()
-    if (!creds) throw new Error('Could not register with the LobeHub marketplace')
-    this.store.settings.update('lobe', {
+    if (!creds) throw new Error('Could not register with the Marketplace marketplace')
+    this.store.settings.update('marketplace', {
       baseUrl: BASE_URL,
       clientId: creds.clientId,
       clientSecret: creds.clientSecret,
@@ -253,7 +253,7 @@ export class LobeSkills {
     return creds
   }
 
-  async ensureRegistered(): Promise<LobeCredentials> {
+  async ensureRegistered(): Promise<MarketplaceCredentials> {
     const creds = this.credentials()
     if (creds) return creds
     return this.register()
@@ -266,7 +266,7 @@ export class LobeSkills {
     pageSize = 24,
     sort = 'createdAt',
     order = 'desc'
-  }: LobeSearchOptions = {}): Promise<LobeSearchResult> {
+  }: MarketplaceSearchOptions = {}): Promise<MarketplaceSearchResult> {
     const key = `${q}|${category}|${page}|${pageSize}|${sort}|${order}`
     const cached = this.cache?.get(key)
     if (cached && Date.now() - cached.at < 60000) return cached.value
@@ -305,9 +305,9 @@ export class LobeSkills {
       validated: Boolean(i.isValidated),
       tags: Array.isArray(i.tags) ? i.tags.map((tag) => str(tag)) : [],
       stars: num(isRecord(i.github) ? i.github.stars : 0),
-      source: 'lobehub' as const
+      source: 'marketplacehub' as const
     }))
-    const value: LobeSearchResult = {
+    const value: MarketplaceSearchResult = {
       items,
       total: num(json.totalCount) || items.length,
       categories: Array.isArray(json.categories) ? json.categories : []
@@ -317,7 +317,7 @@ export class LobeSkills {
     return value
   }
 
-  async install({ id, agent = 'codex' }: LobeInstallOptions): Promise<LobeInstallResult> {
+  async install({ id, agent = 'codex' }: MarketplaceInstallOptions): Promise<MarketplaceInstallResult> {
     const creds = await this.ensureRegistered()
     const dir = this.skillsDir
     mkdirSync(dir, { recursive: true })
@@ -329,7 +329,7 @@ export class LobeSkills {
   }
 
   /** The MCP plugin catalogue from the same marketplace. */
-  async searchMcp({ q = '', page = 1, pageSize = 24 }: LobeMcpSearchOptions = {}): Promise<LobeMcpSearchResult> {
+  async searchMcp({ q = '', page = 1, pageSize = 24 }: MarketplaceMcpSearchOptions = {}): Promise<MarketplaceMcpSearchResult> {
     const creds = await this.ensureRegistered()
     const args = [
       'mcp',
@@ -353,13 +353,13 @@ export class LobeSkills {
       description: str(i.description),
       author: str(i.author),
       installs: num(i.installCount),
-      source: 'lobehub-mcp' as const
+      source: 'marketplacehub-mcp' as const
     }))
     return { items, total: num(json.totalCount) || items.length }
   }
 
   /** Resolves a skill by its exact identifier, falling back to a title search. */
-  async resolve({ id, name }: LobeResolveOptions): Promise<LobeResolvedSkill | null> {
+  async resolve({ id, name }: MarketplaceResolveOptions): Promise<MarketplaceResolvedSkill | null> {
     const label = name ?? ''
     try {
       const { stdout } = await runCli(['skills', 'view', id, '--output', 'json'], {
@@ -382,7 +382,7 @@ export class LobeSkills {
   }
 
   /** Skills already installed into the workspace. */
-  installed(): LobeInstalledSkill[] {
+  installed(): MarketplaceInstalledSkill[] {
     const dir = this.skillsDir
     let entries: Dirent[] = []
     try {

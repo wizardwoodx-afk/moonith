@@ -1,7 +1,7 @@
 /**
  * Moon Gateway — route resolution.
  *
- * Ported from OpenClaw's routing/resolve-route.ts: an inbound message is
+ * Ported from ExternalAgent's routing/resolve-route.ts: an inbound message is
  * matched against the configured bindings, the most specific match wins, and the
  * match decides both the agent and the session key.
  */

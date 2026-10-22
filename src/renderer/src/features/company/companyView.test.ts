@@ -120,7 +120,7 @@ describe('company view', () => {
         }
       ],
       mcpServers: [],
-      composio: { hasKey: false, enabled: false, toolkits: [] },
+      connectors: { hasKey: false, enabled: false, toolkits: [] },
       channels: [],
       defaultPermissionMode: 'manual',
       customInstructions: '',

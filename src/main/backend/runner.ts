@@ -84,8 +84,8 @@ export interface RunnerUsage {
 }
 
 export interface RunnerIntegrations {
-  lobe?: { context?: () => string }
-  composio?: {
+  marketplace?: { context?: () => string }
+  connectors?: {
     connected: boolean
     toolDefinitions(input: { limit?: number }): Promise<ProviderToolSpec[]>
     execute(input: { tool: string; args: Record<string, unknown> }): Promise<unknown>
@@ -119,12 +119,12 @@ export interface RunnerIntegrations {
       session?: unknown
     }): Promise<{ allowed: boolean; reason?: string }>
   }
-  m365?: {
+  work?: {
     connected(): boolean
     tools(): ProviderToolSpec[]
     run(name: string, args: Record<string, unknown>): Promise<unknown>
   }
-  openclaw?: { agent(prompt: string): Promise<unknown> }
+  externalAgent?: { agent(prompt: string): Promise<unknown> }
 }
 
 export interface RunnerSettings {
@@ -272,19 +272,19 @@ export class AgentRunner {
       ? [
           ...toolSet.roleTools,
           DELEGATE_TOOL,
-          ...toolSet.composioTools,
+          ...toolSet.connectorsTools,
           ...toolSet.computerTools,
-          ...toolSet.uiTarsTools,
-          ...toolSet.m365Tools,
+          ...toolSet.groundedActionsTools,
+          ...toolSet.workTools,
           ...toolSet.mcpTools,
           ...toolSet.openClawTools
         ]
       : [
           ...toolSet.roleTools,
-          ...toolSet.composioTools,
+          ...toolSet.connectorsTools,
           ...toolSet.computerTools,
-          ...toolSet.uiTarsTools,
-          ...toolSet.m365Tools,
+          ...toolSet.groundedActionsTools,
+          ...toolSet.workTools,
           ...toolSet.mcpTools,
           ...toolSet.openClawTools
         ]
@@ -378,8 +378,8 @@ export class AgentRunner {
               parentAgent: agent,
               depth: opts.depth || 0
             })) as unknown as Record<string, unknown>
-          } else if (call.name.startsWith('composio_')) {
-            result = (await this.runComposio(call.name.replace(/^composio_/, ''), args)) as unknown as Record<
+          } else if (call.name.startsWith('connectors_')) {
+            result = (await this.runConnectors(call.name.replace(/^connectors_/, ''), args)) as unknown as Record<
               string,
               unknown
             >
@@ -388,7 +388,7 @@ export class AgentRunner {
               string,
               unknown
             >
-          } else if (call.name === 'ui_tars_run') {
+          } else if (call.name === 'grounded_actions') {
             const res = (await this.integrations.uitars?.run({
               instruction: args.instruction as string,
               maxSteps: args.maxSteps as number | undefined
@@ -396,7 +396,7 @@ export class AgentRunner {
             this.emit('agent:tool', {
               sessionId: input.session.id,
               agentId: agent.id,
-              tool: 'ui_tars_run',
+              tool: 'grounded_actions',
               args,
               result: { ok: true, steps: (res?.steps || []).length, summary: res?.summary }
             })
@@ -461,8 +461,8 @@ export class AgentRunner {
   }
 
   /**
-   * The tool set for a turn: the role's own tools, plus the live Composio
-   * tools, the opt-in computer-use tools and the UI-TARS capability.
+   * The tool set for a turn: the role's own tools, plus the live Connectors
+   * tools, the opt-in computer-use tools and the Grounded Actions capability.
    */
   async buildToolSet(
     agent: ResolvedAgent,
@@ -470,10 +470,10 @@ export class AgentRunner {
     opts: { isolate?: boolean } = {}
   ): Promise<{
     roleTools: ProviderToolSpec[]
-    composioTools: ProviderToolSpec[]
+    connectorsTools: ProviderToolSpec[]
     computerTools: ProviderToolSpec[]
-    uiTarsTools: ProviderToolSpec[]
-    m365Tools: ProviderToolSpec[]
+    groundedActionsTools: ProviderToolSpec[]
+    workTools: ProviderToolSpec[]
     mcpTools: ProviderToolSpec[]
     openClawTools: ProviderToolSpec[]
     canDelegate: boolean
@@ -484,28 +484,28 @@ export class AgentRunner {
       if (name === 'finish') return true
       return agent.tools.includes(name)
     })
-    // Composio tools are real, live tools from the user's own Composio account.
-    const composioTools = await this.composioToolDefinitions()
+    // Connectors tools are real, live tools from the user's own Connectors account.
+    const connectorsTools = await this.connectorsToolDefinitions()
     // Computer use is opt-in and only offered when the user switched it on.
     const computerTools = this.integrations.computer?.definitions?.() ?? []
-    // Microsoft 365 (the surface Copilot 365 reasons over) — only when connected.
-    const m365Tools = this.integrations.m365?.connected() ? this.integrations.m365.tools() : []
+    // Work Files (the surface SubscriptionAccount 365 reasons over) — only when connected.
+    const workTools = this.integrations.work?.connected() ? this.integrations.work.tools() : []
     // MCP connectors (the GitHub MCP Server, Microsoft Learn, …) expose their own tools.
     const mcpTools = await this.mcpToolDefinitions()
-    // OpenClaw: hand a task to a running OpenClaw gateway.
-    const openClawTools: ProviderToolSpec[] = this.integrations.openclaw
+    // ExternalAgent: hand a task to a running ExternalAgent gateway.
+    const openClawTools: ProviderToolSpec[] = this.integrations.externalAgent
       ? [
           {
             type: 'function',
             function: {
-              name: 'openclaw_agent',
+              name: 'externalAgent_agent',
               description:
-                'Run a task on a running OpenClaw gateway — the self-hosted agent that also answers on ' +
-                'Telegram, Discord, Slack and the rest. Use it for work that belongs in that session.',
+                'Run a task on a running ExternalAgent gateway — the self-hosted agent that also answers on ' +
+                'your chat app and the rest. Use it for work that belongs in that session.',
               parameters: {
                 type: 'object',
                 properties: {
-                  prompt: { type: 'string', description: 'The task for the OpenClaw agent' }
+                  prompt: { type: 'string', description: 'The task for the ExternalAgent agent' }
                 },
                 required: ['prompt']
               }
@@ -513,16 +513,16 @@ export class AgentRunner {
           }
         ]
       : []
-    // UI-TARS is a capability, not a separate app: when configured, the agent
+    // Grounded Actions is a capability, not a separate app: when configured, the agent
     // can hand a GUI task to the grounded action model.
-    const uiTarsTools: ProviderToolSpec[] = this.integrations.uitars?.enabled
+    const groundedActionsTools: ProviderToolSpec[] = this.integrations.uitars?.enabled
       ? [
           {
             type: 'function',
             function: {
-              name: 'ui_tars_run',
+              name: 'grounded_actions',
               description:
-                'Hand a desktop task to the UI-TARS GUI agent. It looks at the screen, ' +
+                'Hand a desktop task to the Grounded Actions GUI agent. It looks at the screen, ' +
                 'grounds the target and clicks, types, scrolls or drags until the task is done.',
               parameters: {
                 type: 'object',
@@ -544,10 +544,10 @@ export class AgentRunner {
     const canDelegate = agent.canDelegate !== false && !opts.isolate
     return {
       roleTools,
-      composioTools,
+      connectorsTools,
       computerTools,
-      uiTarsTools,
-      m365Tools,
+      groundedActionsTools,
+      workTools,
       mcpTools,
       openClawTools,
       canDelegate
@@ -595,10 +595,10 @@ export class AgentRunner {
     const { session, agent, runtime, userMessage, opts, controller } = input
     const toolSet = await this.buildToolSet(agent, runtime, opts)
     const extraTools: ProviderToolSpec[] = [
-      ...toolSet.composioTools,
+      ...toolSet.connectorsTools,
       ...toolSet.computerTools,
-      ...toolSet.uiTarsTools,
-      ...toolSet.m365Tools,
+      ...toolSet.groundedActionsTools,
+      ...toolSet.workTools,
       ...toolSet.mcpTools,
       ...toolSet.openClawTools,
       ...(toolSet.canDelegate ? [DELEGATE_TOOL] : [])
@@ -629,20 +629,20 @@ export class AgentRunner {
       if (name === 'delegate_to_agent') {
         return this.delegate({ session, args, parentAgent: agent, depth: opts.depth || 0 })
       }
-      if (name.startsWith('composio_')) {
-        return this.runComposio(name.replace(/^composio_/, ''), args)
+      if (name.startsWith('connectors_')) {
+        return this.runConnectors(name.replace(/^connectors_/, ''), args)
       }
       if (name.startsWith('computer_')) {
         return this.integrations.computer?.invoke(name, args)
       }
-      if (name === 'ui_tars_run') {
+      if (name === 'grounded_actions') {
         return this.integrations.uitars?.run({
           instruction: args.instruction as string,
           maxSteps: args.maxSteps as number | undefined
         })
       }
-      if (name.startsWith('m365_')) {
-        const result = await this.integrations.m365?.run(name, args)
+      if (name.startsWith('work_')) {
+        const result = await this.integrations.work?.run(name, args)
         emit('agent:tool', { tool: name, args, result })
         return result
       }
@@ -651,8 +651,8 @@ export class AgentRunner {
         emit('agent:tool', { tool: name, args, result })
         return result
       }
-      if (name === 'openclaw_agent') {
-        const result = await this.integrations.openclaw?.agent(args.prompt as string)
+      if (name === 'externalAgent_agent') {
+        const result = await this.integrations.externalAgent?.agent(args.prompt as string)
         emit('agent:tool', { tool: name, args, result })
         return result
       }
@@ -744,31 +744,31 @@ export class AgentRunner {
   }
 
   buildSkillContext(): string {
-    const ctx = this.integrations.lobe?.context?.() || ''
+    const ctx = this.integrations.marketplace?.context?.() || ''
     if (!ctx) return ''
     return `Installed skills:\n${ctx}`
   }
 
-  /** Live tool definitions from the user's Composio account (empty when not connected). */
-  async composioToolDefinitions(): Promise<ProviderToolSpec[]> {
-    const composio = this.integrations.composio
-    if (!composio || !composio.connected) return []
+  /** Live tool definitions from the user's Connectors account (empty when not connected). */
+  async connectorsToolDefinitions(): Promise<ProviderToolSpec[]> {
+    const connectors = this.integrations.connectors
+    if (!connectors || !connectors.connected) return []
     try {
-      return await composio.toolDefinitions({ limit: 40 })
+      return await connectors.toolDefinitions({ limit: 40 })
     } catch {
       return []
     }
   }
 
-  async runComposio(tool: string, args: Record<string, unknown>): Promise<unknown> {
-    const composio = this.integrations.composio
-    if (!composio?.connected) return { ok: false, error: 'Composio is not connected.' }
+  async runConnectors(tool: string, args: Record<string, unknown>): Promise<unknown> {
+    const connectors = this.integrations.connectors
+    if (!connectors?.connected) return { ok: false, error: 'Connectors is not connected.' }
     try {
-      const res = await composio.execute({ tool, args })
+      const res = await connectors.execute({ tool, args })
       this.emit('agent:tool', {
         sessionId: null,
         agentId: 'knight',
-        tool: `composio.${tool}`,
+        tool: `connectors.${tool}`,
         args,
         result: res
       })

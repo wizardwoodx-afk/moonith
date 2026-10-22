@@ -6,7 +6,7 @@ import { REA_SERVER_CONFIG } from '@shared/constants'
 import type {
   AttachmentRef,
   ChannelInput,
-  ComposioInput,
+  ConnectorsInput,
   CreateScheduleInput,
   CreateTaskInput,
   McpServerConfig,
@@ -16,7 +16,7 @@ import type {
   SendMessageInput,
   SettingsPatch,
   SkillDraft,
-  SkillRegistry,
+  SkillSource,
   TableGoalInput,
   TableHostInput,
   TableJoinInput,
@@ -39,7 +39,7 @@ import { tableService } from './services/table'
 import { skillService } from './services/skills'
 import { memoryService } from './services/memory'
 import { usageService } from './services/usage'
-import { composioManager } from './services/composio'
+import { connectorsManager } from './services/connectors'
 import { channelService } from './services/channels'
 import { subAgentService } from './services/subagents'
 import { applyTitleBarTheme } from './window'
@@ -265,10 +265,10 @@ export function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.skillsList, () => skillService.list())
-  ipcMain.handle(IPC.skillsSearch, (_event, query: string, registry?: SkillRegistry) =>
+  ipcMain.handle(IPC.skillsSearch, (_event, query: string, registry?: SkillSource) =>
     skillService.search(query, registry)
   )
-  ipcMain.handle(IPC.skillsInstall, (_event, ref: string, registry?: SkillRegistry) =>
+  ipcMain.handle(IPC.skillsInstall, (_event, ref: string, registry?: SkillSource) =>
     skillService.install(ref, registry)
   )
   ipcMain.handle(IPC.skillsRead, (_event, id: string) => skillService.read(id))
@@ -282,13 +282,13 @@ export function registerIpc(): void {
 
   ipcMain.handle(IPC.usageSummary, () => usageService.summary())
 
-  ipcMain.handle(IPC.composioState, (_event, refresh?: boolean) =>
-    composioManager.getState(Boolean(refresh))
+  ipcMain.handle(IPC.connectorsState, (_event, refresh?: boolean) =>
+    connectorsManager.getState(Boolean(refresh))
   )
-  ipcMain.handle(IPC.composioSave, async (_event, input: ComposioInput) => {
-    await store.saveComposio(input)
-    composioManager.invalidate()
-    return composioManager.getState(true)
+  ipcMain.handle(IPC.connectorsSave, async (_event, input: ConnectorsInput) => {
+    await store.saveConnectors(input)
+    connectorsManager.invalidate()
+    return connectorsManager.getState(true)
   })
 
   ipcMain.handle(IPC.channelState, () => channelService.getState())

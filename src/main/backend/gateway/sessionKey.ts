@@ -1,7 +1,7 @@
 /**
  * Moon Gateway — session keys.
  *
- * Ported from OpenClaw's routing/session-key.ts. A session key is the identity
+ * Ported from ExternalAgent's routing/session-key.ts. A session key is the identity
  * a conversation is persisted under; it encodes the agent, the channel, the
  * account and the peer, plus the scope that decides how direct messages
  * collapse onto shared sessions.

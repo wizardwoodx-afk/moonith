@@ -1,7 +1,7 @@
 /**
  * Moon Gateway — automations.
  *
- * Ported from OpenClaw's cron/store/row-codec.ts and cron/service. A job is a
+ * Ported from ExternalAgent's cron/store/row-codec.ts and cron/service. A job is a
  * row in the store: an agent, a session, a prompt and a schedule. Jobs can be
  * grouped into a family so the family can be replaced as a unit.
  */

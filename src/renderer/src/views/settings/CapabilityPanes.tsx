@@ -18,11 +18,11 @@ import { toast } from 'sonner'
 import type {
   ChannelRecord,
   ChannelState,
-  ComposioState,
+  ConnectorsState,
   SkillDetail,
   SkillDraft,
   SkillMarketResult,
-  SkillRegistry,
+  SkillSource,
   SkillSummary,
   SubAgentRun
 } from '@shared/types'
@@ -114,7 +114,7 @@ export function SkillsPane() {
   const [skills, setSkills] = useState<SkillSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
-  const [registry, setRegistry] = useState<SkillRegistry>('clawhub')
+  const [registry, setRegistry] = useState<SkillSource>('registry')
   const [results, setResults] = useState<SkillMarketResult[] | null>(null)
   const [searching, setSearching] = useState(false)
   const [installing, setInstalling] = useState<string | null>(null)
@@ -150,7 +150,7 @@ export function SkillsPane() {
     }
   }
 
-  const install = async (ref: string, from: SkillRegistry): Promise<void> => {
+  const install = async (ref: string, from: SkillSource): Promise<void> => {
     setInstalling(ref)
     try {
       setSkills(await window.knight.installSkill(ref, from))
@@ -237,10 +237,10 @@ export function SkillsPane() {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-[12.5px] font-medium text-ink">{skill.name}</p>
                     <Chip tone={skill.source === 'installed' ? 'accent' : 'neutral'}>
-                      {skill.registry === 'lobehub'
-                        ? 'LobeHub'
-                        : skill.registry === 'clawhub'
-                          ? 'ClawHub'
+                      {skill.registry === 'marketplace'
+                        ? 'Marketplace'
+                        : skill.registry === 'registry'
+                          ? 'Registry'
                           : 'Local'}
                     </Chip>
                     <span className="text-[10px] text-faint">
@@ -275,7 +275,7 @@ export function SkillsPane() {
         description="Search a public registry. Nothing installs until you choose it."
       >
         <div className="flex w-fit gap-0.5 rounded-lg border border-line bg-canvas p-0.5">
-          {(['clawhub', 'lobehub'] as const).map((id) => (
+          {(['registry', 'marketplace'] as const).map((id) => (
             <button
               key={id}
               onClick={() => {
@@ -289,7 +289,7 @@ export function SkillsPane() {
                   : 'text-muted hover:text-ink'
               )}
             >
-              {id === 'clawhub' ? 'ClawHub' : 'LobeHub'}
+              {id === 'registry' ? 'Registry' : 'Marketplace'}
             </button>
           ))}
         </div>
@@ -306,8 +306,8 @@ export function SkillsPane() {
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void runSearch()
               }}
-              placeholder={`Search ${registry === 'lobehub' ? 'LobeHub' : 'ClawHub'}`}
-              aria-label={`Search ${registry === 'lobehub' ? 'LobeHub' : 'ClawHub'} skills`}
+              placeholder={`Search ${registry === 'marketplace' ? 'Marketplace' : 'Registry'}`}
+              aria-label={`Search ${registry === 'marketplace' ? 'Marketplace' : 'Registry'} skills`}
               className={cn(inputClass, 'pl-8')}
             />
           </div>
@@ -438,10 +438,10 @@ export function SkillsPane() {
   )
 }
 
-/* ───────────────────────────── Composio ───────────────────────────── */
+/* ───────────────────────────── Connectors ─────────────────────────── */
 
-export function ComposioPane() {
-  const [state, setState] = useState<ComposioState | null>(null)
+export function ConnectorsPane() {
+  const [state, setState] = useState<ConnectorsState | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [keyDraft, setKeyDraft] = useState('')
@@ -452,7 +452,7 @@ export function ComposioPane() {
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true)
     try {
-      setState(await window.knight.composioState(refresh))
+      setState(await window.knight.connectorsState(refresh))
     } catch (error) {
       toast.error(errorMessage(error))
     } finally {
@@ -467,16 +467,16 @@ export function ComposioPane() {
 
   const saveKey = async (): Promise<void> => {
     if (!keyDraft.trim()) {
-      toast.error('Paste a Composio API key first.')
+      toast.error('Paste a connector key first.')
       return
     }
     setSaving(true)
     try {
-      const next = await window.knight.saveComposio({ apiKey: keyDraft })
+      const next = await window.knight.saveConnectors({ apiKey: keyDraft })
       setState(next)
       setKeyDraft('')
       if (next.error) toast.error(next.error)
-      else toast.success('Composio connected.')
+      else toast.success('Connectors connected.')
     } catch (error) {
       toast.error(errorMessage(error))
     } finally {
@@ -490,7 +490,7 @@ export function ComposioPane() {
     toolkits?: string[]
   }): Promise<void> => {
     try {
-      const next = await window.knight.saveComposio(input)
+      const next = await window.knight.saveConnectors(input)
       setState(next)
       if (next.error) toast.error(next.error)
     } catch (error) {
@@ -534,12 +534,12 @@ export function ComposioPane() {
     <div className="space-y-9">
       <SettingsSection
         title="Connection"
-        description="Your key stays sealed on this device. Calls go straight to Composio."
+        description="Your key stays sealed on this device. Calls go straight to the connector service."
       >
         <div className="space-y-5">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-[12.5px] font-medium text-ink">Composio key</p>
+              <p className="text-[12.5px] font-medium text-ink">Connector key</p>
               <p className="text-[11.5px] text-muted">
                 {state?.configured ? 'A key is saved on this device.' : 'Add a key to list toolkits.'}
               </p>
@@ -553,7 +553,7 @@ export function ComposioPane() {
               type="password"
               value={keyDraft}
               onChange={(event) => setKeyDraft(event.target.value)}
-              aria-label="Composio API key"
+              aria-label="Connector API key"
               className={inputClass}
               autoComplete="off"
             />
@@ -572,7 +572,7 @@ export function ComposioPane() {
               <Toggle
                 checked={state.enabled}
                 onChange={(checked) => void patch({ enabled: checked })}
-                label="Expose Composio tools"
+                label="Expose connector tools"
               />
             </div>
           ) : null}
@@ -712,7 +712,7 @@ export function ChannelsPane() {
 
   const openNew = (next: 'webhook' | 'telegram'): void => {
     setKind(next)
-    setName(next === 'webhook' ? 'Local webhook' : 'Telegram')
+    setName(next === 'webhook' ? 'Local webhook' : 'Chat channel')
     setToken('')
     setEditing('new')
   }
@@ -945,7 +945,7 @@ export function ChannelsPane() {
           <Empty
             icon={<Globe2 size={18} />}
             title="No channels yet"
-            hint="Add a local webhook for your own scripts and apps, or connect a Telegram bot so you can message the Captain from your phone."
+            hint="Add a local webhook for your own scripts and apps, or connect a chat bot so you can message the Captain from your phone."
           />
         )}
 
@@ -971,7 +971,7 @@ export function ChannelsPane() {
               <MessageCircle size={14} />
             </div>
             <div>
-              <p className="text-[12px] font-medium text-ink">Telegram bot</p>
+              <p className="text-[12px] font-medium text-ink">Chat bot</p>
               <p className="text-[10.5px] text-muted">Long polling · no public URL</p>
             </div>
             <Plus size={13} className="ml-auto text-faint" />

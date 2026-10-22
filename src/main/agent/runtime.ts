@@ -19,19 +19,18 @@ import { store } from '../store'
 import { ensureTaskWorkspace } from '../paths'
 import { isWithin } from '../security'
 import { newId, nowIso, truncate } from '../util'
-import { addUsage, type CompletionResult } from './types'
-import { providerError, streamCompletion } from './providers'
+import { addUsage } from './types'
+import { providerError } from './providers'
 import { buildSystemPrompt } from './prompt'
 import { getBuiltinTools } from './tools'
 import type { AgentTool, ToolContext } from './tools/types'
 import { artifactKindForPath, mimeForPath } from '../services/documents'
 import { mcpManager } from '../services/mcp'
-import { composioManager } from '../services/composio'
+import { connectorsManager } from '../services/connectors'
 import { memoryService } from '../services/memory'
 import { skillService } from '../services/skills'
 import { subAgentService } from '../services/subagents'
 import { usageService } from '../services/usage'
-import { isFailoverWorthy } from './failover'
 import { runEngineTurn, type ToolOutcome } from './engine'
 import { getBackend } from '../backend'
 import { backendSkillsDir } from '../backend/paths'
@@ -45,22 +44,8 @@ interface RunState {
   pendingSteer: boolean
 }
 
-interface ResolvedProvider {
-  id: string
-  name: string
-  kind: 'anthropic' | 'openai' | 'compatible'
-  apiKey: string
-  baseUrl?: string
-  model: string
-}
-
 const MAX_ROUNDS = 50
 const MAX_STEPS = 500
-
-function withoutSchemaMetadata(schema: Record<string, unknown>): Record<string, unknown> {
-  const { $schema: _schema, ...rest } = schema
-  return rest
-}
 
 function mergePlan(existing: PlanItem[], steps: string[]): PlanItem[] {
   const byText = new Map(existing.map((item) => [item.text, item]))
@@ -198,8 +183,8 @@ class AgentRuntime {
       await this.commit(task)
 
       const settings = store.getPublicSettings()
-      const providers = this.resolveProviders(task, settings)
-      const tools = await this.collectTools(task, run, providers, settings)
+      const provider = this.resolveEngineProvider(task, settings)
+      const tools = await this.collectTools(task, run, provider, settings)
       const toolMap = new Map(tools.map((tool) => [tool.name, tool]))
       const skills = await skillService.promptIndex().catch(() => '')
       const lastUser = [...task.messages]
@@ -217,7 +202,6 @@ class AgentRuntime {
       })
 
       const backend = getBackend()
-      const provider = this.resolveEngineProvider(task, settings)
 
       // The Moonwright core takes the transcript up to the last user message,
       // and the user message itself.
@@ -346,7 +330,7 @@ class AgentRuntime {
   private async collectTools(
     task: Task,
     run: RunState,
-    providers: ResolvedProvider[],
+    provider: Provider,
     settings: PublicSettings
   ): Promise<AgentTool[]> {
     let mcpTools: AgentTool[] = []
@@ -355,14 +339,14 @@ class AgentRuntime {
     } catch (error) {
       toast('error', `MCP tools unavailable: ${error instanceof Error ? error.message : String(error)}`)
     }
-    let composioTools: AgentTool[] = []
+    let connectorsTools: AgentTool[] = []
     try {
-      composioTools = await composioManager.getAgentTools()
+      connectorsTools = await connectorsManager.getAgentTools()
     } catch {
-      // The Composio page reports the connection error; a task should still run.
+      // The Connectors page reports the connection error; a task should still run.
     }
 
-    const base = [...getBuiltinTools(task.mode), ...mcpTools, ...composioTools]
+    const base = [...getBuiltinTools(task.mode), ...mcpTools, ...connectorsTools]
     const delegate: AgentTool = {
       name: 'delegate_to_crew',
       title: 'Delegate to a Crew sub-agent',
@@ -398,7 +382,7 @@ class AgentRuntime {
         this.runSubAgent(
           task,
           run,
-          providers[0],
+          provider,
           args.name,
           args.instruction,
           [...base, readSkill],
@@ -436,7 +420,7 @@ class AgentRuntime {
   private async runSubAgent(
     task: Task,
     parent: RunState,
-    provider: ResolvedProvider,
+    provider: Provider,
     name: string,
     instruction: string,
     tools: AgentTool[],
@@ -447,8 +431,8 @@ class AgentRuntime {
       taskTitle: task.title,
       name,
       instruction,
-      provider: provider.kind,
-      model: provider.model
+      provider: provider.settings.providerId ?? 'knight',
+      model: provider.settings.model ?? ''
     })
     const allowed = tools.filter(
       (tool) =>
@@ -456,11 +440,6 @@ class AgentRuntime {
         (tool.approval === 'never' || task.permissionMode === 'skip')
     )
     const toolMap = new Map(allowed.map((tool) => [tool.name, tool]))
-    const providerTools = allowed.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: withoutSchemaMetadata(tool.inputSchema)
-    }))
     const workspace = ensureTaskWorkspace(task.id)
     const system = `You are ${name}, a Crew sub-agent inside Knight Cowork. The Captain delegated one focused job to you.
 Do the job with the tools you have, verify what you can, then reply with a compact report: findings, file paths, and anything the Captain must know.
@@ -469,90 +448,54 @@ Workspace: ${workspace}
 Granted folders:
 ${context.roots.map((root) => `- ${root}`).join('\n')}
 ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace.' : 'This job is read-only: do not modify files or run shell commands.'}`
-    const messages: ChatMessage[] = [
-      {
-        id: newId('msg'),
-        role: 'user',
-        content: instruction,
-        createdAt: nowIso()
-      }
-    ]
     const subContext: ToolContext = { ...context, setPlan: () => undefined }
+    const backend = getBackend()
 
     try {
-      for (let round = 0; round < 8; round++) {
-        if (parent.stopped) {
-          await subAgentService.finish(run, 'stopped', { error: 'The parent task was stopped.' })
-          return { content: `${name} stopped because the task was stopped.`, isError: true }
-        }
-        const completion = await streamCompletion({
-          kind: provider.kind,
-          apiKey: provider.apiKey,
-          baseUrl: provider.baseUrl,
-          model: provider.model,
-          system,
-          messages,
-          tools: providerTools,
-          signal: parent.controller.signal,
-          onText: () => undefined
-        })
-        await usageService
-          .record({
-            agentId: `Crew · ${name}`,
-            providerId: provider.id,
-            model: provider.model,
-            usage: completion.usage
-          })
-          .catch(() => undefined)
-        messages.push({
-          id: newId('msg'),
-          role: 'assistant',
-          content: completion.text,
-          createdAt: nowIso(),
-          toolCalls: completion.toolCalls.map((call) => ({
-            id: call.id,
-            name: call.name,
-            arguments: call.arguments
-          }))
-        })
-        if (!completion.toolCalls.length) {
-          const summary = completion.text.trim() || `${name} finished without a written report.`
-          run.summary = truncate(summary, 8000)
-          await subAgentService.finish(run, 'done', { summary: run.summary })
-          return { content: `Crew report from ${name}:\n\n${truncate(summary, 20000)}` }
-        }
-        for (const call of completion.toolCalls) {
-          if (parent.stopped) break
-          const tool = toolMap.get(call.name)
+      const result = await runEngineTurn({
+        provider,
+        tools: allowed,
+        systemPrompt: system,
+        history: [],
+        userMessage: instruction,
+        memoryStore: backend.store.memories,
+        skillsDir: backendSkillsDir(),
+        config: {
+          maxIterations: 8,
+          delegationMaxIterations: 0,
+          skillNudgeInterval: 10,
+          memoryNudgeInterval: 15,
+          backgroundReview: false,
+          temperature: 0.2,
+          maxOutputTokens: 4096
+        },
+        signal: parent.controller.signal,
+        onText: () => undefined,
+        onTool: async (callId, toolName, args) => {
+          if (parent.stopped) {
+            return { content: 'The parent task was stopped.', isError: true }
+          }
+          const tool = toolMap.get(toolName)
           const stepId = newId('step')
           if (!tool) {
-            messages.push({
-              id: newId('msg'),
-              role: 'tool',
-              content: `Unknown tool "${call.name}".`,
-              createdAt: nowIso(),
-              toolCallId: call.id,
-              name: call.name,
-              error: true
-            })
             run.steps.push({
               id: stepId,
-              tool: call.name,
-              title: call.name,
+              tool: toolName,
+              title: toolName,
               status: 'error',
               detail: 'Unknown tool',
               at: nowIso()
             })
             await subAgentService.saveRun(run)
-            continue
+            return { content: `Unknown tool "${toolName}".`, isError: true }
           }
           const record: SubAgentStep = {
             id: stepId,
             tool: tool.name,
             title: tool.title,
             detail: tool.summarize
-              ? tool.summarize(call.arguments)
-              : truncate(JSON.stringify(call.arguments), 240),
+              ? tool.summarize(args)
+              : truncate(JSON.stringify(args), 240),
             status: 'running',
             at: nowIso()
           }
@@ -561,15 +504,17 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
           let content = ''
           let isError = false
           try {
-            let args: unknown = call.arguments
+            let parsedArgs: unknown = args
             if (tool.schema) {
-              const parsed = tool.schema.safeParse(call.arguments)
-              if (!parsed.success) throw new Error(parsed.error.issues.map((issue) => issue.message).join('; '))
-              args = parsed.data
+              const parsed = tool.schema.safeParse(args)
+              if (!parsed.success) {
+                throw new Error(parsed.error.issues.map((issue) => issue.message).join('; '))
+              }
+              parsedArgs = parsed.data
             }
-            const result = await tool.execute(args, subContext)
-            content = truncate(result.content, 30000)
-            isError = Boolean(result.isError)
+            const outcome = await tool.execute(parsedArgs, subContext)
+            content = truncate(outcome.content, 30000)
+            isError = Boolean(outcome.isError)
           } catch (error) {
             content = `Tool error: ${error instanceof Error ? error.message : String(error)}`
             isError = true
@@ -577,20 +522,29 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
           record.status = isError ? 'error' : 'ok'
           record.detail = isError ? truncate(content, 400) : record.detail
           await subAgentService.saveRun(run)
-          messages.push({
-            id: newId('msg'),
-            role: 'tool',
-            content,
-            createdAt: nowIso(),
-            toolCallId: call.id,
-            name: call.name,
-            error: isError
-          })
-        }
-      }
-      const summary = `${name} reached the sub-agent step limit before finishing.`
-      await subAgentService.finish(run, 'error', { error: summary })
-      return { content: summary, isError: true }
+          return { content, isError }
+        },
+        emit: () => undefined
+      })
+
+      await usageService
+        .record({
+          agentId: `Crew · ${name}`,
+          providerId: provider.settings.providerId ?? 'knight',
+          model: provider.settings.model ?? '',
+          usage: {
+            input: result.usage.prompt,
+            output: result.usage.completion,
+            total: result.usage.total
+          }
+        })
+        .catch(() => undefined)
+
+      const summary =
+        (result.finalResponse ?? '').trim() || `${name} finished without a written report.`
+      run.summary = truncate(summary, 8000)
+      await subAgentService.finish(run, 'done', { summary: run.summary })
+      return { content: `Crew report from ${name}:\n\n${truncate(summary, 20000)}` }
     } catch (error) {
       if (parent.stopped) {
         await subAgentService.finish(run, 'stopped', { error: 'The parent task was stopped.' })
@@ -600,49 +554,6 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       await subAgentService.finish(run, 'error', { error: message })
       return { content: `Crew sub-agent failed: ${message}`, isError: true }
     }
-  }
-
-  private resolveProviders(task: Task, settings: PublicSettings): ResolvedProvider[] {
-    const providerId = task.providerId || settings.defaultProviderId
-    const provider = providerId ? store.getProvider(providerId) : undefined
-    if (!provider) {
-      throw new Error('Connect an AI provider in Settings to get started.')
-    }
-    if (!provider.enabled) {
-      throw new Error(`The provider “${provider.name}” is disabled. Enable it in Settings.`)
-    }
-    const apiKey = store.getProviderSecret(provider.id)
-    if (!apiKey) {
-      throw new Error(`Add an API key for ${provider.name} in Settings.`)
-    }
-    const model = task.model || settings.defaultModel || provider.models[0]
-    if (!model) {
-      throw new Error('Choose a model for this task in the composer or in Settings.')
-    }
-
-    const primary: ResolvedProvider = {
-      id: provider.id,
-      name: provider.name,
-      kind: provider.kind,
-      apiKey,
-      baseUrl: provider.baseUrl,
-      model
-    }
-    const candidates = [primary]
-    for (const alternate of settings.providers) {
-      if (alternate.id === primary.id || !alternate.enabled || !alternate.models[0]) continue
-      const alternateKey = store.getProviderSecret(alternate.id)
-      if (!alternateKey) continue
-      candidates.push({
-        id: alternate.id,
-        name: alternate.name,
-        kind: alternate.kind,
-        apiKey: alternateKey,
-        baseUrl: alternate.baseUrl,
-        model: alternate.models[0]
-      })
-    }
-    return candidates
   }
 
   /**

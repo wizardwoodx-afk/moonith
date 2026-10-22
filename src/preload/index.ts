@@ -6,7 +6,7 @@ import type {
   BackendEvent,
   BackendSettingsPublic,
   ChannelInput,
-  ComposioInput,
+  ConnectorsInput,
   CreateScheduleInput,
   CreateTaskInput,
   KnightApi,
@@ -16,7 +16,7 @@ import type {
   SendMessageInput,
   SettingsPatch,
   SkillDraft,
-  SkillRegistry,
+  SkillSource,
   TableGoalInput,
   TableHostInput,
   TableJoinInput,
@@ -69,9 +69,9 @@ const api: KnightApi = {
   addReaPreset: () => ipcRenderer.invoke(IPC.mcpReaPreset),
 
   listSkills: () => ipcRenderer.invoke(IPC.skillsList),
-  searchSkills: (query: string, registry?: SkillRegistry) =>
+  searchSkills: (query: string, registry?: SkillSource) =>
     ipcRenderer.invoke(IPC.skillsSearch, query, registry),
-  installSkill: (ref: string, registry?: SkillRegistry) =>
+  installSkill: (ref: string, registry?: SkillSource) =>
     ipcRenderer.invoke(IPC.skillsInstall, ref, registry),
   readSkill: (id: string) => ipcRenderer.invoke(IPC.skillsRead, id),
   createSkill: (draft: SkillDraft) => ipcRenderer.invoke(IPC.skillsCreate, draft),
@@ -84,8 +84,8 @@ const api: KnightApi = {
 
   getUsageSummary: () => ipcRenderer.invoke(IPC.usageSummary),
 
-  composioState: (refresh?: boolean) => ipcRenderer.invoke(IPC.composioState, refresh),
-  saveComposio: (input: ComposioInput) => ipcRenderer.invoke(IPC.composioSave, input),
+  connectorsState: (refresh?: boolean) => ipcRenderer.invoke(IPC.connectorsState, refresh),
+  saveConnectors: (input: ConnectorsInput) => ipcRenderer.invoke(IPC.connectorsSave, input),
 
   channelState: () => ipcRenderer.invoke(IPC.channelState),
   upsertChannel: (input: ChannelInput) => ipcRenderer.invoke(IPC.channelUpsert, input),
@@ -137,21 +137,21 @@ const api: KnightApi = {
     stopGateway: () => ipcRenderer.invoke(IPC.backendGatewayStop),
     gatewayStatus: () => ipcRenderer.invoke(IPC.backendGatewayStatus),
     gatewayToken: () => ipcRenderer.invoke(IPC.backendGatewayToken),
-    copilotStatus: () => ipcRenderer.invoke(IPC.backendCopilotStatus),
-    copilotModels: () => ipcRenderer.invoke(IPC.backendCopilotModels),
-    m365Status: () => ipcRenderer.invoke(IPC.backendM365Status),
-    m365BeginSignIn: (clientId?: string) =>
-      ipcRenderer.invoke(IPC.backendM365BeginSignIn, clientId),
-    m365CompleteSignIn: () => ipcRenderer.invoke(IPC.backendM365CompleteSignIn),
-    m365Disconnect: () => ipcRenderer.invoke(IPC.backendM365Disconnect),
-    m365Files: () => ipcRenderer.invoke(IPC.backendM365Files),
-    m365Mail: () => ipcRenderer.invoke(IPC.backendM365Mail),
+    subscriptionStatus: () => ipcRenderer.invoke(IPC.backendSubscriptionAccountStatus),
+    subscriptionModels: () => ipcRenderer.invoke(IPC.backendSubscriptionAccountModels),
+    workStatus: () => ipcRenderer.invoke(IPC.backendWorkStatus),
+    workBeginSignIn: (clientId?: string) =>
+      ipcRenderer.invoke(IPC.backendWorkBeginSignIn, clientId),
+    workCompleteSignIn: () => ipcRenderer.invoke(IPC.backendWorkCompleteSignIn),
+    workDisconnect: () => ipcRenderer.invoke(IPC.backendWorkDisconnect),
+    workFiles: () => ipcRenderer.invoke(IPC.backendWorkFiles),
+    workMail: () => ipcRenderer.invoke(IPC.backendWorkMail),
     computerStatus: () => ipcRenderer.invoke(IPC.backendComputerStatus),
-    uiTarsStatus: () => ipcRenderer.invoke(IPC.backendUiTarsStatus),
-    lobeSearch: (query: string) => ipcRenderer.invoke(IPC.backendLobeSearch, query),
-    lobeInstall: (id: string) => ipcRenderer.invoke(IPC.backendLobeInstall, id),
-    clawHubSearch: (query: string) => ipcRenderer.invoke(IPC.backendClawHubSearch, query),
-    openClawStatus: () => ipcRenderer.invoke(IPC.backendOpenClawStatus),
+    groundedActionsStatus: () => ipcRenderer.invoke(IPC.backendGroundedActionsStatus),
+    marketplaceSearch: (query: string) => ipcRenderer.invoke(IPC.backendMarketplaceSearch, query),
+    marketplaceInstall: (id: string) => ipcRenderer.invoke(IPC.backendMarketplaceInstall, id),
+    registrySearch: (query: string) => ipcRenderer.invoke(IPC.backendRegistrySearch, query),
+    openClawStatus: () => ipcRenderer.invoke(IPC.backendExternalAgentStatus),
     answerPermission: (id: string, allowed: boolean) =>
       ipcRenderer.invoke(IPC.backendPermissionAnswer, id, allowed),
     onEvent: (cb: (event: BackendEvent) => void) => {

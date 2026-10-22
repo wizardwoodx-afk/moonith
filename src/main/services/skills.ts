@@ -5,7 +5,7 @@ import type {
   SkillDetail,
   SkillDraft,
   SkillMarketResult,
-  SkillRegistry,
+  SkillSource,
   SkillSummary
 } from '@shared/types'
 import { getPaths } from '../paths'
@@ -14,14 +14,14 @@ import { slugify, truncate } from '../util'
 
 const MARKET_API = 'https://clawhub.ai/api/v1'
 const MARKET_SITE = 'https://clawhub.ai'
-const LOBE_CLI = '@lobehub/market-cli'
-const LOBE_SITE = 'https://lobehub.com/skills'
+const MARKETPLACE_CLI = '@lobehub/market-cli'
+const MARKETPLACE_SITE = 'https://lobehub.com/skills'
 const MANIFEST = '.installed.json'
 const SAFE_REF = /^@?[a-zA-Z0-9][a-zA-Z0-9._/-]{0,100}$/
 
 interface InstalledEntry {
   id: string
-  registry: SkillRegistry
+  registry: SkillSource
 }
 
 export interface ParsedSkill {
@@ -93,7 +93,7 @@ async function walk(dir: string, depth = 0): Promise<Array<{ dir: string; file: 
 }
 
 class SkillService {
-  private lobeCache = new Map<string, { at: number; results: SkillMarketResult[] }>()
+  private marketplaceCache = new Map<string, { at: number; results: SkillMarketResult[] }>()
 
   private root(): string {
     return getPaths().skills
@@ -106,13 +106,13 @@ class SkillService {
       if (!Array.isArray(parsed)) return []
       const entries: InstalledEntry[] = []
       for (const item of parsed) {
-        if (typeof item === 'string') entries.push({ id: item, registry: 'clawhub' })
+        if (typeof item === 'string') entries.push({ id: item, registry: 'registry' })
         else if (item && typeof item === 'object') {
           const value = item as { id?: unknown; registry?: unknown }
           if (typeof value.id !== 'string') continue
           entries.push({
             id: value.id,
-            registry: value.registry === 'lobehub' ? 'lobehub' : 'clawhub'
+            registry: value.registry === 'marketplace' ? 'marketplace' : 'registry'
           })
         }
       }
@@ -224,9 +224,9 @@ class SkillService {
 
   async search(
     query: string,
-    registry: SkillRegistry = 'clawhub'
+    registry: SkillSource = 'registry'
   ): Promise<SkillMarketResult[]> {
-    if (registry === 'lobehub') return this.searchLobe(query)
+    if (registry === 'marketplace') return this.searchMarketplace(query)
     const url = new URL(`${MARKET_API}/search`)
     if (query.trim()) url.searchParams.set('q', query.trim())
     url.searchParams.set('limit', '24')
@@ -237,9 +237,9 @@ class SkillService {
         signal: AbortSignal.timeout(20000)
       })
     } catch {
-      throw new Error('Could not reach the ClawHub registry. Check your network connection.')
+      throw new Error('Could not reach the skill registry. Check your network connection.')
     }
-    if (!response.ok) throw new Error(`ClawHub returned ${response.status}.`)
+    if (!response.ok) throw new Error(`SkillSource returned ${response.status}.`)
     const json = (await response.json()) as {
       results?: Array<Record<string, unknown>>
       items?: Array<Record<string, unknown>>
@@ -258,31 +258,31 @@ class SkillService {
         version: typeof latest === 'string' ? latest : latest?.version ?? '',
         downloads: stats?.downloads ?? 0,
         url: canonical ? `${MARKET_SITE}${canonical}` : MARKET_SITE,
-        registry: 'clawhub'
+        registry: 'registry'
       }
     })
   }
 
-  private async searchLobe(query: string): Promise<SkillMarketResult[]> {
+  private async searchMarketplace(query: string): Promise<SkillMarketResult[]> {
     const clean = query
       .trim()
       .replace(/[^a-zA-Z0-9 _-]+/g, ' ')
       .replace(/\s+/g, ' ')
       .slice(0, 80)
-    const cached = this.lobeCache.get(clean)
+    const cached = this.marketplaceCache.get(clean)
     if (cached && Date.now() - cached.at < 60_000) return cached.results
 
     const args = ['skills', 'search', '--page-size', '24', '--output', 'json']
     if (clean) args.push('--q', clean)
-    const result = await this.runCli(LOBE_CLI, args)
+    const result = await this.runCli(MARKETPLACE_CLI, args)
     if (result.code !== 0) {
-      throw new Error(this.cliMessage(result, 'LobeHub search failed'))
+      throw new Error(this.cliMessage(result, 'Marketplace search failed'))
     }
     let json: { items?: Array<Record<string, unknown>> }
     try {
       json = JSON.parse(result.stdout) as { items?: Array<Record<string, unknown>> }
     } catch {
-      throw new Error('LobeHub returned a response Knight could not read.')
+      throw new Error('Marketplace returned a response Knight could not read.')
     }
     const results = (json.items ?? []).map((item) => {
       const identifier = String(item.identifier ?? '')
@@ -294,23 +294,23 @@ class SkillService {
         author: String(item.author ?? ''),
         version: String(item.version ?? ''),
         downloads: Number(item.installCount ?? github?.stars ?? 0) || 0,
-        url: identifier ? `${LOBE_SITE}/${encodeURIComponent(identifier)}` : LOBE_SITE,
-        registry: 'lobehub' as const
+        url: identifier ? `${MARKETPLACE_SITE}/${encodeURIComponent(identifier)}` : MARKETPLACE_SITE,
+        registry: 'marketplace' as const
       }
     })
-    this.lobeCache.set(clean, { at: Date.now(), results })
+    this.marketplaceCache.set(clean, { at: Date.now(), results })
     return results
   }
 
-  async install(ref: string, registry: SkillRegistry = 'clawhub'): Promise<SkillSummary[]> {
+  async install(ref: string, registry: SkillSource = 'registry'): Promise<SkillSummary[]> {
     const clean = ref.trim()
     if (!clean || !SAFE_REF.test(clean) || clean.includes('..')) {
       throw new Error('That skill reference is not valid.')
     }
     const before = new Set((await this.list()).map((skill) => skill.id))
     const result =
-      registry === 'lobehub'
-        ? await this.runCli(LOBE_CLI, [
+      registry === 'marketplace'
+        ? await this.runCli(MARKETPLACE_CLI, [
             'skills',
             'install',
             clean,
@@ -330,7 +330,7 @@ class SkillService {
             '--no-input'
           ])
     if (result.code !== 0) {
-      const label = registry === 'lobehub' ? 'LobeHub' : 'ClawHub'
+      const label = registry === 'marketplace' ? 'Marketplace' : 'Registry'
       throw new Error(this.cliMessage(result, `${label} install failed`))
     }
     const skills = await this.list()
@@ -341,7 +341,7 @@ class SkillService {
       ...fresh.map((id) => ({ id, registry }))
     ])
     if (!fresh.length) {
-      const label = registry === 'lobehub' ? 'LobeHub' : 'ClawHub'
+      const label = registry === 'marketplace' ? 'Marketplace' : 'Registry'
       throw new Error(`${label} reported success but no SKILL.md bundle appeared in the library.`)
     }
     return this.list()

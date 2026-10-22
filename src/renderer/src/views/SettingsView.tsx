@@ -80,11 +80,11 @@ import { SettingsSection } from './settings/SettingsSection'
 import { AppearancePane, ColorsPane, MoonPane } from './settings/ThemePanes'
 import {
   ChannelsPane,
-  ComposioPane,
+  ConnectorsPane,
   SkillsPane,
   SubAgentsPane
 } from './settings/CapabilityPanes'
-import { DesktopPane, GatewayPane, MicrosoftPane, TiersPane } from './settings/BackendPanes'
+import { DesktopPane, GatewayPane, TiersPane, WorkFilesPane } from './settings/BackendPanes'
 
 const NAV_ICONS: Record<SettingsPaneId, typeof SlidersHorizontal> = {
   profile: CircleUserRound,
@@ -104,10 +104,10 @@ const NAV_ICONS: Record<SettingsPaneId, typeof SlidersHorizontal> = {
   skills: Sparkles,
   'sub-agents': Bot,
   mcp: Plug,
-  composio: Boxes,
+  connectors: Boxes,
   channels: Radio,
   gateway: ServerCog,
-  microsoft: Building2,
+  'work-files': Building2,
   desktop: Monitor,
   about: Info
 }
@@ -323,10 +323,10 @@ export function SettingsView() {
                   {tab === 'providers' ? <ProvidersTab settings={settings} /> : null}
                   {tab === 'tiers' ? <TiersPane /> : null}
                   {tab === 'mcp' ? <McpTab /> : null}
-                  {tab === 'composio' ? <ComposioPane /> : null}
+                  {tab === 'connectors' ? <ConnectorsPane /> : null}
                   {tab === 'channels' ? <ChannelsPane /> : null}
                   {tab === 'gateway' ? <GatewayPane /> : null}
-                  {tab === 'microsoft' ? <MicrosoftPane /> : null}
+                  {tab === 'work-files' ? <WorkFilesPane /> : null}
                   {tab === 'desktop' ? <DesktopPane /> : null}
                   {tab === 'about' ? <AboutTab /> : null}
                 </>
@@ -812,20 +812,20 @@ const PROVIDER_KINDS: {
 }[] = [
   {
     value: 'anthropic',
-    label: 'Anthropic',
-    blurb: 'Claude models',
+    label: 'Direct API',
+    blurb: 'First-party model APIs',
     icon: Sparkles
   },
   {
     value: 'openai',
-    label: 'OpenAI',
-    blurb: 'GPT and o-series',
+    label: 'Hosted API',
+    blurb: 'Hosted chat-completion models',
     icon: Aperture
   },
   {
     value: 'compatible',
     label: 'Compatible',
-    blurb: 'OpenAI-style APIs',
+    blurb: 'Any chat-completion endpoint',
     icon: Plug
   }
 ]
@@ -913,8 +913,8 @@ function ProvidersTab({ settings }: { settings: PublicSettings }) {
             </div>
             <p className="mt-3 text-[13px] font-medium">No model provider yet</p>
             <p className="mt-1 max-w-sm text-[12px] leading-relaxed text-faint">
-              Add an Anthropic key, an OpenAI key, or point Knight at any OpenAI-compatible
-              endpoint such as LM Studio, Ollama, or OpenRouter.
+              Add a key for a first-party model API, or point Knight at any
+              chat-completion endpoint — hosted or running on your own machine.
             </p>
             <Button variant="primary" size="sm" className="mt-4" onClick={openCreate}>
               <Plus size={13} />
@@ -952,9 +952,9 @@ function ProvidersTab({ settings }: { settings: PublicSettings }) {
                     <p className="mt-0.5 truncate text-[11px] text-faint">
                       {provider.baseUrl || (
                         provider.kind === 'anthropic'
-                          ? 'api.anthropic.com'
+                          ? 'First-party endpoint'
                           : provider.kind === 'openai'
-                            ? 'api.openai.com'
+                            ? 'Hosted endpoint'
                             : 'Custom endpoint'
                       )}
                     </p>
@@ -2728,15 +2728,16 @@ function AboutTab() {
 
       <SettingsSection title="Open source">
         <p className="text-[11.5px] leading-relaxed text-muted">
-          Skills follow the agentskills.io format. Registry and channel contracts follow Seamoon
-          and OpenClaw (MIT). Composio, ClawHub and Telegram are third-party services.
+          Skills follow the agentskills.io format. The registry and channel contracts follow two
+          MIT-licensed upstream projects. The connector, registry and marketplace services are
+          third-party and remain subject to their own terms.
         </p>
       </SettingsSection>
 
       <p className="px-1 text-[10.5px] leading-relaxed text-faint">
-        Knight Cowork is an independent, local-first project. It is not affiliated with Anthropic.
-        Claude is a trademark of Anthropic, PBC. Only analyze software you are authorized to
-        inspect.
+        Knight Cowork is an independent, local-first project. It is not affiliated with any model
+        provider. Model names referenced in your own configuration remain the trademarks of their
+        respective owners. Only analyze software you are authorized to inspect.
       </p>
     </div>
   )

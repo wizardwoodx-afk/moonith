@@ -14,7 +14,7 @@ import { dirname } from 'node:path'
  * Ported from Seamoon's `electron/backend/security.js`.
  */
 
-export const SECRET_KEYS = ['apiKey', 'composioApiKey', 'composioToken', 'copilotToken']
+export const SECRET_KEYS = ['apiKey', 'connectorsApiKey', 'connectorsToken', 'subscriptionToken']
 
 interface StoredSecret {
   enc?: string
