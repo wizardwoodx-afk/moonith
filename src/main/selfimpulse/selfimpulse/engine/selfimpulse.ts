@@ -73,22 +73,31 @@ import {
   emitInterrupt, emitStateSnapshot,
 } from "./agui";
 
-/* ── storage (node-safe: probes run without a browser) ───────────────────── */const hasLS = typeof globalThis.localStorage !== "undefined";
+/* ── storage (node-safe: probes run without a browser) ───────────────────── */
+/* Knight Cowork's main process has no localStorage, so the engine's durable
+ * session, threads, facts and mission ledger are files under userData. */
+import {
+  nodeStorage,
+  engineWorkspaceList,
+  engineWorkspaceRead,
+  engineWorkspaceStat,
+  engineWorkspaceWrite
+} from "../../host/knight";
+const hasLS = typeof globalThis.localStorage !== "undefined";
 const mem: Map<string, string> = new Map();
 const store = {
   get(k: string): string | null {
-    try { return hasLS ? globalThis.localStorage.getItem(k) : mem.get(k) ?? null; } catch { return null; }
+    try { return hasLS ? globalThis.localStorage.getItem(k) : nodeStorage.getItem(k); } catch { return mem.get(k) ?? null; }
   },
   set(k: string, v: string): void {
-    try { if (hasLS) globalThis.localStorage.setItem(k, v); else mem.set(k, v); } catch { /* full — ignore */ }
+    try { if (hasLS) globalThis.localStorage.setItem(k, v); else nodeStorage.setItem(k, v); } catch { mem.set(k, v); }
   },
   del(k: string): void {
-    try { if (hasLS) globalThis.localStorage.removeItem(k); else mem.delete(k); } catch { /* ignore */ }
+    try { if (hasLS) globalThis.localStorage.removeItem(k); else nodeStorage.removeItem(k); } catch { mem.delete(k); }
   },
 };
 
 const SESSION_KEY = "selfimpulse.session.v1";
-const WORKSPACE_KEY = "selfimpulse.workspace.v1";
 
 /* ── public types ─────────────────────────────────────────────────────────── */
 export type SelfImpulsePersona = "witty" | "professional" | "minimal";
@@ -480,49 +489,27 @@ export function recordMission(m: MissionOutcome): void {
   saveMissions(list);
 }
 
-/* ── local workspace (honest: a file store on THIS machine, not the FS) ───── */
-interface WorkspaceFile { name: string; content: string; updated: string; }
-
-function loadWorkspace(): Record<string, WorkspaceFile> {
-  const raw = store.get(WORKSPACE_KEY);
-  if (!raw) return {};
-  try { return JSON.parse(raw) as Record<string, WorkspaceFile>; } catch { return {}; }
-}
-
-function saveWorkspace(ws: Record<string, WorkspaceFile>): void {
-  store.set(WORKSPACE_KEY, JSON.stringify(ws));
-}
+/* ── the workspace: real files in the engine's folder on this machine ─────── */
 
 export function selfimpulseWorkspaceFiles(): Array<{ name: string; chars: number; updated: string }> {
-  return Object.values(loadWorkspace()).map((f) => ({ name: f.name, chars: f.content.length, updated: f.updated })).sort((a, b) => a.name.localeCompare(b.name));
+  return engineWorkspaceList();
 }
 
-/* The names a plain object cannot own. A workspace file called `__proto__`
-   never became a file: `ws["__proto__"] = {...}` hit the inherited setter
-   and the write vanished, while the call still reported success. Worse, the
-   read side then resolved `existing` to `Object.prototype`, whose `.content`
-   is undefined — so the simulation stage threw and the risky path died with
-   a TypeError instead of a refusal. Both are refusals now. */
-const RESERVED_WORKSPACE_NAMES = new Set(["__proto__", "constructor", "prototype"]);
-
+/* A plain object cannot own every name, and a disk cannot own every name
+   either: `__proto__` is a legal file, but `con:` and `a/b` are not. The host
+   decides what is nameable and refuses the rest by name, so a failed write is
+   never reported as a success. The caps remain: 200k chars per file and 500
+   files, so a tool loop cannot use the workspace as an unbounded store. */
 function workspaceWrite(name: string, content: string): { name: string; chars: number } {
-  /* FINALFIX: the virtual workspace is still bounded — sanitized names, a
-   * content cap and a file-count cap, so no caller can use it as a
-   * storage-exhaustion vector. */
-  const safeName = sanitizeText(name, 200) || "untitled.txt";
-  if (RESERVED_WORKSPACE_NAMES.has(safeName)) {
-    throw new Error(`"${safeName}" is a reserved name and cannot be a workspace file — nothing was written`);
-  }
+  const safeName = sanitizeText(name, 200).trim() || "untitled.txt";
   const safeContent = content.slice(0, 200_000);
-  const ws = loadWorkspace();
-  /* Own-property access only: an inherited name is never a file, whatever
-     the prototype says. */
-  if (!Object.prototype.hasOwnProperty.call(ws, safeName) && Object.keys(ws).length >= 500) {
+  const existing = engineWorkspaceStat(safeName);
+  if (!existing && selfimpulseWorkspaceFiles().length >= 500) {
     throw new Error("workspace is full (500 files) — remove a file before writing a new one");
   }
-  ws[safeName] = { name: safeName, content: safeContent, updated: new Date().toISOString() };
-  saveWorkspace(ws);
-  return { name: safeName, chars: safeContent.length };
+  const written = engineWorkspaceWrite(safeName, safeContent);
+  if (!written.ok) throw new Error(written.reason);
+  return { name: written.name, chars: written.chars };
 }
 
 /* ── knowledge base (offline — the demo brain's world, 2026-current) ──────── */
@@ -759,15 +746,15 @@ export const SELFIMPULSE_TOOLS: Record<string, SelfImpulseTool> = {
   },
   workspace_write: {
     name: "workspace_write", risky: true,
-    description: "Write a file to the local workspace on this machine (simulated, then approval-gated).",
+    description: "Write a text file into the workspace folder on this machine (approval-gated).",
     run: async (a) => {
       const r = workspaceWrite(String(a.name ?? "untitled.txt"), String(a.content ?? ""));
-      return `wrote ${r.name} (${r.chars} chars) to the local workspace`;
+      return `wrote ${r.name} (${r.chars} chars) to the workspace`;
     },
   },
   workspace_list: {
     name: "workspace_list", risky: false,
-    description: "List files in the local workspace.",
+    description: "List files in the workspace folder on this machine.",
     run: async () => {
       const fs = selfimpulseWorkspaceFiles();
       return fs.length === 0 ? "workspace is empty" : fs.map((f) => `• ${f.name} (${f.chars} chars, ${f.updated.slice(0, 16).replace("T", " ")})`).join("\n");
@@ -794,6 +781,21 @@ export function deregisterProbeTool(name: string): void {
   const prev = _savedProbeTools.get(name);
   _savedProbeTools.delete(name);
   if (prev === undefined) { delete SELFIMPULSE_TOOLS[name]; } else { SELFIMPULSE_TOOLS[name] = prev; }
+}
+
+/**
+ * The host extension seam (Knight Cowork).
+ *
+ * `registerProbeTool` is for tests and restores the previous entry on
+ * deregistration. A HOST adds tools for the life of the process, so it gets a
+ * plain assignment with no restore bookkeeping — removing one is explicit and
+ * is the host's own decision, not a probe teardown.
+ */
+export function registerTool(name: string, tool: SelfImpulseTool): void {
+  SELFIMPULSE_TOOLS[name] = tool;
+}
+export function unregisterTool(name: string): void {
+  delete SELFIMPULSE_TOOLS[name];
 }
 /* 17.1.4 validation+retry throat (single canonical primitive). The real
  * implementation lives in toolSchema.ts — validateWithRetry, deterministicRepair,
@@ -858,16 +860,16 @@ export function simulateSelfImpulseAction(action: SelfImpulseAction): SelfImpuls
   }
   const name = String(action.args.name ?? "untitled.txt");
   const content = String(action.args.content ?? "");
-  const existing = Object.prototype.hasOwnProperty.call(loadWorkspace(), name) ? loadWorkspace()[name] : undefined;
+  const existing = engineWorkspaceStat(name);
   const warnings: string[] = [];
-  if (existing) warnings.push(`"${name}" already exists in the workspace — its content (${existing.content.length} chars) is replaced`);
+  if (existing) warnings.push(`"${name}" already exists in the workspace — its content (${existing.chars} chars) is replaced`);
   if (content.length > 20000) warnings.push("large content (>20k chars) — consider splitting");
   return {
     tool: "workspace_write",
     prediction: existing
-      ? `"${name}" will exist in the local workspace with ${content.length} chars (an overwrite of the existing ${existing.content.length}-char file).`
-      : `"${name}" will exist in the local workspace with ${content.length} chars.`,
-    sideEffects: [existing ? `local workspace: "${name}" overwritten (${existing.content.length} → ${content.length} chars)` : `local workspace: "${name}" created (${content.length} chars)`],
+      ? `"${name}" will exist in the workspace with ${content.length} chars (an overwrite of the existing ${existing.chars}-char file).`
+      : `"${name}" will exist in the workspace with ${content.length} chars.`,
+    sideEffects: [existing ? `workspace: "${name}" overwritten (${existing.chars} → ${content.length} chars)` : `workspace: "${name}" created (${content.length} chars)`],
     warnings,
     confidence: "high",
   };

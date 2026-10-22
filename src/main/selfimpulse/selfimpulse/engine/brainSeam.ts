@@ -30,6 +30,7 @@
  * and the refusal is visible in the plan's thoughts.
  */
 import fs from "node:fs";
+import { nodeStorage } from "../../host/knight";
 import { HARNESS_BY_ID, type HarnessId } from "../../domain/harness";
 import type { SelfImpulseBrain, SelfImpulsePlan } from "./selfimpulse";
 
@@ -38,7 +39,7 @@ const PREF_KEY = "vh.brain.pref";
 
 export function brainPref(): BrainPref {
   try {
-    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(PREF_KEY) : null;
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(PREF_KEY) : nodeStorage.getItem(PREF_KEY);
     return raw === "auto" ? "auto" : "simulated"; // OFF by default — a human turns it on
   } catch {
     return "simulated";
@@ -47,7 +48,8 @@ export function brainPref(): BrainPref {
 
 export function setBrainPref(p: BrainPref): void {
   try {
-    localStorage.setItem(PREF_KEY, p === "auto" ? "auto" : "simulated");
+    if (typeof localStorage !== "undefined") localStorage.setItem(PREF_KEY, p === "auto" ? "auto" : "simulated");
+    else nodeStorage.setItem(PREF_KEY, p === "auto" ? "auto" : "simulated");
   } catch {
     /* non-persistent host: the pref is session-only, stated by the UI */
   }

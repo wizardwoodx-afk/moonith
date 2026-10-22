@@ -75,6 +75,7 @@
  *      RECOURSE write (saveSkills(…, "human")).
  */
 import { uid } from "../app/id";
+import { nodeStorage } from "../host/knight";
 import { loadSkills, mergeProposals, saveSkills, type SkillProposal } from "./skillEvolution";
 
 export const KNOWLEDGE_TOOL = "si-knowledge-forge/mechanical-v1";
@@ -210,7 +211,8 @@ export interface KnowledgeSaveResult {
 }
 
 export function saveKnowledgeProposals(memory: KnowledgeProposal[]): KnowledgeSaveResult {
-  const store = globalThis.localStorage as Storage | undefined;
+  const store = (globalThis.localStorage ??
+    (typeof process !== "undefined" && process.versions?.electron ? nodeStorage : undefined)) as Storage | undefined;
   /* No storage at all is the documented memory-only case (a probe host, a
    * quarantined webview), NOT a failure — and `loadKnowledgeProposals` already
    * treats it that way. Saying so here keeps the two honest about the same

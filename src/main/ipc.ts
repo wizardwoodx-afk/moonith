@@ -26,6 +26,15 @@ import type {
 } from '@shared/types'
 import { agentRuntime } from './agent/runtime'
 import { fetchProviderModels, verifyProvider } from './agent/providers'
+import { selfImpulseEngineStatus } from './selfimpulse/bridge/facade'
+import {
+  newSelfImpulseThread,
+  resolveSelfImpulseApproval,
+  selfimpulseSession,
+  sendSelfImpulseMessage,
+  setActiveSelfImpulseThread,
+  stopSelfImpulse
+} from './selfimpulse/selfimpulse/engine/selfimpulse'
 import { approvals } from './approvals'
 import { sendTaskEvent } from './emitter'
 import { store } from './store'
@@ -79,6 +88,37 @@ export function registerIpc(): void {
     userDataPath: app.getPath('userData'),
     isDev: !app.isPackaged
   }))
+
+  /* ── the SelfImpulse engine ────────────────────────────────────────────────
+   * The engine is the brain; these are its only doors. `state` returns the
+   * same committed session the receipt chain describes, and every mutation
+   * broadcasts on `event:selfimpulse` so no surface invents a second copy. */
+  ipcMain.handle(IPC.selfImpulseState, () => ({
+    status: selfImpulseEngineStatus(),
+    session: selfimpulseSession()
+  }))
+
+  ipcMain.handle(IPC.selfImpulseSend, async (_event, text: string) => {
+    await sendSelfImpulseMessage(String(text ?? ''))
+    return { status: selfImpulseEngineStatus(), session: selfimpulseSession() }
+  })
+
+  ipcMain.handle(IPC.selfImpulseStop, () => stopSelfImpulse())
+
+  ipcMain.handle(IPC.selfImpulseApprove, (_event, input: { id: string; ok: boolean }) => {
+    resolveSelfImpulseApproval(String(input?.id ?? ''), input?.ok === true, { by: 'human' })
+    return { status: selfImpulseEngineStatus(), session: selfimpulseSession() }
+  })
+
+  ipcMain.handle(IPC.selfImpulseThreadNew, (_event, title?: string) => {
+    const id = newSelfImpulseThread(typeof title === 'string' ? title : undefined)
+    return { id, session: selfimpulseSession() }
+  })
+
+  ipcMain.handle(IPC.selfImpulseThreadSelect, (_event, id: string) => {
+    const ok = setActiveSelfImpulseThread(String(id ?? ''))
+    return { ok, session: selfimpulseSession() }
+  })
 
   ipcMain.handle(IPC.settingsGet, () => ({
     ...store.getPublicSettings(),

@@ -11,6 +11,7 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { getPaths, taskWorkspace } from './paths'
 import { store } from './store'
+import { initSelfImpulseEngine } from './selfimpulse/bridge/facade'
 import { registerIpc } from './ipc'
 import { createMainWindow, getMainWindow, showMainWindow } from './window'
 import { subscribeTaskEvents } from './emitter'
@@ -214,6 +215,11 @@ if (!gotLock) {
   app.whenReady().then(async () => {
     try {
       await store.init()
+      const engine = initSelfImpulseEngine()
+      console.log(
+        `[selfimpulse] engine ${engine.wired ? 'wired' : 'not wired'} · provider=${engine.providerId ?? 'none'} · model=${engine.model ?? 'none'} · tools=${engine.tools.length}` +
+          (engine.reason ? ` · ${engine.reason}` : '')
+      )
       registerIpc()
       registerFileProtocol()
       setupMenu()
@@ -235,6 +241,7 @@ if (!gotLock) {
         setupWindowCloseBehavior()
       })
     } catch (error) {
+      console.error('[startup] Knight Cowork could not start:', error)
       await dialog.showMessageBox({
         type: 'error',
         title: 'Knight Cowork could not start',

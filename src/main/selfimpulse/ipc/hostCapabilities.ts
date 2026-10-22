@@ -203,7 +203,7 @@ export function resolveCapabilities(surface?: HostSurfaceLike | null): Capabilit
         ? null
         : (globalThis.window as unknown as HostSurfaceLike);
 
-  if (!bag) return { ...NOTHING };
+  if (!bag) return mainProcessCapabilities();
 
   const el = isElectronSurface(bag)
     ? bag
@@ -224,6 +224,30 @@ export function resolveCapabilities(surface?: HostSurfaceLike | null): Capabilit
 /** The live table for the host this renderer is running in. */
 export function capabilities(): CapabilityTable {
   return resolveCapabilities(liveHostSurface());
+}
+
+/**
+ * The table for Knight Cowork's main process.
+ *
+ * There is no `window` here, so the renderer shape tests cannot answer. Each
+ * `true` below is a capability this host really implements (see
+ * `host/knight.ts`); everything else stays false and its refusal still names
+ * the gap. `window`, `dialog`, `confirm`, `browser`, `federation`,
+ * `providerBinding` and `controlMcp` are renderer or unimplemented surfaces,
+ * so they are NOT claimed.
+ */
+function mainProcessCapabilities(): CapabilityTable {
+  if (typeof process === "undefined" || !process.versions?.electron) return { ...NOTHING };
+  return {
+    ...NOTHING,
+    secrets: true,
+    notifications: true,
+    fs: true,
+    git: true,
+    exec: true,
+    providerCall: true,
+    engine: true,
+  };
 }
 
 /** The window object as the app sees it, or null outside a renderer (probe runs, Node). */

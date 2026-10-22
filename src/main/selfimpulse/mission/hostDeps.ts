@@ -6,7 +6,7 @@
  * they did not run rather than pretending). The Mission Loop engine never fakes a
  * run — these are the deps the app hands it; probes inject deterministic ones.
  */
-import { ipc } from "../ipc/client";
+import { ipc } from "../host/ipcMain";
 import type { TeamRunnerDeps } from "./teamExecutor";
 
 /**

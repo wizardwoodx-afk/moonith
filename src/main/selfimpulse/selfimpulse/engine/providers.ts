@@ -23,8 +23,10 @@
  * Refusals come in words (no route · disabled · key missing · call failed ·
  * empty answer). OFF by default (`vh.brain.model`) — a human turns it on.
  */
-import { ipc } from "../../ipc/client";
+import { ipc } from "../../host/ipcMain";
+import { nodeStorage } from "../../host/knight";
 import { localDb } from "../../ipc/localDb";
+import { detectHost } from "../../app/desktop";
 import type { SelfImpulsePlan } from "./selfimpulse";
 
 /* ── the registry (MANAGE) ────────────────────────────────────────────────── */
@@ -56,7 +58,12 @@ function asKV(store: Store): ProviderKV {
   const m = store as Map<string, string>;
   return { get: (k) => m.get(k) ?? null, set: (k, v) => void m.set(k, v) };
 }
-const defaultStore = (): Store => (globalThis.localStorage ?? new Map<string, string>()) as Store;
+const memStore = new Map<string, string>();
+const defaultStore = (): Store =>
+  (globalThis.localStorage ??
+    (typeof process !== "undefined" && process.versions?.electron
+      ? (nodeStorage as unknown as Store)
+      : memStore)) as Store;
 
 export function listProviders(store: Store = defaultStore()): ProviderEntry[] {
   try {
@@ -101,7 +108,7 @@ export function setProviderKey(providerId: string, apiKey: string, kind?: Provid
   // storage risk with zero benefit. The honest split, in this build:
   //   cloud keys → refused in words; nothing is written to page storage.
   //   ollama     → local only, kept in this app's own store.
-  if (kind !== "ollama") {
+  if (kind !== "ollama" && detectHost() === "web") {
     return {
       ok: false,
       refused:

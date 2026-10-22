@@ -62,15 +62,19 @@ export interface PersistNotice {
   detail: string;
 }
 
+/** Knight Cowork's main process has no localStorage; the engine's keys are files. */
+import { nodeStorage } from "../host/knight";
+
 function resolveStorage(store?: Writable | null): Writable | null {
   if (store !== undefined) return store;
   try {
     const ls = (globalThis as { localStorage?: Storage }).localStorage;
-    return ls && typeof ls.setItem === "function" ? ls : null;
+    if (ls && typeof ls.setItem === "function") return ls;
   } catch {
     // a sandboxed frame can throw on ACCESS, not just on write
-    return null;
   }
+  if (typeof process !== "undefined" && process.versions?.electron) return nodeStorage;
+  return null;
 }
 
 function isQuotaError(e: unknown): boolean {

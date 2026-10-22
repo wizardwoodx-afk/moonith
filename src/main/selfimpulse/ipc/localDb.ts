@@ -1,4 +1,5 @@
 import { uid, nowIso } from "../app/id";
+import { nodeStorage, knightSecretDelete, knightSecretExists, knightSecretGet, knightSecretSet } from "../host/knight";
 import type { SecretStatus } from "./client";
 import { GRAPH_SCHEMA_VERSION, type ApprovalRecord, type DlqRecord, type EvolutionCandidateRecord, type ExecutionEventRecord, type ExecutionRecord, type ExecutionStats, type FeedbackRecord, type McpServerEntry, type MemoryRecord, type SkillRecord, type WorkflowGraph, type WorkflowRecord } from "../domain/types";
 import { writeFirstThatFits, notePersist, type PersistResult, type PersistRung } from "../persist/quotaSafe";
@@ -115,7 +116,7 @@ function load(): DbShape {
   const db = empty();
   let raw: string | null = null;
   try {
-    raw = localStorage.getItem(KEY);
+    raw = nodeStorage.getItem(KEY);
   } catch {
     // A storage that throws on ACCESS (sandboxed frame, private-mode quota of zero) is a host
     // fact, not a corruption signal: there is no stored state to distrust, so say nothing.
@@ -207,7 +208,7 @@ function save(db: DbShape): PersistResult {
       dropped: `all ${events} event row(s) (execution telemetry; every durable record is intact)`,
     });
   }
-  const result = writeFirstThatFits(KEY, ladder);
+  const result = writeFirstThatFits(KEY, ladder, nodeStorage);
   if (!result.ok) {
     throw new Error(
       result.refused ??
@@ -223,7 +224,7 @@ export const localDb = {
   /** The persisted-state refusal this process recorded at load, or null. A frozen fact. */
   loadRefusal: () => loadRefusal,
   reset() {
-    localStorage.removeItem(KEY);
+    nodeStorage.removeItem(KEY);
     loadRefusal = null;
   },
 
@@ -312,7 +313,7 @@ export const localDb = {
     db.events.push(rec);
     if (db.events.length > 4000) db.events = db.events.slice(-3000);
     save(db);
-    window.dispatchEvent(new CustomEvent("vh://event", { detail: rec }));
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("vh://event", { detail: rec }));
     return rec;
   },
   executionEvents(executionId: string) {
@@ -330,30 +331,16 @@ export const localDb = {
   },
 
   secretSet(ref: string, value: string) {
-    const db = load();
-    db.secrets[ref] = value;
-    save(db);
+    knightSecretSet(ref, value);
   },
   secretDelete(ref: string) {
-    const db = load();
-    delete db.secrets[ref];
-    save(db);
+    knightSecretDelete(ref);
   },
   secretExists(refs: string[]): Record<string, SecretStatus> {
-    const db = load();
-    // V7 fix (bug W): matches the native shape. In the browser these live in localStorage, which
-    // does survive a reload but is not an OS keychain and is readable by anything in this origin.
-    return Object.fromEntries(
-      refs.map((r) => [
-        r,
-        db.secrets[r]
-          ? { exists: true, location: "browser-localStorage", survivesRestart: true, warning: "Stored in browser localStorage, not an OS keychain. Readable by anything in this origin." }
-          : { exists: false, location: "absent", survivesRestart: false },
-      ]),
-    );
+    return knightSecretExists(refs) as Record<string, SecretStatus>;
   },
   secretGet(ref: string): string | null {
-    return load().secrets[ref] ?? null;
+    return knightSecretGet(ref);
   },
 
   mcpList() {

@@ -106,9 +106,17 @@ export const IPC = {
   backendExternalAgentStatus: 'backend:externalAgent:status',
   backendPermissionAnswer: 'backend:permission:answer',
 
+  selfImpulseState: 'selfimpulse:state',
+  selfImpulseSend: 'selfimpulse:send',
+  selfImpulseStop: 'selfimpulse:stop',
+  selfImpulseApprove: 'selfimpulse:approve',
+  selfImpulseThreadNew: 'selfimpulse:thread-new',
+  selfImpulseThreadSelect: 'selfimpulse:thread-select',
+
   eventTask: 'event:task',
   eventApproval: 'event:approval',
-  eventBackend: 'event:backend'
+  eventBackend: 'event:backend',
+  eventSelfImpulse: 'event:selfimpulse'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

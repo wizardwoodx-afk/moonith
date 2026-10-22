@@ -1,0 +1,70 @@
+{
+  "generatedBy": "tools/vendor-graph-runtime.mjs",
+  "upstream": [
+    {
+      "name": "@langchain/langgraph",
+      "version": "1.5.1",
+      "license": "MIT",
+      "directory": "runtime"
+    },
+    {
+      "name": "@langchain/core",
+      "version": "1.2.18",
+      "license": "MIT",
+      "directory": "core"
+    },
+    {
+      "name": "@langchain/langgraph-checkpoint",
+      "version": "1.2.0",
+      "license": "MIT",
+      "directory": "checkpoint"
+    }
+  ],
+  "thirdParty": [
+    {
+      "name": "@cfworker/json-schema",
+      "version": "4.1.1",
+      "license": "MIT"
+    },
+    {
+      "name": "mustache",
+      "version": "4.2.0",
+      "license": "MIT"
+    },
+    {
+      "name": "p-queue",
+      "version": "6.6.2",
+      "license": "MIT"
+    }
+  ],
+  "stubs": [
+    "langsmith",
+    "remoteRender",
+    "tiktoken"
+  ],
+  "patched": [
+    {
+      "file": "@langchain/core/dist/utils/gateway.js",
+      "why": "the upstream resolver pointed LangChain's model classes at the hosted LangSmith gateway"
+    },
+    {
+      "file": "@langchain/core/dist/utils/tiktoken.js",
+      "why": "the upstream loader fetched an encoding table from tiktoken.pages.dev"
+    },
+    {
+      "file": "@langchain/core/dist/runnables/graph_mermaid.js",
+      "why": "the upstream renderer fetched a graph's image from mermaid.ink"
+    }
+  ],
+  "excluded": [],
+  "unresolvedSpecifiers": [],
+  "licenceFiles": [
+    "_langchain_langgraph-LICENSE.txt",
+    "_langchain_core-LICENSE.txt",
+    "_langchain_langgraph-checkpoint-LICENSE.txt",
+    "mustache-LICENSE.txt",
+    "p-queue-LICENSE.txt"
+  ],
+  "files": 498,
+  "bytes": 2165370
+}

@@ -1,3 +1,14 @@
+/* Knight Cowork runs this engine in the MAIN process. When there is no
+ * `window`, these primitives are answered by the Electron host directly. */
+import {
+  knightAppInfo,
+  knightNotify,
+  knightSecretDelete,
+  knightSecretExists,
+  knightSecretGet,
+  knightSecretSet
+} from "../host/knight";
+
 export type DesktopHost = "electron" | "web";
 
 /**
@@ -139,33 +150,51 @@ export type ElectronSecrets = {
 /** The native secret store, ONLY when this host really exposes all four verbs. */
 export function electronSecretBridge(): ElectronSecrets | null {
   const b = electronBridge();
-  if (!b) return null;
-  const s = b as unknown as Partial<ElectronSecrets>;
-  if (!isFn(s.secretSet) || !isFn(s.secretGet) || !isFn(s.secretHas) || !isFn(s.secretRemove)) return null;
-  return s as ElectronSecrets;
+  if (b) {
+    const s = b as unknown as Partial<ElectronSecrets>;
+    if (!isFn(s.secretSet) || !isFn(s.secretGet) || !isFn(s.secretHas) || !isFn(s.secretRemove)) return null;
+    return s as ElectronSecrets;
+  }
+  // Main process: the OS keychain is reached through Electron, not a window.
+  if (typeof window === "undefined" && inElectronMain()) {
+    return {
+      secretSet: async (ref, value) => knightSecretSet(ref, value),
+      secretGet: async (ref) => {
+        const value = knightSecretGet(ref);
+        return { ref, present: value !== null, value, redacted: false };
+      },
+      secretHas: async (refs) => knightSecretExists(refs),
+      secretRemove: async (ref) => knightSecretDelete(ref),
+    };
+  }
+  return null;
 }
 
 /** The native notification verb, ONLY when this host really exposes it. */
 export function electronNotifyBridge(): (title: string, body: string) => Promise<NativeNotifyReceipt> {
   const b = electronBridge();
-  // `typeof … !== "function"` rather than the `isFn` helper: this is the branch
-  // that both proves the capability and narrows the type for the call below.
-  if (!b || typeof b.notify !== "function") {
-    throw new Error("this Electron build exposes no notification channel");
+  if (b && typeof b.notify === "function") {
+    const notify = b.notify;
+    return (title, body) => notify(title, body);
   }
-  const notify = b.notify;
-  return (title, body) => notify(title, body);
+  if (typeof window === "undefined" && inElectronMain()) {
+    return async (title, body) => knightNotify(title, body);
+  }
+  throw new Error("this Electron build exposes no notification channel");
 }
 
 /** Build and runtime identity from the Electron shell, or null when it cannot answer. */
 export async function electronInfo(): Promise<Record<string, unknown> | null> {
   const b = electronBridge();
-  if (!b || typeof b.info !== "function") return null;
-  try {
-    return await b.info();
-  } catch {
-    return null;
+  if (b && typeof b.info === "function") {
+    try {
+      return await b.info();
+    } catch {
+      return null;
+    }
   }
+  if (typeof window === "undefined" && inElectronMain()) return knightAppInfo();
+  return null;
 }
 
 /** The M-7 sandbox report, or null when the host cannot answer the question. */
@@ -201,12 +230,22 @@ export async function electronRetrySandbox(): Promise<NativeHostStatus | null> {
  * written to be hard to get wrong rather than to be clever.
  */
 export function detectHost(): DesktopHost {
-  if (typeof window === "undefined") return "web";
+  if (typeof window === "undefined") {
+    return inElectronMain() ? "electron" : "web";
+  }
   if (electronBridge()) return "electron";
   return "web";
 }
 
+/** True when this module is executing inside Electron's main process. */
+function inElectronMain(): boolean {
+  return typeof process !== "undefined" && Boolean(process.versions?.electron);
+}
+
 export function detectPlatform(): "mac" | "win" | "linux" {
+  if (typeof navigator === "undefined") {
+    return process.platform === "darwin" ? "mac" : process.platform === "win32" ? "win" : "linux";
+  }
   const ua = navigator.userAgent.toLowerCase();
   if (ua.includes("mac")) return "mac";
   if (ua.includes("win")) return "win";
