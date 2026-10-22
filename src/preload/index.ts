@@ -3,6 +3,8 @@ import { IPC } from '@shared/ipc'
 import type {
   ApprovalRequest,
   ApprovalDecision,
+  BackendEvent,
+  BackendSettingsPublic,
   ChannelInput,
   ComposioInput,
   CreateScheduleInput,
@@ -114,6 +116,50 @@ const api: KnightApi = {
       cb(payload)
     ipcRenderer.on(IPC.eventApproval, listener)
     return () => ipcRenderer.removeListener(IPC.eventApproval, listener)
+  },
+
+  backend: {
+    settings: () => ipcRenderer.invoke(IPC.backendSettingsGet),
+    saveSettings: (patch: Partial<BackendSettingsPublic>) =>
+      ipcRenderer.invoke(IPC.backendSettingsSave, patch),
+    credits: () => ipcRenderer.invoke(IPC.backendCredits),
+    themes: () => ipcRenderer.invoke(IPC.backendThemes),
+    modes: () => ipcRenderer.invoke(IPC.backendModes),
+    providers: () => ipcRenderer.invoke(IPC.backendProviders),
+    tiers: () => ipcRenderer.invoke(IPC.backendTiers),
+    listMemories: () => ipcRenderer.invoke(IPC.backendMemoryList),
+    addMemory: (input: { text: string; scope?: string; tags?: string[] }) =>
+      ipcRenderer.invoke(IPC.backendMemoryAdd, input),
+    removeMemory: (id: string) => ipcRenderer.invoke(IPC.backendMemoryRemove, id),
+    importMemories: (text: string) => ipcRenderer.invoke(IPC.backendMemoryImport, text),
+    usage: () => ipcRenderer.invoke(IPC.backendUsageSummary),
+    startGateway: () => ipcRenderer.invoke(IPC.backendGatewayStart),
+    stopGateway: () => ipcRenderer.invoke(IPC.backendGatewayStop),
+    gatewayStatus: () => ipcRenderer.invoke(IPC.backendGatewayStatus),
+    gatewayToken: () => ipcRenderer.invoke(IPC.backendGatewayToken),
+    copilotStatus: () => ipcRenderer.invoke(IPC.backendCopilotStatus),
+    copilotModels: () => ipcRenderer.invoke(IPC.backendCopilotModels),
+    m365Status: () => ipcRenderer.invoke(IPC.backendM365Status),
+    m365BeginSignIn: (clientId?: string) =>
+      ipcRenderer.invoke(IPC.backendM365BeginSignIn, clientId),
+    m365CompleteSignIn: () => ipcRenderer.invoke(IPC.backendM365CompleteSignIn),
+    m365Disconnect: () => ipcRenderer.invoke(IPC.backendM365Disconnect),
+    m365Files: () => ipcRenderer.invoke(IPC.backendM365Files),
+    m365Mail: () => ipcRenderer.invoke(IPC.backendM365Mail),
+    computerStatus: () => ipcRenderer.invoke(IPC.backendComputerStatus),
+    uiTarsStatus: () => ipcRenderer.invoke(IPC.backendUiTarsStatus),
+    lobeSearch: (query: string) => ipcRenderer.invoke(IPC.backendLobeSearch, query),
+    lobeInstall: (id: string) => ipcRenderer.invoke(IPC.backendLobeInstall, id),
+    clawHubSearch: (query: string) => ipcRenderer.invoke(IPC.backendClawHubSearch, query),
+    openClawStatus: () => ipcRenderer.invoke(IPC.backendOpenClawStatus),
+    answerPermission: (id: string, allowed: boolean) =>
+      ipcRenderer.invoke(IPC.backendPermissionAnswer, id, allowed),
+    onEvent: (cb: (event: BackendEvent) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: BackendEvent): void =>
+        cb(payload)
+      ipcRenderer.on(IPC.eventBackend, listener)
+      return () => ipcRenderer.removeListener(IPC.eventBackend, listener)
+    }
   }
 }
 

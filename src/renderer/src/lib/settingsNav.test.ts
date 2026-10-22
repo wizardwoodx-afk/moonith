@@ -33,7 +33,14 @@ describe('settings navigation', () => {
     expect(groups.Personal).toContain('moon')
     expect(groups.Personal).not.toContain('agent')
     expect(groups.Agents).toEqual(['agent', 'agent-team', 'skills', 'sub-agents'])
-    expect(groups.Integrations).toEqual(['mcp', 'composio', 'channels'])
+    expect(groups.Integrations).toEqual([
+      'mcp',
+      'composio',
+      'channels',
+      'gateway',
+      'microsoft',
+      'desktop'
+    ])
     expect(groups.Knight).toEqual(['about'])
   })
 
@@ -73,7 +80,8 @@ describe('settings navigation', () => {
     expect(searchSettingsNav('api key').map((item) => item.id)).toEqual(['providers'])
     expect(searchSettingsNav('hotkeys').map((item) => item.id)).toEqual(['shortcuts'])
     expect(searchSettingsNav('exclusive').map((item) => item.id)).toEqual(['moon'])
-    expect(searchSettingsNav('ui-tars')).toEqual([])
+    expect(searchSettingsNav('ui-tars').map((item) => item.id)).toEqual(['desktop'])
+    expect(searchSettingsNav('moonwright').map((item) => item.id)).toEqual(['gateway'])
   })
 
   it('returns no matches without inventing panes', () => {

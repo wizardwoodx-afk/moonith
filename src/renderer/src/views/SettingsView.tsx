@@ -27,6 +27,7 @@ import {
   Loader2,
   Lock,
   Moon,
+  Monitor,
   Paintbrush,
   Pencil,
   Plug,
@@ -83,6 +84,7 @@ import {
   SkillsPane,
   SubAgentsPane
 } from './settings/CapabilityPanes'
+import { DesktopPane, GatewayPane, MicrosoftPane, TiersPane } from './settings/BackendPanes'
 
 const NAV_ICONS: Record<SettingsPaneId, typeof SlidersHorizontal> = {
   profile: CircleUserRound,
@@ -95,6 +97,7 @@ const NAV_ICONS: Record<SettingsPaneId, typeof SlidersHorizontal> = {
   colors: SwatchBook,
   moon: Moon,
   providers: Cpu,
+  tiers: Zap,
   instructions: Brain,
   agent: ChessKnight,
   'agent-team': Users,
@@ -103,6 +106,9 @@ const NAV_ICONS: Record<SettingsPaneId, typeof SlidersHorizontal> = {
   mcp: Plug,
   composio: Boxes,
   channels: Radio,
+  gateway: ServerCog,
+  microsoft: Building2,
+  desktop: Monitor,
   about: Info
 }
 
@@ -315,9 +321,13 @@ export function SettingsView() {
                   {tab === 'permissions' ? <PermissionsPane settings={settings} /> : null}
                   {tab === 'instructions' ? <InstructionsPane settings={settings} /> : null}
                   {tab === 'providers' ? <ProvidersTab settings={settings} /> : null}
+                  {tab === 'tiers' ? <TiersPane /> : null}
                   {tab === 'mcp' ? <McpTab /> : null}
                   {tab === 'composio' ? <ComposioPane /> : null}
                   {tab === 'channels' ? <ChannelsPane /> : null}
+                  {tab === 'gateway' ? <GatewayPane /> : null}
+                  {tab === 'microsoft' ? <MicrosoftPane /> : null}
+                  {tab === 'desktop' ? <DesktopPane /> : null}
                   {tab === 'about' ? <AboutTab /> : null}
                 </>
               )}

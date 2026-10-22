@@ -211,6 +211,8 @@ export interface PublicSettings {
   customInstructions: string
   allowShell: boolean
   onboardingComplete: boolean
+  /** The transplanted Seamoon backend: provider registry, tiers, memory, gateway. */
+  backend?: BackendSettingsPublic
 }
 
 export interface SettingsPatch {
@@ -538,6 +540,195 @@ export interface AppInfo {
   isDev: boolean
 }
 
+export type BackendPermissionRule = 'allow' | 'deny' | 'ask'
+
+export interface BackendProviderInfo {
+  id: string
+  name: string
+  baseUrl: string
+  defaultModel: string
+  available: boolean
+  keyEnv: string | null
+}
+
+export interface BackendTierInfo {
+  id: string
+  name: string
+  desc: string
+  env: string[]
+  model: string
+  thinking: boolean
+  effort: string | null
+  multiplier: string
+  context: number
+}
+
+export interface BackendAccountPublic {
+  name: string
+  email: string
+  role: string
+  planName: string
+  planCredits: number
+  addOnCredits: number
+  creditBudget: number
+}
+
+export interface BackendUiTarsPublic {
+  enabled: boolean
+  baseUrl: string
+  apiKey: string
+  model: string
+  language: string
+  temperature: number
+  maxTokens: number
+  maxSteps: number
+}
+
+export interface BackendSettingsPublic {
+  providerId: string
+  baseUrl: string
+  apiKey: string
+  hasApiKey: boolean
+  model: string
+  resolvedModel: string
+  systemPrompt: string
+  temperature: number
+  maxOutputTokens: number
+  maxIterations: number
+  sandbox: boolean
+  memoryEnabled: boolean
+  permissions: Record<string, BackendPermissionRule>
+  workspace: string | null
+  tier: string
+  tierConfig: Record<string, unknown>
+  permissionMode: string
+  computerUse: boolean
+  avatar: string
+  appIcon: string
+  uiTars: BackendUiTarsPublic
+  mode: string
+  account: BackendAccountPublic
+  providers: BackendProviderInfo[]
+  [key: string]: unknown
+}
+
+export interface BackendThemeStyle {
+  id: string
+  label: string
+  builtin: boolean
+  note: string
+  accent: string
+  swatches: Array<{ name: string; hex: string }>
+  modes: string[]
+}
+
+export interface BackendModeInfo {
+  id: string
+  label: string
+  greeting: string
+  accent: string
+  accentSoft: string
+  accentText: string
+  extras: string[]
+}
+
+export interface BackendCredits {
+  plan: { used: number; total: number; remaining: number }
+  addon: { used: number; total: number; remaining: number }
+  tokens: number
+  planName: string
+}
+
+export interface BackendMemoryNote {
+  id: string
+  text: string
+  scope: string
+  tags: string[]
+  source: string
+  createdAt: number
+}
+
+export interface BackendUsageSummary {
+  days: Array<{ date: string; total: number; level: number }>
+  totals: { prompt: number; completion: number; total: number; calls: number }
+  byAgent: Record<string, number>
+  monthLabels: Array<{ key: string; label: string }>
+}
+
+export interface BackendGatewayState {
+  running: boolean
+  url: string | null
+  port: number | null
+  agents: unknown[]
+  bindings: unknown[]
+  automations: unknown[]
+  channels: unknown[]
+}
+
+export interface BackendM365State {
+  connected: boolean
+  account: { email?: string; name?: string } | null
+}
+
+export interface BackendM365File {
+  id: string
+  name: string
+  size?: number
+  modified?: string
+}
+
+export interface BackendM365Mail {
+  id: string
+  subject: string
+  from?: string
+  received?: string
+}
+
+export type BackendEvent =
+  | { type: 'permission'; id: string; tool: string; description?: string }
+  | { type: 'provider'; providerId: string; model: string }
+  | { type: 'gateway'; message: string }
+  | { type: 'notice'; level: 'info' | 'success' | 'error'; message: string }
+
+export interface BackendApi {
+  settings: () => Promise<BackendSettingsPublic>
+  saveSettings: (patch: Partial<BackendSettingsPublic>) => Promise<BackendSettingsPublic>
+  credits: () => Promise<BackendCredits>
+  themes: () => Promise<BackendThemeStyle[]>
+  modes: () => Promise<BackendModeInfo[]>
+  providers: () => Promise<BackendProviderInfo[]>
+  tiers: () => Promise<BackendTierInfo[]>
+  listMemories: () => Promise<BackendMemoryNote[]>
+  addMemory: (input: {
+    text: string
+    scope?: string
+    tags?: string[]
+  }) => Promise<BackendMemoryNote[]>
+  removeMemory: (id: string) => Promise<BackendMemoryNote[]>
+  importMemories: (text: string) => Promise<BackendMemoryNote[]>
+  usage: () => Promise<BackendUsageSummary>
+  startGateway: () => Promise<BackendGatewayState>
+  stopGateway: () => Promise<BackendGatewayState>
+  gatewayStatus: () => Promise<BackendGatewayState>
+  gatewayToken: () => Promise<string>
+  copilotStatus: () => Promise<{ connected: boolean }>
+  copilotModels: () => Promise<string[]>
+  m365Status: () => Promise<BackendM365State>
+  m365BeginSignIn: (clientId?: string) => Promise<{ prompt: string }>
+  m365CompleteSignIn: () => Promise<{ ok: boolean; email?: string; error?: string }>
+  m365Disconnect: () => Promise<{ ok: boolean }>
+  m365Files: () => Promise<BackendM365File[]>
+  m365Mail: () => Promise<BackendM365Mail[]>
+  computerStatus: () => Promise<{ enabled: boolean }>
+  uiTarsStatus: () => Promise<{ enabled: boolean; model: string; baseUrl: string }>
+  lobeSearch: (query: string) => Promise<unknown[]>
+  lobeInstall: (id: string) => Promise<{ ok: boolean }>
+  clawHubSearch: (query: string) => Promise<unknown[]>
+  openClawStatus: () => Promise<{ installed: boolean; version?: string }>
+  answerPermission: (id: string, allowed: boolean) => Promise<{ ok: boolean }>
+  onEvent: (cb: (event: BackendEvent) => void) => () => void
+}
+
 export interface KnightApi {
   getAppInfo: () => Promise<AppInfo>
   getSettings: () => Promise<PublicSettings>
@@ -613,4 +804,6 @@ export interface KnightApi {
 
   onTaskEvent: (cb: (event: TaskEvent) => void) => () => void
   onApprovalRequest: (cb: (request: ApprovalRequest) => void) => () => void
+
+  backend: BackendApi
 }

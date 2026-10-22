@@ -43,6 +43,9 @@ import { composioManager } from './services/composio'
 import { channelService } from './services/channels'
 import { subAgentService } from './services/subagents'
 import { applyTitleBarTheme } from './window'
+import { getBackend } from './backend'
+import { registerBackendIpc, setBackendEventTarget } from './backend/ipc'
+import type { BackendSettingsPublic } from '@shared/types'
 
 function publishTask(task: Task): void {
   sendTaskEvent({ type: 'task', task })
@@ -77,7 +80,10 @@ export function registerIpc(): void {
     isDev: !app.isPackaged
   }))
 
-  ipcMain.handle(IPC.settingsGet, () => store.getPublicSettings())
+  ipcMain.handle(IPC.settingsGet, () => ({
+    ...store.getPublicSettings(),
+    backend: getBackend().publicSettings() as unknown as BackendSettingsPublic
+  }))
 
   ipcMain.handle(IPC.settingsSave, async (_event, patch: SettingsPatch) => {
     const before = JSON.stringify(store.getPublicSettings().mcpServers)
@@ -305,6 +311,8 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.tableWithdraw, (_event, proposalId: string) => tableService.withdraw(proposalId))
   ipcMain.handle(IPC.tablePublish, (_event, proposalId: string) => tableService.publish(proposalId))
   ipcMain.handle(IPC.tableLeave, () => tableService.leave())
+
+  registerBackendIpc()
 }
 
 function safeArtifactPath(taskId: string, relPath: string): string {

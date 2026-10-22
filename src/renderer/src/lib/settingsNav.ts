@@ -9,6 +9,7 @@ export const SETTINGS_PANES = [
   'colors',
   'moon',
   'providers',
+  'tiers',
   'instructions',
   'agent',
   'agent-team',
@@ -17,6 +18,9 @@ export const SETTINGS_PANES = [
   'mcp',
   'composio',
   'channels',
+  'gateway',
+  'microsoft',
+  'desktop',
   'about'
 ] as const
 
@@ -165,6 +169,28 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     status: 'live'
   },
   {
+    id: 'tiers',
+    label: 'Tiers',
+    group: 'Personal',
+    summary: 'How much a turn may spend.',
+    keywords: [
+      'tier',
+      'tiers',
+      'reasoning',
+      'thinking',
+      'effort',
+      'budget',
+      'tokens',
+      'swift',
+      'balanced',
+      'deep',
+      'agentic',
+      'lean',
+      'auto'
+    ],
+    status: 'live'
+  },
+  {
     id: 'instructions',
     label: 'Memory',
     group: 'Personal',
@@ -238,6 +264,61 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     group: 'Integrations',
     summary: 'Reach the Captain from another app.',
     keywords: ['channel', 'webhook', 'telegram', 'bot', 'inbound', 'messages', 'remote', 'api'],
+    status: 'live'
+  },
+  {
+    id: 'gateway',
+    label: 'Gateway',
+    group: 'Integrations',
+    summary: 'Reach the backend from anywhere.',
+    keywords: [
+      'gateway',
+      'moon',
+      'http',
+      'webhook',
+      'token',
+      'router',
+      'automation',
+      'remote',
+      'api',
+      'moonwright'
+    ],
+    status: 'live'
+  },
+  {
+    id: 'microsoft',
+    label: 'Microsoft 365',
+    group: 'Integrations',
+    summary: 'Files, mail and the calendar.',
+    keywords: [
+      'microsoft',
+      '365',
+      'office',
+      'outlook',
+      'graph',
+      'mail',
+      'calendar',
+      'onedrive',
+      'sharepoint'
+    ],
+    status: 'live'
+  },
+  {
+    id: 'desktop',
+    label: 'Desktop',
+    group: 'Integrations',
+    summary: 'Screen control and GUI actions.',
+    keywords: [
+      'computer',
+      'desktop',
+      'screen',
+      'mouse',
+      'keyboard',
+      'ui-tars',
+      'uitars',
+      'grounding',
+      'automation'
+    ],
     status: 'live'
   },
   {

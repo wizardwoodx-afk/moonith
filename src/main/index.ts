@@ -22,6 +22,7 @@ import { channelService } from './services/channels'
 import { approvals } from './approvals'
 import { isWithin } from './security'
 import { mimeForPath } from './services/documents'
+import { setBackendEventTarget } from './backend/ipc'
 
 let tray: Tray | null = null
 let isQuitting = false
@@ -221,6 +222,8 @@ if (!gotLock) {
 
       createMainWindow()
       setupWindowCloseBehavior()
+      const mainWindow = getMainWindow()
+      if (mainWindow) setBackendEventTarget(mainWindow)
 
       scheduler.init()
       void mcpManager.startAll()

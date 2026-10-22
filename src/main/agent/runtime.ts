@@ -32,6 +32,11 @@ import { skillService } from '../services/skills'
 import { subAgentService } from '../services/subagents'
 import { usageService } from '../services/usage'
 import { isFailoverWorthy } from './failover'
+import { runEngineTurn, type ToolOutcome } from './engine'
+import { getBackend } from '../backend'
+import { backendSkillsDir } from '../backend/paths'
+import { Provider, resolveConfig } from '../backend/provider'
+import type { ModelMessage } from '../backend/core/types'
 
 interface RunState {
   taskId: string
@@ -196,11 +201,6 @@ class AgentRuntime {
       const providers = this.resolveProviders(task, settings)
       const tools = await this.collectTools(task, run, providers, settings)
       const toolMap = new Map(tools.map((tool) => [tool.name, tool]))
-      const providerTools = tools.map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        parameters: withoutSchemaMetadata(tool.inputSchema)
-      }))
       const skills = await skillService.promptIndex().catch(() => '')
       const lastUser = [...task.messages]
         .reverse()
@@ -216,131 +216,113 @@ class AgentRuntime {
         memory
       })
 
-      let rounds = 0
-      let emptyStreak = 0
+      const backend = getBackend()
+      const provider = this.resolveEngineProvider(task, settings)
 
-      while (!run.stopped && rounds < MAX_ROUNDS) {
-        rounds++
-        if (task.status !== 'running') {
-          task.status = 'running'
-          this.publish(task)
-        }
-
-        const assistantMessage: ChatMessage = {
-          id: newId('msg'),
-          role: 'assistant',
-          content: '',
-          createdAt: nowIso()
-        }
-        task.messages.push(assistantMessage)
-        this.publish(task)
-
-        let completion: CompletionResult | undefined
-        let usedProvider = providers[0]
-        let lastError: unknown
-        try {
-          for (let index = 0; index < providers.length; index++) {
-            const candidate = providers[index]
-            let produced = false
-            try {
-              completion = await streamCompletion({
-                kind: candidate.kind,
-                apiKey: candidate.apiKey,
-                baseUrl: candidate.baseUrl,
-                model: candidate.model,
-                system,
-                messages: task.messages,
-                tools: providerTools,
-                signal: run.controller.signal,
-                onText: (delta) => {
-                  produced = true
-                  assistantMessage.content += delta
-                  sendTaskEvent({
-                    type: 'delta',
-                    taskId: task.id,
-                    messageId: assistantMessage.id,
-                    delta
-                  })
-                }
-              })
-              usedProvider = candidate
-              if (index > 0) {
-                providers.splice(index, 1)
-                providers.unshift(candidate)
-                toast('info', `Continued on ${candidate.name}.`)
+      // The Moonwright core takes the transcript up to the last user message,
+      // and the user message itself.
+      const lastUserIndex = findLastUserIndex(task.messages)
+      const userMessage = lastUserIndex >= 0 ? task.messages[lastUserIndex] : undefined
+      const history: ModelMessage[] = task.messages
+        .slice(0, lastUserIndex < 0 ? task.messages.length : lastUserIndex)
+        .filter((message) => message.role === 'user' || message.role === 'assistant')
+        .map((message) => ({
+          role: message.role as ModelMessage['role'],
+          content: message.content,
+          ...(message.toolCalls?.length
+            ? {
+                toolCalls: message.toolCalls.map((call) => ({
+                  id: call.id,
+                  name: call.name,
+                  args: (call.arguments ?? {}) as Record<string, unknown>
+                }))
               }
-              break
-            } catch (error) {
-              lastError = error
-              if (!isFailoverWorthy(error, produced) || run.controller.signal.aborted) throw error
-              const next = providers[index + 1]
-              if (!next) throw error
-              toast('info', `${candidate.name} could not take the turn. Trying ${next.name}.`)
-            }
-          }
-          if (!completion) throw lastError ?? new Error('No provider could take the turn.')
-        } catch (error) {
-          if (!assistantMessage.content.trim()) {
-            task.messages = task.messages.filter((message) => message.id !== assistantMessage.id)
-          }
-          if (run.stopped) {
-            await this.commit(task)
-            return
-          }
-          throw error
-        }
-
-        assistantMessage.content = completion.text || assistantMessage.content
-        task.usage = addUsage(task.usage, completion.usage)
-        await usageService
-          .record({
-            agentId: 'Captain',
-            providerId: usedProvider.id,
-            model: usedProvider.model,
-            usage: completion.usage
-          })
-          .catch(() => undefined)
-        const calls: ToolCallInfo[] = completion.toolCalls.map((call) => ({
-          id: call.id,
-          name: call.name,
-          arguments: call.arguments
+            : {})
         }))
-        if (calls.length) assistantMessage.toolCalls = calls
-        await this.commit(task)
 
-        if (run.stopped) return
-
-        if (!calls.length) {
-          if (run.pendingSteer) {
-            run.pendingSteer = false
-            emptyStreak = 0
-            continue
-          }
-          if (!assistantMessage.content.trim()) {
-            task.messages = task.messages.filter((message) => message.id !== assistantMessage.id)
-            emptyStreak++
-            await this.commit(task)
-            if (emptyStreak < 2) continue
-            throw new Error('The model returned an empty response. Try another model or provider.')
-          }
-          await this.finish(task, 'done')
-          return
-        }
-
-        emptyStreak = 0
-        const context = this.createToolContext(task, settings)
-        for (const call of calls) {
-          if (run.stopped) break
-          await this.executeToolCall(task, toolMap, call, run, context, assistantMessage.id)
-        }
-        await this.reconcileToolResults(task)
-        await this.commit(task)
-        if (run.stopped) return
+      if (task.status !== 'running') {
+        task.status = 'running'
+        this.publish(task)
       }
 
+      const assistantMessage: ChatMessage = {
+        id: newId('msg'),
+        role: 'assistant',
+        content: '',
+        createdAt: nowIso()
+      }
+      task.messages.push(assistantMessage)
+      this.publish(task)
+
+      const toolContext = this.createToolContext(task, settings)
+      const context = [skills, memory].filter(Boolean).join('\n\n')
+
+      const result = await runEngineTurn({
+        provider,
+        tools,
+        systemPrompt: system,
+        history,
+        userMessage: userMessage?.content ?? '',
+        context,
+        memoryStore: backend.store.memories,
+        skillsDir: backendSkillsDir(),
+        config: {
+          maxIterations: MAX_ROUNDS,
+          delegationMaxIterations: 12,
+          skillNudgeInterval: 10,
+          memoryNudgeInterval: 15,
+          verifyOnStop: true,
+          preVerifyContinue: true,
+          kanbanTerminalTool: false,
+          lateLspVerdicts: true,
+          backgroundReview: true,
+          temperature: 0.2,
+          maxOutputTokens: 4096,
+          reviewMaxIterations: 12
+        },
+        signal: run.controller.signal,
+        onText: (delta) => {
+          assistantMessage.content += delta
+          sendTaskEvent({
+            type: 'delta',
+            taskId: task.id,
+            messageId: assistantMessage.id,
+            delta
+          })
+        },
+        onTool: async (callId, name, args) =>
+          this.executeToolCall(
+            task,
+            toolMap,
+            { id: callId, name, arguments: args },
+            run,
+            toolContext,
+            assistantMessage.id
+          ),
+        emit: (event, payload) => this.handleEngineEvent(task, event, payload)
+      })
+
+      assistantMessage.content = result.finalResponse || assistantMessage.content
+      task.usage = addUsage(task.usage, {
+        input: result.usage.prompt,
+        output: result.usage.completion,
+        total: result.usage.total
+      })
+      await usageService
+        .record({
+          agentId: 'Captain',
+          providerId: provider.settings.providerId ?? 'knight',
+          model: provider.settings.model ?? '',
+          usage: {
+            input: result.usage.prompt,
+            output: result.usage.completion,
+            total: result.usage.total
+          }
+        })
+        .catch(() => undefined)
+      await this.commit(task)
       if (run.stopped) return
-      toast('info', `Paused after ${MAX_ROUNDS} steps. Resume when you are ready.`)
-      await this.finish(task, 'paused')
+      await this.finish(task, 'done')
     } catch (error) {
       if (run.stopped) {
         await this.commit(task).catch(() => undefined)
@@ -663,6 +645,71 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
     return candidates
   }
 
+  /**
+   * The provider for this turn. The task's provider and model are resolved
+   * first; the backend's client adds every other credentialed provider as a
+   * failover, so a rate-limited or out-of-credit provider degrades into the
+   * next working one instead of failing the turn.
+   */
+  private resolveEngineProvider(task: Task, settings: PublicSettings): Provider {
+    const providerId = task.providerId || settings.defaultProviderId
+    const stored = providerId ? store.getProvider(providerId) : undefined
+    if (providerId && !stored) {
+      throw new Error('Connect an AI provider in Settings to get started.')
+    }
+    if (stored && !stored.enabled) {
+      throw new Error(`The provider “${stored.name}” is disabled. Enable it in Settings.`)
+    }
+    const apiKey = stored ? store.getProviderSecret(stored.id) : ''
+    if (stored && !apiKey) {
+      throw new Error(`Add an API key for ${stored.name} in Settings.`)
+    }
+    const model = task.model || settings.defaultModel || stored?.models[0] || ''
+    const config = resolveConfig({
+      providerId: providerId ?? undefined,
+      baseUrl: stored?.baseUrl,
+      apiKey,
+      model
+    })
+    if (!config.model) {
+      throw new Error('Choose a model for this task in the composer or in Settings.')
+    }
+    return new Provider({
+      providerId: config.providerId,
+      baseUrl: config.baseUrl,
+      apiKey: config.apiKey,
+      model: config.model,
+      kind: stored?.kind === 'anthropic' ? 'anthropic' : 'openai'
+    })
+  }
+
+  /** Moonwright's own events, mapped onto the task surface the renderer sees. */
+  private handleEngineEvent(task: Task, event: string, payload: unknown): void {
+    const data = (payload ?? {}) as Record<string, unknown>
+    switch (event) {
+      case 'agent:nudge':
+        toast('info', String(data.message ?? 'The agent kept going.'))
+        break
+      case 'agent:stop_gate':
+        toast('info', String(data.reason ?? 'The agent is verifying the work before answering.'))
+        break
+      case 'agent:review':
+        toast('info', 'Reviewing the turn for skills and memory.')
+        break
+      case 'agent:budget_warning':
+        toast('info', String(data.message ?? 'The turn is close to its step budget.'))
+        break
+      case 'provider:attempt':
+        if (data.providerId) toast('info', `Using ${String(data.providerId)}.`)
+        break
+      case 'agent:error':
+        toast('error', String(data.error ?? 'The agent run failed.'))
+        break
+      default:
+        break
+    }
+  }
+
   private createToolContext(task: Task, settings: PublicSettings): ToolContext {
     const workspace = ensureTaskWorkspace(task.id)
     return {
@@ -690,14 +737,15 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
     run: RunState,
     context: ToolContext,
     messageId: string
-  ): Promise<void> {
+  ): Promise<ToolOutcome> {
     const tool = toolMap.get(call.name)
     const rawArgs = (call.arguments ?? {}) as Record<string, unknown>
 
     if (!tool) {
-      this.appendToolMessage(task, call, `Unknown tool "${call.name}".`, true)
+      const content = `Unknown tool "${call.name}".`
+      this.appendToolMessage(task, call, content, true)
       await this.commit(task)
-      return
+      return { content, isError: true }
     }
 
     let args: unknown = rawArgs
@@ -707,9 +755,10 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
         const issues = parsed.error.issues
           .map((issue) => `${issue.path.join('.') || 'arguments'}: ${issue.message}`)
           .join('; ')
-        this.appendToolMessage(task, call, `Invalid arguments for ${tool.name}: ${issues}`, true)
+        const content = `Invalid arguments for ${tool.name}: ${issues}`
+        this.appendToolMessage(task, call, content, true)
         await this.commit(task)
-        return
+        return { content, isError: true }
       }
       args = parsed.data
     }
@@ -753,23 +802,20 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
         step.status = 'error'
         step.error = 'Stopped'
         step.endedAt = nowIso()
-        this.appendToolMessage(task, call, 'Tool execution was interrupted by the user.', true)
+        const content = 'Tool execution was interrupted by the user.'
+        this.appendToolMessage(task, call, content, true)
         await this.commit(task)
-        return
+        return { content, isError: true }
       }
       if (!approved) {
         step.status = 'error'
         step.error = 'Permission denied'
         step.endedAt = nowIso()
-        this.appendToolMessage(
-          task,
-          call,
-          `The user denied permission to run ${tool.name}. Do not retry the same action; ask the user how to proceed or choose a different approach.`,
-          true
-        )
+        const content = `The user denied permission to run ${tool.name}. Do not retry the same action; ask the user how to proceed or choose a different approach.`
+        this.appendToolMessage(task, call, content, true)
         task.status = 'running'
         await this.commit(task)
-        return
+        return { content, isError: true }
       }
       task.status = 'running'
     }
@@ -777,21 +823,29 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
     step.status = 'running'
     await this.commit(task)
 
+    let outcome: ToolOutcome
     try {
       const result = await tool.execute(args, context)
       step.status = result.isError ? 'error' : 'ok'
       step.output = truncate(result.content, 6000)
       if (result.isError) step.error = truncate(firstLine(result.content), 500)
       this.appendToolMessage(task, call, truncate(result.content, 30_000), result.isError)
+      outcome = {
+        content: truncate(result.content, 30_000),
+        isError: result.isError,
+        mutatedPaths: mutatedPathsFor(tool.name, rawArgs)
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       step.status = 'error'
       step.error = truncate(message, 500)
       step.output = truncate(message, 6000)
       this.appendToolMessage(task, call, `Tool error: ${message}`, true)
+      outcome = { content: `Tool error: ${message}`, isError: true }
     }
     step.endedAt = nowIso()
     await this.commit(task)
+    return outcome
   }
 
   private appendToolMessage(
@@ -941,6 +995,40 @@ function approvalDetails(tool: AgentTool, args: Record<string, unknown>): string
 
 function firstLine(value: string): string {
   return value.split(/\r?\n/).find((line) => line.trim()) ?? value
+}
+
+/** The index of the last message the user actually wrote (attachments are hidden). */
+function findLastUserIndex(messages: ChatMessage[]): number {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index]
+    if (message.role === 'user' && !message.hidden) return index
+  }
+  return -1
+}
+
+const MUTATING_TOOLS = new Set([  'write_file',
+  'edit_file',
+  'delete_path',
+  'move_path',
+  'make_directory',
+  'create_document',
+  'create_pdf',
+  'create_presentation',
+  'create_spreadsheet'
+])
+
+/**
+ * The paths a tool call touched. The engine's verify gates use this to keep
+ * the turn alive until the edited files actually check out.
+ */
+function mutatedPathsFor(toolName: string, args: Record<string, unknown>): string[] | undefined {
+  if (!MUTATING_TOOLS.has(toolName)) return undefined
+  const out: string[] = []
+  for (const key of ['path', 'file', 'filePath', 'from', 'to', 'target']) {
+    const value = args[key]
+    if (typeof value === 'string' && value.trim()) out.push(value)
+  }
+  return out.length ? out : undefined
 }
 
 export const agentRuntime = new AgentRuntime()
