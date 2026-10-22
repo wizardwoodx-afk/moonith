@@ -3,7 +3,10 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022"],
+    // DOM types are needed by the vendored SelfImpulse engine's host boundary
+    // (WebCrypto, FileReader, localStorage shims). They are types only: the
+    // main process must still never touch window/document at runtime.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
