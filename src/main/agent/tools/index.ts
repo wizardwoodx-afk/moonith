@@ -7,7 +7,7 @@ import { planTools } from './plan'
 import { documentTools } from './documents'
 import { browserTools } from './browser'
 import { memoryTools } from './memory'
-import { craftTools } from './craft'
+import { studioTools } from './studio'
 
 export function getBuiltinTools(mode: TaskMode): AgentTool[] {
   if (mode === 'chat') {
@@ -22,7 +22,7 @@ export function getBuiltinTools(mode: TaskMode): AgentTool[] {
     ...webTools,
     ...planTools,
     ...documentTools,
-    ...craftTools,
+    ...studioTools,
     ...browserTools,
     ...memoryTools
   ]
