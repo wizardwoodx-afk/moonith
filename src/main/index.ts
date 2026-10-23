@@ -1,5 +1,6 @@
 import {
   app,
+  type BrowserWindow,
   dialog,
   Menu,
   nativeImage,
@@ -39,6 +40,9 @@ if (portableData) {
 let tray: Tray | null = null
 let isQuitting = false
 let trayNoticeShown = false
+// The window that already carries the close handler, so repeated `activate`
+// events cannot stack a second listener on the same instance.
+let closeBehaviourWindow: BrowserWindow | null = null
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -139,6 +143,8 @@ function notify(title: string, body: string): void {
   notification.show()
 }
 
+const TASK_NOTIFICATION_MEMORY = 500
+
 function setupTaskNotifications(): void {
   const previous = new Map<string, string>()
   subscribeTaskEvents((event) => {
@@ -146,6 +152,13 @@ function setupTaskNotifications(): void {
     const task = event.task
     const before = previous.get(task.id)
     previous.set(task.id, task.status)
+    // Map keeps insertion order, so dropping from the front evicts the oldest
+    // task ids and keeps the map bounded for the lifetime of the process.
+    while (previous.size > TASK_NOTIFICATION_MEMORY) {
+      const oldest = previous.keys().next()
+      if (oldest.done) break
+      previous.delete(oldest.value)
+    }
     if (!before || before === task.status) return
     if (task.status !== 'done' && task.status !== 'error') return
     const win = getMainWindow()
@@ -198,6 +211,8 @@ function registerFileProtocol(): void {
 function setupWindowCloseBehavior(): void {
   const win = getMainWindow()
   if (!win) return
+  if (closeBehaviourWindow === win) return
+  closeBehaviourWindow = win
   win.on('close', (event) => {
     if (isQuitting) return
     const hasSchedules = store.listSchedules().some((schedule) => schedule.enabled)

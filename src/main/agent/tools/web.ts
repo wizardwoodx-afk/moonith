@@ -1,6 +1,123 @@
 import { z } from 'zod'
+import { isIP } from 'node:net'
 import { defineTool, toolResultError } from './types'
 import { truncate } from '../../util'
+
+const MAX_REDIRECTS = 3
+
+const BLOCKED_NAMES = new Set([
+  'localhost',
+  'localhost.localdomain',
+  'ip6-localhost',
+  'ip6-loopback',
+  'metadata.google.internal'
+])
+
+function ipv4ToInt(host: string): number | null {
+  const parts = host.split('.')
+  if (parts.length !== 4) return null
+  let value = 0
+  for (const part of parts) {
+    if (!/^\d{1,3}$/.test(part)) return null
+    const octet = Number(part)
+    if (octet > 255) return null
+    value = value * 256 + octet
+  }
+  return value
+}
+
+function isBlockedIpv4(value: number): boolean {
+  const inRange = (base: number, bits: number): boolean => {
+    const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0
+    return ((value & mask) >>> 0) === ((base & mask) >>> 0)
+  }
+  return (
+    inRange(0x00000000, 8) || // 0.0.0.0/8 "this network"
+    inRange(0x0a000000, 8) || // 10.0.0.0/8
+    inRange(0x64400000, 10) || // 100.64.0.0/10 CGNAT
+    inRange(0x7f000000, 8) || // 127.0.0.0/8 loopback
+    inRange(0xa9fe0000, 16) || // 169.254.0.0/16 link-local
+    inRange(0xac100000, 12) || // 172.16.0.0/12
+    inRange(0xc0a80000, 16) || // 192.168.0.0/16
+    inRange(0xe0000000, 4) || // 224.0.0.0/4 multicast
+    inRange(0xf0000000, 4) // 240.0.0.0/4 reserved, includes broadcast
+  )
+}
+
+/** Expands an IPv6 literal to eight 16-bit groups; returns null when unparseable. */
+function expandIpv6(host: string): number[] | null {
+  const halves = host.split('::')
+  if (halves.length > 2) return null
+  const parse = (part: string): number[] | null => {
+    if (!part) return []
+    const groups: number[] = []
+    for (const piece of part.split(':')) {
+      if (piece.includes('.')) {
+        const v4 = ipv4ToInt(piece)
+        if (v4 === null) return null
+        groups.push(Math.floor(v4 / 65536), v4 % 65536)
+        continue
+      }
+      if (!/^[0-9a-f]{1,4}$/.test(piece)) return null
+      groups.push(parseInt(piece, 16))
+    }
+    return groups
+  }
+  const head = parse(halves[0])
+  const tail = halves.length === 2 ? parse(halves[1]) : []
+  if (!head || !tail) return null
+  if (halves.length === 1) return head.length === 8 ? head : null
+  const fill = 8 - head.length - tail.length
+  if (fill < 0) return null
+  return [...head, ...new Array<number>(fill).fill(0), ...tail]
+}
+
+function isBlockedIpv6(host: string): boolean {
+  const groups = expandIpv6(host.split('%')[0])
+  // Fail closed: `isIP` said this is IPv6, so an unparseable literal is suspicious.
+  if (!groups) return true
+  const mapped =
+    groups[0] === 0 &&
+    groups[1] === 0 &&
+    groups[2] === 0 &&
+    groups[3] === 0 &&
+    groups[4] === 0 &&
+    groups[5] === 0xffff
+  if (mapped) return isBlockedIpv4(groups[6] * 256 + groups[7])
+  const first = groups[0]
+  return (
+    groups.every((group) => group === 0) || // ::
+    (groups.slice(0, 7).every((group) => group === 0) && groups[7] === 1) || // ::1
+    (first & 0xffc0) === 0xfe80 || // fe80::/10 link-local
+    (first & 0xfe00) === 0xfc00 || // fc00::/7 unique local
+    (first & 0xff00) === 0xff00 // ff00::/8 multicast
+  )
+}
+
+/**
+ * True for loopback, private, link-local, unique-local, unspecified and
+ * multicast hosts. Only canonical dotted-quad IPv4 is recognised: exotic
+ * encodings such as `http://2130706433/` or octal/hex octets are not decoded
+ * here, so this is a guard against ordinary misconfiguration and simple SSRF,
+ * not a complete defence against a determined attacker.
+ */
+export function isBlockedHost(hostname: string): boolean {
+  const host = hostname
+    .trim()
+    .toLowerCase()
+    .replace(/^\[/, '')
+    .replace(/\]$/, '')
+    .replace(/\.$/, '')
+  if (!host) return true
+  if (BLOCKED_NAMES.has(host) || host.endsWith('.localhost')) return true
+  const family = isIP(host)
+  if (family === 4) {
+    const value = ipv4ToInt(host)
+    return value === null ? true : isBlockedIpv4(value)
+  }
+  if (family === 6) return isBlockedIpv6(host)
+  return false
+}
 
 function normalizeUrl(value: string): URL {
   const url = new URL(value)
@@ -8,6 +125,35 @@ function normalizeUrl(value: string): URL {
     throw new Error('Only http and https URLs are allowed.')
   }
   return url
+}
+
+function assertPublicUrl(url: URL): void {
+  if (isBlockedHost(url.hostname)) {
+    throw new Error('Refusing to fetch a private or loopback address.')
+  }
+}
+
+/** Fetches with manual redirects so every hop is re-checked against the host guard. */
+async function fetchPublic(start: URL, signal: AbortSignal): Promise<{ response: Response; url: URL }> {
+  let current = start
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    assertPublicUrl(current)
+    const response = await fetch(current, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8'
+      },
+      signal,
+      redirect: 'manual'
+    })
+    if (response.status < 300 || response.status >= 400) return { response, url: current }
+    const location = response.headers.get('location')
+    if (!location) return { response, url: current }
+    if (hop === MAX_REDIRECTS) throw new Error('Too many redirects.')
+    current = normalizeUrl(new URL(location, current).toString())
+  }
+  throw new Error('Too many redirects.')
 }
 
 export const webFetchTool = defineTool({
@@ -20,16 +166,11 @@ export const webFetchTool = defineTool({
   risk: 'low',
   execute: async (args) => {
     try {
-      const url = normalizeUrl(args.url)
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131 Safari/537.36',
-          Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8'
-        },
-        signal: AbortSignal.timeout(25000),
-        redirect: 'follow'
-      })
+      const start = normalizeUrl(args.url)
+      if (isBlockedHost(start.hostname)) {
+        return { content: 'Refusing to fetch a private or loopback address.', isError: true }
+      }
+      const { response, url } = await fetchPublic(start, AbortSignal.timeout(25000))
       if (!response.ok) return { content: `Request failed with HTTP ${response.status}.`, isError: true }
       const contentType = response.headers.get('content-type') ?? ''
       if (!/text|json|xml|html/.test(contentType)) {

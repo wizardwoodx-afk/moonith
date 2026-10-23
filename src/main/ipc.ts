@@ -1,6 +1,6 @@
 import { app, dialog, ipcMain, shell } from 'electron'
 import { promises as fs } from 'node:fs'
-import { basename, join } from 'node:path'
+import { basename } from 'node:path'
 import { IPC } from '@shared/ipc'
 import { REA_SERVER_CONFIG } from '@shared/constants'
 import type {
@@ -39,7 +39,7 @@ import { approvals } from './approvals'
 import { sendTaskEvent } from './emitter'
 import { store } from './store'
 import { taskWorkspace } from './paths'
-import { isWithin } from './security'
+import { resolveSafePath } from './security'
 import { browserService } from './services/browser'
 import { mcpManager } from './services/mcp'
 import { mimeForPath } from './services/documents'
@@ -233,13 +233,13 @@ export function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.artifactOpen, async (_event, taskId: string, relPath: string) => {
-    const target = safeArtifactPath(taskId, relPath)
+    const target = await safeArtifactPath(taskId, relPath)
     const error = await shell.openPath(target)
     if (error) throw new Error(error)
   })
 
-  ipcMain.handle(IPC.artifactReveal, (_event, taskId: string, relPath: string) => {
-    shell.showItemInFolder(safeArtifactPath(taskId, relPath))
+  ipcMain.handle(IPC.artifactReveal, async (_event, taskId: string, relPath: string) => {
+    shell.showItemInFolder(await safeArtifactPath(taskId, relPath))
   })
 
   ipcMain.handle(IPC.scheduleList, () => store.listSchedules())
@@ -367,11 +367,10 @@ export function registerIpc(): void {
   registerBackendIpc()
 }
 
-function safeArtifactPath(taskId: string, relPath: string): string {
+async function safeArtifactPath(taskId: string, relPath: string): Promise<string> {
   const task = store.getTask(taskId)
   if (!task) throw new Error('Task not found.')
-  const workspace = taskWorkspace(taskId)
-  const target = join(workspace, relPath)
-  if (!isWithin(workspace, target)) throw new Error('Artifact path is outside the task workspace.')
-  return target
+  // Real-path checking as well as lexical: a symlink inside the workspace must
+  // not hand `shell.openPath` a target that lives outside it.
+  return resolveSafePath([taskWorkspace(taskId)], relPath, { mode: 'read' })
 }

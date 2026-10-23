@@ -70,7 +70,7 @@ const DEFAULT_SETTINGS: StoredSettings = {
   channels: [],
   defaultPermissionMode: 'manual',
   customInstructions: '',
-  allowShell: true,
+  allowShell: false,
   onboardingComplete: false
 }
 

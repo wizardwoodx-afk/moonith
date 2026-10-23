@@ -2,8 +2,26 @@ import { resolve } from 'node:path'
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import type { Plugin } from 'vite'
 
 const shared = resolve('src/shared')
+
+/**
+ * The shipped CSP forbids inline scripts. `@vitejs/plugin-react` injects an
+ * inline react-refresh preamble into the dev server's HTML, which that policy
+ * would block, so relax `script-src` for `serve` only. `apply: 'serve'` keeps
+ * this out of the production build entirely — the packaged app keeps the
+ * strict policy that `src/renderer/index.html` declares.
+ */
+function devInlineScriptCsp(): Plugin {
+  return {
+    name: 'selfimpulse-dev-csp',
+    apply: 'serve',
+    transformIndexHtml(html: string): string {
+      return html.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
+    }
+  }
+}
 
 /**
  * `KNIGHT_BUILD_ONLY` splits the production build into two processes.
@@ -46,7 +64,7 @@ export default defineConfig({
               '@renderer': resolve('src/renderer/src')
             }
           },
-          plugins: [react(), tailwindcss()]
+          plugins: [react(), tailwindcss(), devInlineScriptCsp()]
         }
       })
 })

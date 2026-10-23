@@ -99,10 +99,12 @@ export function registerKnightTools(ctx: ToolContext): string[] {
     registerTool(tool.name, {
       name: tool.name,
       description: `${tool.title} — ${tool.description}${argHint(tool)}`,
-      /* The host already encodes the human gate: `approval: 'policy'` means
-       * the side effect needs a decision. The engine's gate then pauses on
-       * exactly the tools the host would have paused on. */
-      risky: tool.approval === 'policy',
+      /* The host encodes the human gate in `approval`: `never` runs freely,
+       * `policy` follows the task's permission mode, `always` needs a decision
+       * in every mode. The engine only has a boolean gate, so anything that is
+       * not `never` must be marked risky — otherwise the `always` tier would
+       * be silently downgraded to "run without asking" on the engine path. */
+      risky: tool.approval !== 'never',
       run: async (args) => {
         try {
           const parsed = tool.schema ? tool.schema.safeParse(args) : null

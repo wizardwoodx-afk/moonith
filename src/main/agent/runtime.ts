@@ -434,10 +434,11 @@ class AgentRuntime {
       provider: provider.settings.providerId ?? 'knight',
       model: provider.settings.model ?? ''
     })
+    // Sub-agents never prompt, so 'always' tools are withheld from them entirely.
     const allowed = tools.filter(
       (tool) =>
         tool.name !== 'delegate_to_crew' &&
-        (tool.approval === 'never' || task.permissionMode === 'skip')
+        (tool.approval === 'never' || (tool.approval === 'policy' && task.permissionMode === 'skip'))
     )
     const toolMap = new Map(allowed.map((tool) => [tool.name, tool]))
     const workspace = ensureTaskWorkspace(task.id)
@@ -689,11 +690,14 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       task.steps.splice(0, task.steps.length - MAX_STEPS)
     }
 
+    // 'always' tools (shell, recursive delete) ask in every mode, including skip.
+    // Only an explicit per-task "always allow" for this tool bypasses the prompt.
     const needsApproval =
-      tool.approval === 'policy' &&
-      task.permissionMode !== 'skip' &&
+      tool.approval !== 'never' &&
       !approvals.isAlwaysAllowed(task.id, tool.name) &&
-      (task.permissionMode === 'manual' || tool.risk === 'high')
+      (tool.approval === 'always' ||
+        task.permissionMode === 'manual' ||
+        (task.permissionMode !== 'skip' && tool.risk === 'high'))
 
     if (needsApproval) {
       step.status = 'waiting'

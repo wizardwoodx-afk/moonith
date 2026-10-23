@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs'
-import { extname, join, relative } from 'node:path'
+import { extname, join, relative, resolve } from 'node:path'
 import { z } from 'zod'
 import type { ToolContext } from './types'
 import { defineTool, toolResultError } from './types'
@@ -178,6 +178,14 @@ export const makeDirectoryTool = defineTool({
   }
 })
 
+export function moveRejection(from: string, to: string): string | null {
+  const source = resolve(from)
+  const target = resolve(to)
+  if (source === target) return 'Source and destination are the same path.'
+  if (isWithin(source, target)) return 'Cannot move a folder into itself.'
+  return null
+}
+
 export const movePathTool = defineTool({
   name: 'move_path',
   title: 'Move or rename',
@@ -189,7 +197,8 @@ export const movePathTool = defineTool({
     try {
       const from = await resolveSafePath(ctx.roots, args.from, { mode: 'read' })
       const to = await resolveSafePath(ctx.roots, args.to, { mode: 'write' })
-      if (isWithin(to, from)) return { content: 'Cannot move a folder into itself.', isError: true }
+      const rejection = moveRejection(from, to)
+      if (rejection) return { content: rejection, isError: true }
       await fs.mkdir(join(to, '..'), { recursive: true })
       await fs.rename(from, to)
       return { content: `Moved ${args.from} → ${args.to}` }
@@ -204,10 +213,11 @@ export const deletePathTool = defineTool({
   name: 'delete_path',
   title: 'Delete',
   description:
-    'Delete a file or folder. This is destructive and requires approval unless the task permission mode is Integrated acceptance.',
+    'Delete a file or folder. This is destructive and always requires a human decision, in every permission mode.',
   schema: z.object({ path: z.string() }),
   sideEffect: 'write',
   risk: 'high',
+  approval: 'always',
   execute: async (args, ctx) => {
     try {
       const target = await resolveSafePath(ctx.roots, args.path, { mode: 'read' })

@@ -28,7 +28,7 @@ export interface AgentTool {
   schema?: z.ZodTypeAny
   sideEffect: ToolSideEffect
   risk: ToolRisk
-  approval: 'never' | 'policy'
+  approval: 'never' | 'policy' | 'always'
   execute: (args: any, ctx: ToolContext) => Promise<ToolResult>
   summarize?: (args: any) => string
 }
@@ -40,7 +40,7 @@ interface DefineToolInput<S extends z.ZodTypeAny> {
   schema: S
   sideEffect?: ToolSideEffect
   risk?: ToolRisk
-  approval?: 'never' | 'policy'
+  approval?: 'never' | 'policy' | 'always'
   execute: (args: z.infer<S>, ctx: ToolContext) => Promise<ToolResult>
   summarize?: (args: z.infer<S>) => string
 }
