@@ -1,20 +1,20 @@
-import { MemoryManager, MoonwrightAgent, SkillManager } from './core/index'
-import type { ModelMessage, MoonwrightPorts, ToolSpec } from './core/types'
+import { MemoryManager, ImpulseAgent, SkillManager } from './core/index'
+import type { ModelMessage, ImpulsePorts, ToolSpec } from './core/types'
 import { makePorts } from './adapter'
 import type { Provider, ProviderToolSpec } from './provider'
 import type { BackendStore } from './store'
 
 /**
- * The Moonwright runner — the agent turn, driven by the TypeScript Moonwright core.
+ * The ImpulseCore runner — the agent turn, driven by the TypeScript ImpulseCore core.
  *
  * The core lives in `src/main/backend/core/` and is bundled with the main
  * process. This module wires it to the provider, tool runtime, memory ledger
  * and workspace skills, and adds the three tools the learning loop needs.
  *
- * Ported from Seamoon's `electron/backend/moonwright-runner.js`.
+ * Ported from the earlier desktop shell.
  */
 
-/** The tool specs the Moonwright core sees in addition to the backend's own tools. */
+/** The tool specs the ImpulseCore core sees in addition to the backend's own tools. */
 export function moonwrightToolSpecs(): ToolSpec[] {
   return [
     {
@@ -72,7 +72,7 @@ export function moonwrightToolSpecs(): ToolSpec[] {
   ]
 }
 
-export interface MoonwrightTurnOptions {
+export interface ImpulseTurnOptions {
   provider: Provider
   runtime: { definitions(): ProviderToolSpec[] }
   memoryStore: BackendStore['memories']
@@ -88,10 +88,10 @@ export interface MoonwrightTurnOptions {
 }
 
 /**
- * Runs one turn with the Moonwright core.
+ * Runs one turn with the ImpulseCore core.
  */
-export async function runMoonwrightTurn(
-  options: MoonwrightTurnOptions
+export async function runImpulseTurn(
+  options: ImpulseTurnOptions
 ): Promise<{
   finalResponse: string | null
   usage: { prompt: number; completion: number; total: number }
@@ -112,8 +112,8 @@ export async function runMoonwrightTurn(
     runTool: options.runTool
   })
 
-  const skillManager = new SkillManager(ports as unknown as MoonwrightPorts)
-  const memoryManager = new MemoryManager(ports as unknown as MoonwrightPorts)
+  const skillManager = new SkillManager(ports as unknown as ImpulsePorts)
+  const memoryManager = new MemoryManager(ports as unknown as ImpulsePorts)
 
   // The three learning-loop tools.
   const specs = moonwrightToolSpecs()
@@ -206,8 +206,8 @@ export async function runMoonwrightTurn(
     contextParts.push(`## Installed skills\n${skillIndex}`)
   }
 
-  const agent = new MoonwrightAgent({
-    ports: ports as unknown as MoonwrightPorts,
+  const agent = new ImpulseAgent({
+    ports: ports as unknown as ImpulsePorts,
     config: (options.config ?? {}) as never,
     systemPrompt: options.systemPrompt,
     history: options.messages ?? []

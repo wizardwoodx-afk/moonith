@@ -14,7 +14,7 @@ import type { Screenshot } from './computer'
  * Recovered with REA from github.com/bytedance/Grounded Actions-desktop
  * (multimodal/gui-agent/{shared,action-parser}, multimodal/agent-tars/core).
  *
- * Ported from Seamoon's `electron/backend/uitars.js`.
+ * Ported from the earlier desktop shell.
  */
 
 /* ------------------------------------------------------------------ */

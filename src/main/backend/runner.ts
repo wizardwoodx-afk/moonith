@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import type { ModelMessage, ToolSpec } from './core/types'
-import { runMoonwrightTurn } from './moonwright'
+import { runImpulseTurn } from './impulse'
 import type { Provider, ProviderToolSpec, WireMessage } from './provider'
 import type { BackendStore } from './store'
 import { ToolRuntime, type ToolPermissions } from './tools'
@@ -9,7 +9,7 @@ import { ToolRuntime, type ToolPermissions } from './tools'
  * Agent runtime: a tool-calling loop on top of the provider, with delegation
  * to sub-agents (Explore / Plan / Custom roles) and per-run token accounting.
  *
- * Ported from Seamoon's `electron/backend/agent.js`.
+ * Ported from the earlier desktop shell.
  */
 
 export interface BuiltinRole {
@@ -233,9 +233,9 @@ export class AgentRunner {
       }
     })
 
-    // The Moonwright core is the default engine; the legacy loop stays as a fallback.
+    // The ImpulseCore core is the default engine; the legacy loop stays as a fallback.
     try {
-      return await this.runWithMoonwright({
+      return await this.runWithImpulseCore({
         session: input.session,
         agent,
         runtime,
@@ -247,7 +247,7 @@ export class AgentRunner {
       this.emit('agent:error', {
         sessionId: input.session.id,
         agentId: agent.id,
-        error: `Moonwright core failed, falling back: ${error}`
+        error: `ImpulseCore core failed, falling back: ${error}`
       })
     }
 
@@ -582,9 +582,9 @@ export class AgentRunner {
   }
 
   /**
-   * Runs a turn with the TypeScript Moonwright core.
+   * Runs a turn with the TypeScript ImpulseCore core.
    */
-  async runWithMoonwright(input: {
+  async runWithImpulseCore(input: {
     session: RunnerSession
     agent: ResolvedAgent
     runtime: ToolRuntime
@@ -661,7 +661,7 @@ export class AgentRunner {
       return result
     }
 
-    const result = await runMoonwrightTurn({
+    const result = await runImpulseTurn({
       provider: this.provider,
       runtime,
       memoryStore: this.store.memories,

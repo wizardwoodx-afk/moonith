@@ -203,7 +203,7 @@ class AgentRuntime {
 
       const backend = getBackend()
 
-      // The Moonwright core takes the transcript up to the last user message,
+      // The ImpulseCore core takes the transcript up to the last user message,
       // and the user message itself.
       const lastUserIndex = findLastUserIndex(task.messages)
       const userMessage = lastUserIndex >= 0 ? task.messages[lastUserIndex] : undefined
@@ -595,7 +595,7 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
     })
   }
 
-  /** Moonwright's own events, mapped onto the task surface the renderer sees. */
+  /** ImpulseCore's own events, mapped onto the task surface the renderer sees. */
   private handleEngineEvent(task: Task, event: string, payload: unknown): void {
     const data = (payload ?? {}) as Record<string, unknown>
     switch (event) {

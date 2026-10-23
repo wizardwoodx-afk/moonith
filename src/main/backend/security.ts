@@ -11,7 +11,7 @@ import { dirname } from 'node:path'
  *  - The "ask" permission actually asks: the renderer is prompted and a denial
  *    is the default when nobody answers.
  *
- * Ported from Seamoon's `electron/backend/security.js`.
+ * Ported from the earlier desktop shell.
  */
 
 export const SECRET_KEYS = ['apiKey', 'connectorsApiKey', 'connectorsToken', 'subscriptionToken']

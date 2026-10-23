@@ -1,5 +1,5 @@
 /**
- * Moonwright agent — the closed learning loop.
+ * ImpulseCore agent — the closed learning loop.
  *
  * Ported from agent/learn_prompt.py (the skill contract), agent/curator.py (the
  * inactivity-driven skill lifecycle) and the post-turn background review in
@@ -15,7 +15,7 @@ export const SKILL_NAME_MAX = 64;
 export const SKILL_DESCRIPTION_MAX = 60;
 export const SKILL_VERSION = "0.1.0";
 /** Skills are shared and published, so the author is never taken from the host. */
-export const SKILL_AUTHOR = "Moonwright";
+export const SKILL_AUTHOR = "ImpulseCore";
 
 export const SKILL_BODY_SECTIONS = [
   "# <Human Title>",

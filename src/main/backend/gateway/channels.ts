@@ -3,7 +3,7 @@
  *
  * Ported from ExternalAgent's channels/plugins/types.adapters.ts. ExternalAgent defines a
  * dozen narrow adapter interfaces (auth, status, secrets, heartbeat, directory,
- * allowlist, approval…); Seamoon keeps one adapter with optional capabilities,
+ * allowlist, approval…); this app keeps one adapter with optional capabilities,
  * which is what a native desktop gateway actually needs.
  */
 import type { ChannelAdapter, ChannelStatus, InboundMessage, OutboundMessage } from "./types";
@@ -53,7 +53,7 @@ export function createChannelRegistry(): ChannelRegistry {
 
 /**
  * The built-in channel: a local HTTP endpoint other programs (or the
- * companion mobile app) can post to. This is Seamoon's own "send a message to
+ * companion mobile app) can post to. This is this app's own "send a message to
  * the agent" surface — no third-party service involved.
  */
 export type WebhookChannel = ChannelAdapter & {

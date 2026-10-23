@@ -1,10 +1,10 @@
 /**
  * Moon Gateway — the native desktop gateway.
  *
- * This is Seamoon's own implementation of the ExternalAgent gateway concept: a
+ * This is this app's own implementation of the external-agent gateway concept: a
  * local service that receives messages from channels, routes each one to an
- * agent, runs the turn through Moonwright, and sends the reply back out. It
- * runs inside Seamoon's main process — no CLI, no external service.
+ * agent, runs the turn through ImpulseCore, and sends the reply back out. It
+ * runs inside this app's main process — no CLI, no external service.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createChannelRegistry, createConsoleChannel, createWebhookChannel } from "./channels";

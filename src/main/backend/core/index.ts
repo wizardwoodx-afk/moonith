@@ -1,10 +1,10 @@
 /**
- * Moonwright agent — public surface.
+ * The agent core — public surface.
  *
- * Moonwright is Seamoon's own agent. Its design is a TypeScript port of the
- * Hermes agent from NousResearch/hermes-agent (MIT), living inside the Seamoon
- * app. It is transport-agnostic: everything external (the model, the tools,
- * memory, skills, the event bus) is injected through `MoonwrightPorts`, so the
+ * The phase machine every turn runs through. Its design is a TypeScript port of
+ * an MIT-licensed upstream agent (see THIRD-PARTY-NOTICES.md). It is
+ * transport-agnostic: everything external (the model, the tools,
+ * memory, skills, the event bus) is injected through `ImpulsePorts`, so the
  * same core runs in the Electron main process today and could run in a worker
  * tomorrow.
  *
@@ -18,7 +18,7 @@
  *   memory.ts      agent/memory_manager.py    — search, summarise, inject
  *   skills.ts      agent/skill_bundles.py     — the agentskills.io manager
  */
-export { MoonwrightAgent } from "./loop";
+export { ImpulseAgent } from "./loop";
 export { IterationBudget, normalizeBudgetWarningRatio } from "./budget";
 export { evaluateStopGates, finalizeHeldAnswer } from "./stopGates";
 export {
@@ -47,8 +47,8 @@ export { SkillManager } from "./skills";
 export { MemoryManager, delegate } from "./memory";
 export {
   DEFAULT_MOONWRIGHT_CONFIG,
-  type MoonwrightConfig,
-  type MoonwrightPorts,
+  type ImpulseConfig,
+  type ImpulsePorts,
   type LoopState,
   type ModelMessage,
   type ModelResponse,

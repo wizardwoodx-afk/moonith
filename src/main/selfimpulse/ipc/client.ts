@@ -966,7 +966,7 @@ export const ipc = {
     // Egress guard at the IPC boundary. Every provider call in the engine passes
     // through here, so the policy is applied once, at the choke point, rather than
     // per call site. Before this, only engine/providers.ts complete() checked
-    // checkEgressUrl — the Hermes autonomous loop (engine/hermesRuntime.ts) called
+    // checkEgressUrl — the agent's autonomous loop called
     // llmChat directly with a caller-supplied base_url, so an SSRF to link-local /
     // RFC1918 / a cloud metadata endpoint, and an exfiltration of the provider key
     // to an attacker-chosen host, both rode an unguarded path. The web host and the Rust handler

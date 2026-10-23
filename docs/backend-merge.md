@@ -1,9 +1,8 @@
 # The merged backend
 
-SelfImpulse runs on **one** backend. It was built from two apps: the original
-Knight Cowork TypeScript runtime, and a second Electron agent stack whose
-services were ported into `src/main/backend/`. The agent core now drives every
-turn, and the renderer talks to the result over one IPC contract.
+SelfImpulse runs on **one** backend: an agent core plus the services around
+it. The agent core drives every turn, and the renderer talks to the result
+over one IPC contract.
 
 ## What lives where
 
@@ -53,7 +52,7 @@ interface MoonwrightPorts {
 }
 ```
 
-`src/main/agent/engine.ts` implements those ports over Knight's own tools and
+`src/main/agent/engine.ts` implements those ports over the app's own tools and
 the backend's provider. That is the whole integration: the core's phase
 machine, budget, stop gates and learning loop drive the turn, while the tool
 set, the approval flow, the artifact registry and the plan stay in
@@ -94,25 +93,10 @@ its compiled stylesheet, its fonts and its artwork were copied from that
 product's bundle. None of it came across. The React renderer and its own design
 language are the interface; the backend brought the *machinery*, not the skin.
 
-## Bugs found and fixed on the way in
-
-- **The agent bridge handed the core the wrong tool shape.** The core reads
-  `tool.name`; the bridge supplied the wire shape, so the core could never see
-  a tool name. Fixed at the port boundary.
-- **An undefined CLI identifier** in the external-agent runner — every spawn
-  would have thrown. The CLI package is now a constructor argument.
-- **Provider keys leaked into spawned shells.** `runCommand` passed the raw
-  `process.env` to the child. It now uses `scrubEnv`, which drops the key
-  patterns the providers read.
-- **The subscription token was moved to the keychain but still read from the
-  plain settings file.** The client now reads the keychain first.
-- **Work-account writes used `update` on a collection with no such key**, so
-  the first sign-in lost the device code. They use `set` with the merged
-  account.
-
 ## Third-party work
 
-The agent core is a TypeScript port of the
-[Hermes agent](https://github.com/NousResearch/hermes-agent) (MIT). The local
-gateway follows the [OpenClaw](https://github.com/openclaw) gateway contracts
-(MIT). Both are used under their licences, with attribution.
+The agent core is a TypeScript port of an MIT-licensed agent project, and the
+local gateway follows MIT-licensed gateway contracts. Both are used under
+their licences, with attribution — the full record, including the vendored
+graph runtime and the ported backend, lives in `THIRD-PARTY-NOTICES.md` at the
+repository root.

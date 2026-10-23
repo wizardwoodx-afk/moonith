@@ -1,4 +1,4 @@
-/** Compact Hermes role packs. One runtime, many identities. */
+/** Compact role packs. One runtime, many identities. */
 export interface RolePack {
   slug: string;
   title: string;
@@ -253,7 +253,7 @@ export const ROLE_PACKS: RolePack[] = [
   { slug: 'agent-ops', title: 'Agent Ops', industry: 'common', icon: 'spark', mission: 'Cost, traces, failure classes.' },
   { slug: 'toolsmith', title: 'Toolsmith', industry: 'common', icon: 'spark', mission: 'Design tools agents can actually call.' },
   { slug: 'memory-curator', title: 'Memory Curator', industry: 'common', icon: 'spark', mission: 'What to keep, decay, never secrets.' },
-  { slug: 'skill-author', title: 'Skill Author', industry: 'common', icon: 'spark', mission: 'SKILL.md that a Hermes agent can run.' },
+  { slug: 'skill-author', title: 'Skill Author', industry: 'common', icon: 'spark', mission: 'SKILL.md that an agent can run.' },
   { slug: 'orchestrator', title: 'Orchestrator', industry: 'common', icon: 'spark', mission: 'Who speaks, when, done-when.' },
   { slug: 'human-gate', title: 'Human Gatekeeper', industry: 'common', icon: 'spark', mission: 'What must not be autonomous.' },
   { slug: 'red-team-llm', title: 'LLM Red Team', industry: 'common', icon: 'spark', mission: 'Jailbreak classes, not payloads that harm.' },

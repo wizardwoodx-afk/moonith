@@ -54,6 +54,7 @@ import { subAgentService } from './services/subagents'
 import { applyTitleBarTheme } from './window'
 import { getBackend } from './backend'
 import { registerBackendIpc, setBackendEventTarget } from './backend/ipc'
+import { registerAuditIpc } from './audit'
 import type { BackendSettingsPublic } from '@shared/types'
 
 function publishTask(task: Task): void {
@@ -365,6 +366,7 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.tableLeave, () => tableService.leave())
 
   registerBackendIpc()
+  registerAuditIpc()
 }
 
 async function safeArtifactPath(taskId: string, relPath: string): Promise<string> {

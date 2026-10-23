@@ -6,7 +6,7 @@
  * real "not connected" state, and with one it lists the live toolkits and
  * executes their tools through Connectors's v3 API.
  *
- * Ported from Seamoon's `electron/backend/connectors.js`.
+ * Ported from the earlier desktop shell.
  */
 import type { BackendStore } from './store'
 

@@ -2,7 +2,7 @@
  * OpenAI-compatible provider client with SSE streaming, tool calling and
  * automatic failover between the providers that hold credentials.
  *
- * Ported from Seamoon's `electron/backend/provider.js`.
+ * Ported from this app's `electron/backend/provider.js`.
  */
 
 export interface ProviderDefinition {

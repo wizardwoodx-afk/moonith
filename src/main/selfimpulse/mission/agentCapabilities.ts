@@ -110,7 +110,7 @@ export interface AgentCapabilities {
 export const AGENT_CAPABILITIES: Record<HarnessId, AgentCapabilities> = {
   hermes: {
     id: "hermes",
-    name: "Hermes Runtime",
+    name: "Agent Runtime",
     // 19.7.15: hermes is IN-PROCESS. It has no binary, is not a stdio child,
     // and takes no argv. These two lines used to describe a subprocess that
     // does not exist; every caller that read them was reasoning about a seat

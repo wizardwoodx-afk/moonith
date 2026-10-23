@@ -5,7 +5,7 @@
   "description": "SelfImpulse — a local-first agentic desktop workspace",
   "main": "./out/main/index.js",
   "author": "SelfImpulse",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",

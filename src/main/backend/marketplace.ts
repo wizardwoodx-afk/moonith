@@ -7,7 +7,7 @@
  * cached; search and install run through the CLI so we always speak the
  * marketplace's own protocol.
  *
- * Ported from Seamoon's `electron/backend/marketplace.js`.
+ * Ported from the earlier desktop shell.
  */
 import { exec } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'

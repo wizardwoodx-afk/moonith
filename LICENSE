@@ -1,0 +1,34 @@
+SelfImpulse
+
+Copyright © 2026 K.S. / SelfImpulse. All rights reserved.
+
+This software is licensed, not sold. You are granted a single,
+non-exclusive, non-transferable licence to install and run SelfImpulse on
+devices you control, for your own use.
+
+You may not:
+
+- redistribute, publish, sublicense, sell, rent or otherwise make the
+  software, or any part of it, available to any third party;
+- reverse engineer, decompile or disassemble the software, except to the
+  extent that this restriction is prohibited by applicable law;
+- remove or alter this licence, the copyright notice, or the attribution
+  notices shipped with the software.
+
+Third-party components
+
+SelfImpulse includes and invokes third-party open-source components. Those
+components remain under their own licences, and their copyright notices and
+permission texts are retained by reference and are included in each
+project's own distribution. They are recorded in THIRD-PARTY-NOTICES.md,
+which ships with the software.
+
+Disclaimer
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.

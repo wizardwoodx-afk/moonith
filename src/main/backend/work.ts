@@ -20,7 +20,7 @@ import type { BackendStore } from './store'
  *      reached with an OAuth 2.0 device-code flow, so the user signs in with
  *      their own Microsoft account and no secret ever touches the app.
  *
- * Ported from Seamoon's `electron/backend/microsoft.js`.
+ * Ported from this app's `electron/backend/microsoft.js`.
  */
 
 export const SUBSCRIPTION_API = 'https://api.githubcopilot.com'

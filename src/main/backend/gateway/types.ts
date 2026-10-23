@@ -8,8 +8,8 @@
  *   cron/store/row-codec.ts             → automations.ts
  *   sessions/session-controller.contracts.ts → types.ts
  *
- * Unlike ExternalAgent, nothing here shells out: the gateway runs inside Seamoon's
- * own process, talks to Moonwright directly, and persists to the local store.
+ * Unlike ExternalAgent, nothing here shells out: the gateway runs inside this app's
+ * own process, talks to ImpulseCore directly, and persists to the local store.
  */
 
 /** A conversation is either a direct chat, a group, or a named channel. */
@@ -100,7 +100,7 @@ export type ChannelStatus = {
 
 /**
  * A channel adapter. ExternalAgent splits this across many narrow interfaces
- * (auth, status, secrets, heartbeat, directory, allowlist, approval); Seamoon
+ * (auth, status, secrets, heartbeat, directory, allowlist, approval); the earlier shell
  * keeps one adapter with optional capabilities, which is enough for a native
  * desktop gateway.
  */

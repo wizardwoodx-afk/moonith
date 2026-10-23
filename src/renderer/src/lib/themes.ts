@@ -8,6 +8,11 @@ export type ThemeId =
   | 'celadon'
   | 'heliodor'
   | 'moon'
+  | 'afterimage'
+  | 'resin'
+  | 'xanadu'
+  | 'wenge'
+  | 'glaucous'
 
 export type ThemeKind = 'dark' | 'light'
 
@@ -46,6 +51,80 @@ const base = {
   '--c-on-ink': '',
   '--c-identity-a': '',
   '--c-identity-b': ''
+}
+
+/**
+ * The Rare Five are optional, opt-in light palettes. Each is three colours —
+ * paper, ink and one signal — and every other token is derived from them, so a
+ * palette stays coherent instead of being tuned by hand 22 values at a time.
+ *
+ * `src/renderer/src/styles.css` is authoritative for rendering; this mirror
+ * exists only so the Appearance preview can show a swatch without mounting the
+ * theme. `themes.test.ts` asserts the two stay identical.
+ */
+function channel(hex: string): [number, number, number] {
+  const value = hex.replace('#', '')
+  return [
+    parseInt(value.slice(0, 2), 16),
+    parseInt(value.slice(2, 4), 16),
+    parseInt(value.slice(4, 6), 16)
+  ]
+}
+
+function blend(a: string, b: string, amount: number): string {
+  const from = channel(a)
+  const to = channel(b)
+  return (
+    '#' +
+    from
+      .map((part, index) => part + (to[index] - part) * amount)
+      .map((part) => Math.round(Math.max(0, Math.min(255, part))))
+      .map((part) => part.toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase()
+  )
+}
+
+function veil(hex: string, alpha: number): string {
+  const [r, g, b] = channel(hex)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+export function lightPalette(
+  canvas: string,
+  ink: string,
+  signal: string
+): Record<string, string> {
+  return {
+    ...base,
+    '--c-canvas': canvas,
+    '--c-canvas-deep': blend(canvas, ink, 0.07),
+    '--c-sidebar': blend(canvas, ink, 0.03),
+    '--c-panel': blend('#FFFFFF', canvas, 0.86),
+    '--c-panel-2': blend(canvas, ink, 0.05),
+    '--c-surface': blend('#FFFFFF', canvas, 0.86),
+    '--c-surface-2': blend(canvas, ink, 0.055),
+    '--c-surface-3': blend(canvas, ink, 0.1),
+    '--c-ink': ink,
+    '--c-muted': blend(canvas, ink, 0.58),
+    '--c-faint': blend(canvas, ink, 0.42),
+    '--c-line': veil(ink, 0.11),
+    '--c-line-strong': veil(ink, 0.2),
+    '--c-accent': signal,
+    '--c-accent-soft': blend(canvas, signal, 0.16),
+    '--c-accent-ink': blend(ink, signal, 0.42),
+    '--c-gold': blend(ink, signal, 0.35),
+    '--c-gold-soft': blend(canvas, signal, 0.22),
+    // Status hues stay fixed: a green that reads as "safe" must not shift with
+    // the accent, or the colours stop meaning what they say.
+    '--c-positive': '#377440',
+    '--c-warn': '#986b00',
+    '--c-danger': '#a63a2a',
+    '--c-ink-button': ink,
+    '--c-on-ink': canvas,
+    '--c-identity-a': signal,
+    '--c-identity-b': blend(signal, ink, 0.4)
+  }
 }
 
 export const THEMES: Theme[] = [
@@ -287,6 +366,41 @@ export const THEMES: Theme[] = [
       '--c-identity-a': '#b7a6d9',
       '--c-identity-b': '#8fb7cf'
     }
+  },
+  {
+    id: 'afterimage',
+    label: 'Afterimage',
+    description: 'What the eye keeps after the light goes: warm paper, plum shadow, a rose that refuses to fade.',
+    kind: 'light',
+    tokens: lightPalette('#F5EFEA', '#1F151A', '#C27483')
+  },
+  {
+    id: 'resin',
+    label: 'Resin',
+    description: 'Amber hardened in old paper. Slow, viscous, patient gold.',
+    kind: 'light',
+    tokens: lightPalette('#F4F0E3', '#1D180F', '#AF7F24')
+  },
+  {
+    id: 'xanadu',
+    label: 'Xanadu',
+    description: 'A pleasure-dome of pale green and deep pine, with one thread of jade.',
+    kind: 'light',
+    tokens: lightPalette('#EFF1E9', '#141C18', '#718D79')
+  },
+  {
+    id: 'wenge',
+    label: 'Wenge',
+    description: 'Tropical timber, cut and oiled: tawny grain against near-black heartwood.',
+    kind: 'light',
+    tokens: lightPalette('#F0E6DC', '#211817', '#A87B61')
+  },
+  {
+    id: 'glaucous',
+    label: 'Glaucous',
+    description: 'Sea-fog blue over slate. The colour of a horizon seen through salt.',
+    kind: 'light',
+    tokens: lightPalette('#E9EEEA', '#121B1F', '#6B8D97')
   }
 ]
 

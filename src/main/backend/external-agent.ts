@@ -12,7 +12,7 @@
  * Skills installed through either registry land in the same workspace folder
  * SelfImpulse's own skill manager reads, so they are usable by the agent at once.
  *
- * Ported from Seamoon's `electron/backend/externalAgent.js`.
+ * Ported from the earlier desktop shell.
  */
 import { execFile, type ExecException } from 'node:child_process'
 import { mkdirSync } from 'node:fs'

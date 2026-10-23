@@ -11,7 +11,7 @@ import type { ProviderToolSpec } from './provider'
  * enumeration, focus, input, URL opening). It is opt-in: the agent only gets
  * these tools when the user turns Computer use on in Settings.
  *
- * Ported from Seamoon's `electron/backend/computer.js`.
+ * Ported from the earlier desktop shell.
  */
 
 const IS_WIN = process.platform === 'win32'

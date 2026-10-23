@@ -8,7 +8,7 @@ import { scrubEnv } from './security'
  * Tool runtime for the local agent.
  * Every tool is gated by a permission rule (allow / deny / ask) and confined to a
  * workspace root unless sandboxing is switched off.
- * Ported from Seamoon's `electron/backend/tools.js`.
+ * Ported from the earlier desktop shell.
  */
 
 export type PermissionRule = 'allow' | 'deny' | 'ask'

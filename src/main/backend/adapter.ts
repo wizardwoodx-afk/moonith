@@ -12,11 +12,11 @@ import type { Provider, ProviderToolSpec, WireMessage } from './provider'
 import type { BackendMemory, BackendStore } from './store'
 
 /**
- * The Moonwright core is driven through a small set of ports. This module
+ * The ImpulseCore core is driven through a small set of ports. This module
  * implements those ports over the backend's provider, tool runtime, memory
  * ledger and workspace skills.
  *
- * Ported from Seamoon's `electron/backend/moonwright-bridge.js`.
+ * Ported from the earlier desktop shell.
  *
  * One fix over the original: the core declares a flat tool spec
  * (`{ name, description, parameters }`) while the tool runtime speaks the
@@ -102,7 +102,7 @@ export function parseSkillMarkdown(text: string, id: string): SkillBundle | null
     name: meta.name || id,
     description: meta.description || '',
     version: meta.version || '0.1.0',
-    author: meta.author || 'Moonwright',
+    author: meta.author || 'ImpulseCore',
     platforms: /platforms:\s*\[(.*?)\]/.exec(front[1])?.[1]
       ? /platforms:\s*\[(.*?)\]/.exec(front[1])![1]
           .split(',')
@@ -224,7 +224,7 @@ export function makeSkillsPort(skillsDir: string): SkillsPort {
 
 /**
  * Translates the agent's message list into the OpenAI wire format. The
- * Moonwright core keeps tool calls in a `toolCalls` field; the API wants them
+ * ImpulseCore core keeps tool calls in a `toolCalls` field; the API wants them
  * inline on the assistant turn, and tool results need their call id.
  */
 export function toWireMessages(messages: ModelMessage[]): WireMessage[] {
@@ -291,7 +291,7 @@ export interface PortOptions {
   onText?: (delta: string) => void
 }
 
-/** Builds the Moonwright ports over the backend's services. */
+/** Builds the ImpulseCore ports over the backend's services. */
 export function makePorts(options: PortOptions): {
   callModel: (
     messages: ModelMessage[],
@@ -406,7 +406,7 @@ export function makePorts(options: PortOptions): {
             args
           })
         } else if (event.type === 'usage') {
-          // the provider reports snake_case; the Moonwright core expects camelCase
+          // the provider reports snake_case; the ImpulseCore core expects camelCase
           const usage = event.usage || {}
           response.usage = {
             prompt: usage.prompt_tokens ?? usage.prompt ?? 0,

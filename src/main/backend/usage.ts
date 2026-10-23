@@ -2,7 +2,7 @@ import type { BackendStore } from './store'
 
 /**
  * Token / credit accounting: daily buckets per agent plus a rolling heatmap.
- * Ported from Seamoon's `electron/backend/usage.js`.
+ * Ported from this app's `electron/backend/usage.js`.
  */
 
 export interface UsageSummaryOptions {

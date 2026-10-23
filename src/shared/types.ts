@@ -3,6 +3,18 @@ export type TaskMode = 'chat' | 'cowork'
 export type TaskStatus = 'draft' | 'running' | 'waiting' | 'paused' | 'done' | 'error'
 export type ProviderKind = 'anthropic' | 'openai' | 'compatible'
 
+import type {
+  AuditExportResult,
+  AuditSummary,
+  AuditVerifyResult
+} from './audit'
+
+export type {
+  AuditExportResult,
+  AuditSummary,
+  AuditVerifyResult
+} from './audit'
+
 export interface McpServerConfig {
   id: string
   name: string
@@ -211,7 +223,7 @@ export interface PublicSettings {
   customInstructions: string
   allowShell: boolean
   onboardingComplete: boolean
-  /** The transplanted Seamoon backend: provider registry, tiers, memory, gateway. */
+  /** The transplanted the earlier shell backend: provider registry, tiers, memory, gateway. */
   backend?: BackendSettingsPublic
 }
 
@@ -803,6 +815,10 @@ export interface KnightApi {
 
   onTaskEvent: (cb: (event: TaskEvent) => void) => () => void
   onApprovalRequest: (cb: (request: ApprovalRequest) => void) => () => void
+
+  auditSummary: () => Promise<AuditSummary>
+  auditExport: () => Promise<AuditExportResult | null>
+  auditVerify: () => Promise<AuditVerifyResult | null>
 
   backend: BackendApi
 }

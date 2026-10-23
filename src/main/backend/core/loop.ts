@@ -1,5 +1,5 @@
 /**
- * Moonwright agent — the turn loop.
+ * ImpulseCore agent — the turn loop.
  *
  * Ported from agent/conversation_loop.py. Upstream runs a turn as a *phase
  * machine*: each phase returns `return` / `break` / `continue`, and the loop
@@ -16,8 +16,8 @@ import { evaluateStopGates, finalizeHeldAnswer, type StopGateContext } from "./s
 import { memoryNudgeMessage, shouldNudgeMemory, shouldNudgeSkill, skillNudgeMessage } from "./nudges";
 import {
   DEFAULT_MOONWRIGHT_CONFIG,
-  type MoonwrightConfig,
-  type MoonwrightPorts,
+  type ImpulseConfig,
+  type ImpulsePorts,
   type LoopState,
   type ModelMessage,
   type ModelResponse,
@@ -26,9 +26,9 @@ import {
   type TurnResult,
 } from "./types";
 
-export interface MoonwrightAgentOptions {
-  ports: MoonwrightPorts;
-  config?: Partial<MoonwrightConfig>;
+export interface ImpulseAgentOptions {
+  ports: ImpulsePorts;
+  config?: Partial<ImpulseConfig>;
   /** The system prompt for the turn. */
   systemPrompt: string;
   /** Where the turn's messages live. */
@@ -48,16 +48,16 @@ export interface RunTurnInput {
   context?: string;
 }
 
-export class MoonwrightAgent {
-  readonly ports: MoonwrightPorts;
-  readonly config: MoonwrightConfig;
+export class ImpulseAgent {
+  readonly ports: ImpulsePorts;
+  readonly config: ImpulseConfig;
   readonly systemPrompt: string;
   readonly isSubagent: boolean;
   private history: ModelMessage[];
   private budget: IterationBudget;
   private signal?: AbortSignal;
 
-  constructor(options: MoonwrightAgentOptions) {
+  constructor(options: ImpulseAgentOptions) {
     this.ports = options.ports;
     this.config = { ...DEFAULT_MOONWRIGHT_CONFIG, ...(options.config || {}) };
     this.systemPrompt = options.systemPrompt;
@@ -252,7 +252,7 @@ export class MoonwrightAgent {
 
   /**
    * The preflight gate: a tool that may only run when the turn is allowed to
-   * continue. Seamoon uses it to surface a pending steer/interrupt.
+   * continue. The earlier shell used it to surface a pending steer/interrupt.
    */
   private async phasePreflightGate(state: LoopState): Promise<PhaseResult> {
     void state;
@@ -260,7 +260,7 @@ export class MoonwrightAgent {
     return { action: "next" };
   }
 
-  private async callModel(state: LoopState, tools: ReturnType<MoonwrightPorts["listTools"]>): Promise<ModelResponse | null> {
+  private async callModel(state: LoopState, tools: ReturnType<ImpulsePorts["listTools"]>): Promise<ModelResponse | null> {
     try {
       const response = await this.ports.callModel(state.messages, {
         tools,
@@ -401,7 +401,7 @@ export class MoonwrightAgent {
         instructions.push(buildMemoryReviewPrompt({ taskSummary: summary, existingMemories, transcriptExcerpt: transcript }));
       }
 
-      const reviewAgent = new MoonwrightAgent({
+      const reviewAgent = new ImpulseAgent({
         ports: this.ports,
         config: { ...this.config, backgroundReview: false, maxIterations: this.config.reviewMaxIterations },
         systemPrompt: [

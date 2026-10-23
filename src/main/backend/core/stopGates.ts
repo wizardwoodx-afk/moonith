@@ -1,5 +1,5 @@
 /**
- * Moonwright agent — the stop gates.
+ * ImpulseCore agent — the stop gates.
  *
  * When the model stops with a text answer, four gates may instead hold the answer
  * back, append it as an interim row plus a user-role nudge, and continue the turn:

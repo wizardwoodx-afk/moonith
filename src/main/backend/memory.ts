@@ -2,7 +2,7 @@ import type { BackendMemory, BackendStore } from './store'
 
 /**
  * Memory store: durable notes the agent can recall, scoped globally or per project.
- * Ported from Seamoon's `electron/backend/memory.js`.
+ * Ported from the earlier desktop shell.
  */
 
 export interface MemoryListOptions {

@@ -1,8 +1,8 @@
-import { MoonwrightAgent } from '../backend/core/index'
+import { ImpulseAgent } from '../backend/core/index'
 import type {
   ModelMessage,
-  MoonwrightConfig,
-  MoonwrightPorts,
+  ImpulseConfig,
+  ImpulsePorts,
   ToolResult,
   TurnResult
 } from '../backend/core/types'
@@ -15,7 +15,7 @@ import type { AgentTool } from './tools/types'
 /**
  * The merged agent engine.
  *
- * Moonwright's phase machine drives the turn — the budget, the four stop
+ * ImpulseCore's phase machine drives the turn — the budget, the four stop
  * gates, the skill and memory nudges and the post-turn review all come from
  * the transplanted core — while the tools, the approval flow, the artifact
  * registry and the plan live in SelfImpulse's runtime and are injected through the
@@ -37,7 +37,7 @@ export interface EngineInput {
   context?: string
   memoryStore: BackendStore['memories']
   skillsDir: string
-  config: Partial<MoonwrightConfig>
+  config: Partial<ImpulseConfig>
   signal: AbortSignal
   onText: (delta: string) => void
   onTool: (callId: string, name: string, args: Record<string, unknown>) => Promise<ToolOutcome>
@@ -114,9 +114,9 @@ export async function runEngineTurn(input: EngineInput): Promise<TurnResult> {
   }
   void runTool
 
-  const agent = new MoonwrightAgent({
-    ports: ports as unknown as MoonwrightPorts,
-    config: input.config as MoonwrightConfig,
+  const agent = new ImpulseAgent({
+    ports: ports as unknown as ImpulsePorts,
+    config: input.config as ImpulseConfig,
     systemPrompt: input.systemPrompt,
     history: input.history
   })

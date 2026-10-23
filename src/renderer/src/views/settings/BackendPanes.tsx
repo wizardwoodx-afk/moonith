@@ -23,7 +23,7 @@ import { Button, Spin, Toggle } from '../../components/ui'
 import { SettingsSection } from './SettingsSection'
 
 /**
- * The panes that surface the transplanted Seamoon backend: the model tiers and
+ * The panes that surface the transplanted the earlier shell backend: the model tiers and
  * the provider registry, the Moon Gateway, Work Files, and the desktop
  * capabilities (computer use and the grounded action model).
  */
@@ -200,7 +200,7 @@ export function GatewayPane() {
   return (
     <SettingsSection
       title="Moon Gateway"
-      description="A local HTTP surface for the backend. Channels post to it, the router picks the agent, the turn runs through Moonwright and the reply goes back out. Every request needs the bearer token."
+      description="A local HTTP surface for the backend. Channels post to it, the router picks the agent, the turn runs through ImpulseCore and the reply goes back out. Every request needs the bearer token."
       action={
         <Button variant="secondary" size="sm" disabled={busy} onClick={() => void toggle()}>
           {busy ? <Spin size={12} /> : <Power size={13} />}

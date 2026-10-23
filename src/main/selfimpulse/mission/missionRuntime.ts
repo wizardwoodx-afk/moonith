@@ -999,7 +999,7 @@ export class MissionRuntime implements DurableRunHandle {
 
     const count = (this.repairCount.get(taskId) ?? 0) + 1;
     this.repairCount.set(taskId, count);
-    /* §RETRY LANES (Paperclip, MIT) — THE DURABLE FLOOR.
+    /* §RETRY LANES (MIT upstream) — THE DURABLE FLOOR.
      *
      * `this.repairs` and `repairCount` are module-scope memory, and `persist()`
      * writes version 6 without either of them, while it DOES write
@@ -1510,7 +1510,7 @@ export class MissionRuntime implements DurableRunHandle {
    *  Called from `checkpoint()` so every rollback point the runtime takes is
    *  also a tamper-evident run step that outlives the process.
    *
-   *  §RETRY LANES (Paperclip, MIT) — it now appends them AS A LANE. This method
+   *  §RETRY LANES (MIT upstream) — it now appends them AS A LANE. This method
    *  is the runtime's single durable write path, which makes it the only place
    *  the distinction can be made once rather than at every call site: a repair
    *  rollback and a gate pause and a settled re-plan all used to land here

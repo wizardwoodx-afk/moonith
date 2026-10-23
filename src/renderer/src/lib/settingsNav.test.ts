@@ -41,7 +41,7 @@ describe('settings navigation', () => {
       'work-files',
       'desktop'
     ])
-    expect(groups.SelfImpulse).toEqual(['about'])
+    expect(groups.SelfImpulse).toEqual(['audit', 'about'])
   })
 
   it('ships no placeholders and no beta badges', () => {
@@ -81,7 +81,8 @@ describe('settings navigation', () => {
     expect(searchSettingsNav('hotkeys').map((item) => item.id)).toEqual(['shortcuts'])
     expect(searchSettingsNav('exclusive').map((item) => item.id)).toEqual(['moon'])
     expect(searchSettingsNav('grounded').map((item) => item.id)).toEqual(['desktop'])
-    expect(searchSettingsNav('moonwright').map((item) => item.id)).toEqual(['gateway'])
+    expect(searchSettingsNav('router').map((item) => item.id)).toEqual(['gateway'])
+    expect(searchSettingsNav('impulse').map((item) => item.id)).toEqual(['audit'])
   })
 
   it('returns no matches without inventing panes', () => {

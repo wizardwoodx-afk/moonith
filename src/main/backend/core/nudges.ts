@@ -1,5 +1,5 @@
 /**
- * Moonwright agent — the nudges.
+ * ImpulseCore agent — the nudges.
  *
  * Two periodic nudges drive the closed learning loop:
  *   - the skill nudge:  every N iterations without a skill being used, the agent is

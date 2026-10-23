@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 let cachedRoot: string | null = null
 
-/** Where the transplanted Seamoon backend keeps its collections. */
+/** Where the transplanted the earlier shell backend keeps its collections. */
 export function backendRoot(): string {
   if (cachedRoot) return cachedRoot
   const root = join(app.getPath('userData'), 'backend')

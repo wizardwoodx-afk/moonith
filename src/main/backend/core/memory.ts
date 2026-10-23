@@ -1,21 +1,21 @@
 /**
- * Moonwright agent — memory and delegation.
+ * ImpulseCore agent — memory and delegation.
  *
  * Memory upstream is a hybrid: full-text search over past sessions plus a
  * background summarisation pass, and only the relevant facts are injected into
- * the current prompt. Seamoon's store is a local JSON ledger, so the same shape
+ * the current prompt. The earlier shell's store was a local JSON ledger, so the same shape
  * is provided over the injected port.
  *
  * Delegation gives a sub-agent its own conversation and its own iteration
  * budget, so the total iterations across parent and children may exceed the
  * parent's cap.
  */
-import { MoonwrightAgent } from "./loop";
+import { ImpulseAgent } from "./loop";
 import { IterationBudget } from "./budget";
-import type { MoonwrightConfig, MoonwrightPorts, MemoryRecord, ModelMessage } from "./types";
+import type { ImpulseConfig, ImpulsePorts, MemoryRecord, ModelMessage } from "./types";
 
 export class MemoryManager {
-  constructor(private ports: MoonwrightPorts) {}
+  constructor(private ports: ImpulsePorts) {}
 
   async list(scope?: string): Promise<MemoryRecord[]> {
     return this.ports.memory.list(scope);
@@ -50,8 +50,8 @@ export class MemoryManager {
 }
 
 export interface DelegationOptions {
-  ports: MoonwrightPorts;
-  config: MoonwrightConfig;
+  ports: ImpulsePorts;
+  config: ImpulseConfig;
   systemPrompt: string;
   instruction: string;
   /** The parent's context handed to the child. */
@@ -64,7 +64,7 @@ export interface DelegationOptions {
  * own and no background review.
  */
 export async function delegate(opts: DelegationOptions) {
-  const child = new MoonwrightAgent({
+  const child = new ImpulseAgent({
     ports: opts.ports,
     config: { ...opts.config, maxIterations: opts.config.delegationMaxIterations },
     systemPrompt: opts.systemPrompt,

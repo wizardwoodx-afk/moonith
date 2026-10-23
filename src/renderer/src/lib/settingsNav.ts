@@ -21,6 +21,7 @@ export const SETTINGS_PANES = [
   'gateway',
   'work-files',
   'desktop',
+  'audit',
   'about'
 ] as const
 
@@ -280,8 +281,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
       'router',
       'automation',
       'remote',
-      'api',
-      'moonwright'
+      'api'
     ],
     status: 'live'
   },
@@ -318,6 +318,25 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
       'actions',
       'grounding',
       'automation'
+    ],
+    status: 'live'
+  },
+  {
+    id: 'audit',
+    label: 'Audit log',
+    group: 'SelfImpulse',
+    summary: 'Export and verify the signed record of every decision the agent made.',
+    keywords: [
+      'audit',
+      'compliance',
+      'export',
+      'verify',
+      'receipts',
+      'signed',
+      'log',
+      'trail',
+      'governance',
+      'impulse'
     ],
     status: 'live'
   },

@@ -175,7 +175,7 @@ export function checkpoint(
 }
 
 /* ── RETRY LANES — a wait is not a failure ────────────────────────────────
- * §RETRY LANES (Paperclip, MIT — see `src/mission/retryLanes.ts` for the full
+ * §RETRY LANES (MIT upstream — see `src/mission/retryLanes.ts` for the full
  * provenance and for why this is the seam the defect lives at).
  *
  * The chain already records every meaningful moment of a run: the repair ladder

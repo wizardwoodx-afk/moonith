@@ -1,5 +1,5 @@
 /**
- * Moonwright agent — per-agent iteration budget.
+ * ImpulseCore agent — per-agent iteration budget.
  *
  * Ported from agent/iteration_budget.py: a thread-safe consume/refund counter.
  * The parent's cap is `maxIterations`; every sub-agent gets its own budget so

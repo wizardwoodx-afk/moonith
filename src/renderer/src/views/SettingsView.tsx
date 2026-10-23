@@ -44,7 +44,8 @@ import {
   Users,
   Waypoints,
   X,
-  Zap
+  Zap,
+  ScrollText
 } from 'lucide-react'
 import { BrandMark } from '../components/BrandMark'
 import { toast } from 'sonner'
@@ -85,6 +86,7 @@ import {
   SubAgentsPane
 } from './settings/CapabilityPanes'
 import { DesktopPane, GatewayPane, TiersPane, WorkFilesPane } from './settings/BackendPanes'
+import { AuditPane } from './settings/AuditPane'
 
 const NAV_ICONS: Record<
   SettingsPaneId,
@@ -112,6 +114,7 @@ const NAV_ICONS: Record<
   gateway: ServerCog,
   'work-files': Building2,
   desktop: Monitor,
+  audit: ScrollText,
   about: Info
 }
 
@@ -331,6 +334,7 @@ export function SettingsView() {
                   {tab === 'gateway' ? <GatewayPane /> : null}
                   {tab === 'work-files' ? <WorkFilesPane /> : null}
                   {tab === 'desktop' ? <DesktopPane /> : null}
+                  {tab === 'audit' ? <AuditPane /> : null}
                   {tab === 'about' ? <AboutTab /> : null}
                 </>
               )}

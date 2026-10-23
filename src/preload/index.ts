@@ -1,8 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/ipc'
+import { AUDIT_IPC } from '@shared/audit'
 import type {
   ApprovalRequest,
   ApprovalDecision,
+  AuditExportResult,
+  AuditSummary,
+  AuditVerifyResult,
   BackendEvent,
   BackendSettingsPublic,
   ChannelInput,
@@ -117,6 +121,10 @@ const api: KnightApi = {
     ipcRenderer.on(IPC.eventApproval, listener)
     return () => ipcRenderer.removeListener(IPC.eventApproval, listener)
   },
+
+  auditSummary: () => ipcRenderer.invoke(AUDIT_IPC.summary),
+  auditExport: () => ipcRenderer.invoke(AUDIT_IPC.export),
+  auditVerify: () => ipcRenderer.invoke(AUDIT_IPC.verify),
 
   backend: {
     settings: () => ipcRenderer.invoke(IPC.backendSettingsGet),

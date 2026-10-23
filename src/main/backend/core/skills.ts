@@ -1,12 +1,12 @@
 /**
- * Moonwright agent — the skill manager.
+ * ImpulseCore agent — the skill manager.
  *
  * Skills are bundles in the agentskills.io format: a SKILL.md with frontmatter.
  * The manager enforces the contract on every write, because the system-prompt
  * skill index truncates descriptions and a bad description silently never routes.
  */
 import { SKILL_AUTHOR, SKILL_VERSION, validateSkill, type SkillValidation } from "./learning";
-import type { MoonwrightPorts, SkillBundle } from "./types";
+import type { ImpulsePorts, SkillBundle } from "./types";
 
 export interface SkillWriteResult {
   ok: boolean;
@@ -15,7 +15,7 @@ export interface SkillWriteResult {
 }
 
 export class SkillManager {
-  constructor(private ports: MoonwrightPorts) {}
+  constructor(private ports: ImpulsePorts) {}
 
   async list(): Promise<SkillBundle[]> {
     const skills = await this.ports.skills.list();

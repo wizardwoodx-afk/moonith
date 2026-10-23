@@ -1,5 +1,5 @@
 /**
- * Seamoon's interface styles, ported into SelfImpulse's backend.
+ * this app's interface styles, ported into SelfImpulse's backend.
  *
  * One table, one source of truth: it generates the CSS custom-property blocks
  * AND drives the theme cards in Settings → Appearance, so a colour can never
@@ -22,7 +22,7 @@ export interface Palette {
   swatches: Swatch[]
 }
 
-/** The palettes Seamoon ships with. */
+/** The palettes the earlier shell ships with. */
 export type PaletteId = 'moonlight' | 'meadow' | 'slate' | 'monolith' | 'ferrous' | 'sky'
 
 /** A style can be rendered light or dark. */
@@ -250,7 +250,7 @@ export function buildTheme(palette: Palette, mode: ThemeMode): ThemeVariables {
   }
 }
 
-/** The styles Seamoon offers: the four recovered ones plus our own palettes. */
+/** The styles the earlier shell offers: the four recovered ones plus our own palettes. */
 export const BUILTIN: BuiltinStyle[] = [
   { id: 'forest', label: 'Forest', accent: '#5cb870', swatches: ['#111110', '#5cb870', '#eeeeeb'] },
   { id: 'mint', label: 'Mint', accent: '#6fd8b0', swatches: ['#101614', '#6fd8b0', '#e8f6ef'] },

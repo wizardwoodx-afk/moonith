@@ -2,7 +2,7 @@
  * Minimal MCP (Model Context Protocol) client.
  * Supports stdio servers (JSON-RPC over stdio) and HTTP servers (JSON-RPC over POST).
  *
- * Ported from Seamoon's `electron/backend/mcp.js`.
+ * Ported from the earlier desktop shell.
  */
 import { spawn } from 'node:child_process'
 import type { ChildProcessByStdio } from 'node:child_process'

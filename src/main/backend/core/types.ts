@@ -1,8 +1,8 @@
 /**
- * Moonwright agent — core types.
+ * ImpulseCore agent — core types.
  *
- * Moonwright is Seamoon's own agent. Its design is ported into Seamoon from
- * NousResearch/hermes-agent (MIT), and it is modelled exactly as upstream: a
+ * ImpulseCore is the agent core. Its design is ported from an MIT-licensed
+ * upstream (see THIRD-PARTY-NOTICES.md) and modelled exactly as upstream: a
  * phase machine driven by an iteration budget, with stop gates that can override
  * a text answer and continue the turn, and a post-turn background review that
  * closes the learning loop.
@@ -83,7 +83,7 @@ export interface SkillBundle {
  * The collaborators the agent needs. Everything external is injected, which keeps
  * the core pure TypeScript and testable without a model or a filesystem.
  */
-export interface MoonwrightPorts {
+export interface ImpulsePorts {
   /** One chat-completion call. */
   callModel(messages: ModelMessage[], options: CallOptions): Promise<ModelResponse>;
   /** The tools the model may call this turn. */
@@ -118,7 +118,7 @@ export interface CallOptions {
   signal?: AbortSignal;
 }
 
-export interface MoonwrightConfig {
+export interface ImpulseConfig {
   /** Parent iteration cap (upstream default: 500). */
   maxIterations: number;
   /** Sub-agent iteration cap (upstream default: 50). */
@@ -143,7 +143,7 @@ export interface MoonwrightConfig {
   reviewMaxIterations: number;
 }
 
-export const DEFAULT_MOONWRIGHT_CONFIG: MoonwrightConfig = {
+export const DEFAULT_MOONWRIGHT_CONFIG: ImpulseConfig = {
   maxIterations: 500,
   delegationMaxIterations: 50,
   skillNudgeInterval: 10,

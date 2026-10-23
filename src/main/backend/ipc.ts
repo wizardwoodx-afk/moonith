@@ -19,7 +19,7 @@ import { availableProviders, DEFAULT_TIER_CONFIG, MODEL_TIERS, tierModel } from 
 import { styles } from './themes'
 
 /**
- * The Seamoon backend, exposed to the renderer.
+ * The backend, exposed to the renderer.
  *
  * Everything the renderer can ask the backend for goes through here: the
  * provider registry and model tiers, the memory ledger, the usage ledger, the

@@ -1,8 +1,6 @@
 /**
- * §RETRY LANES — a wait is not a failure. SelfImpulse's lift from Paperclip
- * (`server/src/services/execution-recovery-attempt.ts` and
- * `server/src/services/approved-execution-wait.ts`, MIT — Copyright (c) 2025
- * Paperclip AI; licence text at `LICENSES/paperclip-MIT.txt`).
+ * §RETRY LANES — a wait is not a failure. Lifted from an MIT-licensed
+ * upstream. See `LICENSES/paperclip-MIT.txt` and THIRD-PARTY-NOTICES.md.
  *
  * THE DEFECT THIS CLOSES, STATED AGAINST OUR OWN CODE
  * Two counters in this product claim to mean "how many times this run tried and
@@ -32,7 +30,7 @@
  *      eventually its ceiling, on the time a person took to read the ask.
  *
  * WHAT WAS ADOPTED
- * Paperclip's exact separation, and its two quieter disciplines:
+ * The upstream's exact separation, and its two quieter disciplines:
  *   - A retry CHARGE is decided by its REASON, not by its occurrence:
  *     waits, repairs-by-scheduler and productive continuations never move the
  *     failure counter (`accountingForScheduledRetry`).
@@ -48,7 +46,7 @@
  *     never shortens — so a run cannot be timed out by a clock it never started.
  *
  * WHAT IS OURS, NOT THEIRS
- * Paperclip is a server over Postgres and its lane names are its own scheduler's
+ * The upstream is a server over Postgres and its lane names are its own scheduler's
  * (`max_turns_continuation`, `ai_connection_busy`, `workspace_busy`). This module
  * names the lanes this repository's chains actually contain
  * (`awaiting-human` / `busy` / `continuation`), reads and writes the accounting
@@ -239,7 +237,7 @@ export function stateWithRetryAccounting(state: unknown, accounting: RunRetryAcc
 }
 
 /* ── the approval-wait deadline ────────────────────────────────────────────
- * Paperclip's `extendApprovedExecutionWaitDeadline`, in this product's terms.
+ * The upstream's `extendApprovedExecutionWaitDeadline`, in this product's terms.
  *
  * THE ONE SENTENCE VERSION: a wait whose ask has not been answered yet is
  * measured from when the ask was PRESENTED, and a wait whose work has started is

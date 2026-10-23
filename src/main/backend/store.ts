@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 
 /**
  * Tiny atomic JSON collection. One file per collection under the backend root.
- * Ported from Seamoon's `electron/backend/store.js`.
+ * Ported from this app's `electron/backend/store.js`.
  */
 export class Collection<T extends { id: string }> {
   readonly file: string
@@ -224,7 +224,7 @@ export interface BackendMcpServer {
   [key: string]: unknown
 }
 
-/** The backend's own collection store. Ported from Seamoon's `store.js`. */
+/** The backend's own collection store. Ported from this app's `store.js`. */
 export class BackendStore {
   readonly dir: string
   readonly sessions: Collection<BackendSession>

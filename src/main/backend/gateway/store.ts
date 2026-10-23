@@ -2,7 +2,7 @@
  * Moon Gateway — the local store.
  *
  * Agents, channels, route bindings, sessions and automations, persisted as
- * JSON next to Seamoon's other data.
+ * JSON next to this app's other data.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
