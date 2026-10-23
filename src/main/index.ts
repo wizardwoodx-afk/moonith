@@ -7,9 +7,10 @@ import {
   protocol,
   Tray
 } from 'electron'
-import { promises as fs } from 'node:fs'
+import { mkdirSync, promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { getPaths, migrateLegacyUserData, taskWorkspace } from './paths'
+import { portableDataDir } from './portable'
 import { store } from './store'
 import { initSelfImpulseEngine } from './selfimpulse/bridge/facade'
 import { registerIpc } from './ipc'
@@ -27,6 +28,13 @@ import { setBackendEventTarget } from './backend/ipc'
 
 // Fixed before anything resolves `userData`, including the single-instance lock.
 app.setName('SelfImpulse')
+
+// A portable.flag beside the install folder keeps the profile inside the distribution.
+const portableData = portableDataDir(process.execPath)
+if (portableData) {
+  mkdirSync(portableData, { recursive: true })
+  app.setPath('userData', portableData)
+}
 
 let tray: Tray | null = null
 let isQuitting = false
