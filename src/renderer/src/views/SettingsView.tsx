@@ -76,6 +76,7 @@ import {
 import { buildActivity } from '../lib/activity'
 import { profileInitial, saveLocalProfile, useLocalProfile } from '../lib/localProfile'
 import { startNewTask } from '../lib/navigation'
+import { APP_TAGLINE, buildStamp } from '@shared/identity'
 import { Button, FieldGroup, IconButton, Modal, Spin, Toggle } from '../components/ui'
 import { SettingsSection } from './settings/SettingsSection'
 import { AppearancePane, ColorsPane, MoonPane } from './settings/ThemePanes'
@@ -2669,9 +2670,22 @@ function AboutTab() {
     window.setTimeout(() => setCopied(false), 1800)
   }
 
+  const stamp = info ? buildStamp(info.version) : null
   const rows = info
     ? [
         { label: 'Version', value: info.version },
+        {
+          label: 'Build',
+          value: stamp?.commit
+            ? `${info.isDev ? 'Development' : 'Packaged'} · ${stamp.commit.slice(0, 7)}`
+            : info.isDev
+              ? 'Development'
+              : 'Packaged'
+        },
+        {
+          label: 'Built at',
+          value: stamp?.builtAt ? new Date(stamp.builtAt).toLocaleString() : 'Unknown'
+        },
         {
           label: 'Platform',
           value:
@@ -2681,7 +2695,6 @@ function AboutTab() {
                 ? 'macOS'
                 : info.platform
         },
-        { label: 'Build', value: info.isDev ? 'Development' : 'Packaged' },
         { label: 'Execution engine', value: 'Local agent loop · TypeScript' },
         { label: 'Interface', value: 'Electron · React 19' },
         { label: 'Storage', value: 'Local JSON · OS-encrypted keys' }
@@ -2705,7 +2718,7 @@ function AboutTab() {
           <div>
             <h2 className="display text-[26px] leading-tight">SelfImpulse</h2>
             <p className="mt-1 max-w-[520px] text-[12px] leading-relaxed text-muted">
-              A local-first desktop coworker. One Captain, one engine, your files on this machine.
+              {APP_TAGLINE} One Captain, one engine, your files on this machine.
             </p>
           </div>
         </div>

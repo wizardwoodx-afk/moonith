@@ -1,10 +1,32 @@
 import { resolve } from 'node:path'
+import { execSync } from 'node:child_process'
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import type { Plugin } from 'vite'
 
 const shared = resolve('src/shared')
+
+/**
+ * Provenance, injected at bundle time so a running build can say which commit
+ * it came from. Absent in dev and in tests, where the identity module falls
+ * back instead of throwing.
+ */
+function provenance(): Record<string, string> {
+  let commit = ''
+  try {
+    commit = execSync('git rev-parse HEAD', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).trim()
+  } catch {
+    /* Not a git checkout — provenance is best effort. */
+  }
+  return {
+    __SI_COMMIT__: JSON.stringify(commit),
+    __SI_BUILT__: JSON.stringify(new Date().toISOString())
+  }
+}
 
 /**
  * The shipped CSP forbids inline scripts. `@vitejs/plugin-react` injects an
@@ -38,6 +60,7 @@ export default defineConfig({
     ? {}
     : {
         main: {
+          define: provenance(),
           resolve: {
             alias: { '@shared': shared }
           },
@@ -48,6 +71,7 @@ export default defineConfig({
           build: { minify: false }
         },
         preload: {
+          define: provenance(),
           resolve: {
             alias: { '@shared': shared }
           }
@@ -57,6 +81,7 @@ export default defineConfig({
     ? {}
     : {
         renderer: {
+          define: provenance(),
           root: 'src/renderer',
           resolve: {
             alias: {

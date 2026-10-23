@@ -26,6 +26,7 @@ import { approvals } from './approvals'
 import { isWithin } from './security'
 import { mimeForPath } from './services/documents'
 import { setBackendEventTarget } from './backend/ipc'
+import { APP_NAME, signatureLine } from '@shared/identity'
 
 // Fixed before anything resolves `userData`, including the single-instance lock.
 app.setName('SelfImpulse')
@@ -242,6 +243,7 @@ if (!gotLock) {
     try {
       migrateLegacyUserData()
       await store.init()
+      console.log(`[${APP_NAME.toLowerCase()}] ${signatureLine(app.getVersion())}`)
       const engine = initSelfImpulseEngine()
       console.log(
         `[selfimpulse] engine ${engine.wired ? 'wired' : 'not wired'} · provider=${engine.providerId ?? 'none'} · model=${engine.model ?? 'none'} · tools=${engine.tools.length}` +
