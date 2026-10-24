@@ -24,6 +24,8 @@ import type {
 import { useApp } from '../store'
 import { cn, cronDescription, errorMessage, folderName, timeAgo } from '../lib/utils'
 import { Button, FieldGroup, IconButton, Modal, Segmented, Toggle } from '../components/ui'
+import { TimeScrubber } from '../motion/TimeScrubber'
+import { cronTimeMinutes, replaceCronTime } from '../lib/cron'
 
 const CUSTOM = 'custom'
 
@@ -380,6 +382,13 @@ function ScheduleModal({
 
   const activeProvider = providers.find((provider) => provider.id === providerId) ?? providers[0]
   const cronValue = preset === CUSTOM ? customCron.trim() : preset
+  const fixedTime = cronTimeMinutes(cronValue)
+
+  const changeTime = (minutes: number): void => {
+    const next = replaceCronTime(cronValue, minutes)
+    if (preset === CUSTOM) setCustomCron(next)
+    else setPreset(next)
+  }
 
   const addFolder = async (): Promise<void> => {
     const folder = await window.knight.pickFolder()
@@ -482,6 +491,9 @@ function ScheduleModal({
                   {option.label}
                 </option>
               ))}
+              {preset !== CUSTOM && !CRON_PRESETS.some((option) => option.value === preset) ? (
+                <option value={preset}>Adjusted time · {preset}</option>
+              ) : null}
               <option value={CUSTOM}>Custom cron…</option>
             </select>
           </FieldGroup>
@@ -504,6 +516,8 @@ function ScheduleModal({
             </div>
           )}
         </div>
+
+        {fixedTime !== null ? <TimeScrubber minutes={fixedTime} onChange={changeTime} /> : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <FieldGroup label="Provider">

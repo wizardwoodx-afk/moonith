@@ -17,6 +17,26 @@ nothing in the SelfImpulse licence transfers any rights in these projects.
   attribution. The port map — which upstream file each module corresponds
   to — is recorded in the core's module documentation.
 
+## OpenClaw Enterprise — native IAM policy semantics
+
+- **Upstream:** OpenClaw Enterprise — `github.com/openclaw/openclaw-enterprise`,
+  inspected at revision `6244dc498bfdf77b2ad036ebefe2e62a7d90a0aa`.
+- **Licence:** MIT — Copyright (c) 2026 OpenAI. The complete copyright and
+  permission text ships at
+  `src/main/enterpriseControl/LICENSE.openclaw-enterprise.txt`.
+- **Used for:** authorization and governance semantics adapted into the
+  SelfImpulse-native **Enterprise Control Plane**: default-deny grants, human
+  and per-agent identities, namespace-scoped Roles and AccessBindings,
+  deny-overriding Restrictions, immutable revisions, and lifecycle state.
+- **Local implementation:** `src/main/enterpriseControl/` and
+  `src/shared/enterpriseControl.ts` are SelfImpulse-owned native code, not a
+  vendored upstream workspace or a running OCE distribution. They integrate
+  with the existing mission-admission and signed-audit paths. No controller,
+  worker, OCC sidecar, PostgreSQL, Kubernetes, local server, MCP adapter, or
+  external CLI is used. The same-process policy boundary is not presented as
+  OCE-equivalent hard tenant or workload isolation. Exact scope is recorded in
+  `src/main/enterpriseControl/PROVENANCE.json`.
+
 ## OpenClaw — the gateway contracts
 
 - **Upstream:** the OpenClaw gateway (`github.com/openclaw`), also
@@ -33,19 +53,51 @@ nothing in the SelfImpulse licence transfers any rights in these projects.
   endpoint, and the `clawhub@latest` CLI with `https://clawhub.ai` for the
   skill registry.
 
-## LangGraph — the vendored graph runtime
+## LangGraph — the SELF-ΡΟΗ execution runtime
 
-- **Upstream:** LangChain — `@langchain/langgraph`, `@langchain/core`,
-  `@langchain/langgraph-checkpoint`, with `mustache`, `p-queue` and
-  `@cfworker/json-schema`
-- **Licence:** MIT
-- **Used for:** the graph runtime the mission cycle runs on, vendored at
-  `src/main/vendor/graphruntime/`. The licence texts ship verbatim in
-  `src/main/vendor/graphruntime/licenses/`, and `PROVENANCE.json` records
-  what was taken, what was changed and what was left out.
-- The package names appear in `PROVENANCE.json` and in the vendored import
-  paths and must stay for the code to build. The vendored README points at
-  `docs/legal/THIRD-PARTY-NOTICES.md`; this file is the notice it means.
+- **Upstream:** LangChain — `@langchain/langgraph` 1.5.1, `@langchain/core`
+  1.2.18, and `@langchain/langgraph-checkpoint` 1.2.0. The targeted local
+  source also bundles `@cfworker/json-schema`, `eventemitter3`, `mustache`,
+  `p-finally`, `p-queue`, and `p-timeout` at the versions recorded in
+  `PROVENANCE.json`.
+- **Licence:** MIT. Copyright and permission texts ship in
+  `src/main/selfimpulse/roi/licenses/` and beside the bundled packages.
+- **Used for:** the graph, checkpoint, streaming, command, and interrupt
+  runtime underneath SelfImpulse's Captain/Crew turns and durable mission
+  cycles. The integrated source is at `src/main/selfimpulse/roi/`.
+- **Local changes:** product terminology and imports were localized, missing
+  pinned dependency distributions were restored, and hosted/duplicate
+  provider surfaces were excluded or disabled. `PROVENANCE.json` records the
+  exact upstream versions and local modifications. Upstream names are kept in
+  this attribution rather than in the integrated implementation.
+
+## Mastra — the workflow capability reference
+
+- **Upstream:** Kepler Software, Inc. — `@mastra/core` 1.79.0.
+- **Licence:** Apache-2.0. Copyright (c) 2025 Kepler Software, Inc. The full
+  licence and upstream notice ship in `src/main/selfimpulse/workflow/`.
+- **Used for:** typed workflow/agent-run concepts and behavior: composable
+  steps, schema validation, parallel/branch/foreach/loop operations, run
+  snapshots, event streams, and suspend/resume underneath Captain and Crew.
+- **Local implementation:** `src/main/selfimpulse/workflow/` is a targeted
+  SelfImpulse-owned implementation, not a copy of the upstream distribution.
+  Hosted studio, server, provider, memory, storage, vector, MCP, enterprise,
+  and duplicate tool surfaces are excluded. Exact scope is recorded in that
+  directory's `PROVENANCE.json`.
+
+## Restate — the durable execution reference
+
+- **Upstream:** Restate Software, Inc. and Restate GmbH —
+  `@restatedev/restate-sdk` 1.17.4.
+- **Licence:** MIT. Copyright (c) 2023-2024 Restate Software, Inc., Restate
+  GmbH. The permission text ships in `src/main/selfimpulse/durable/LICENSE.txt`.
+- **Used for:** agent-relevant durable semantics: journaled steps, retries,
+  timers, keyed state, awakeables, named promises, deterministic replay, and
+  external-event coordination for Captain, Crew, and approvals.
+- **Local implementation:** `src/main/selfimpulse/durable/` is a targeted local
+  journal, not an embedded remote server or a copy of the SDK/native runtime.
+  Arbitrary incomplete external side effects remain at-least-once. Exact scope
+  and the single-writer contract are recorded in `PROVENANCE.json`.
 
 ## Paperclip — the retry-lane accounting
 
@@ -56,9 +108,8 @@ nothing in the SelfImpulse licence transfers any rights in these projects.
   `src/main/selfimpulse/mission/retryLanes.ts`: a retry charge is decided by
   its reason, an ambiguous historical record is read conservatively, and an
   approval wait is bounded from when the ask was presented.
-- Note: the source references `LICENSES/paperclip-MIT.txt`, which is not
-  present in this repository. The copyright and licence are recorded here;
-  the licence text should be restored at that path.
+- The complete copyright and permission text ships at
+  `LICENSES/paperclip-MIT.txt`.
 
 ## Seamoon — the ported backend services
 
@@ -88,6 +139,21 @@ nothing in the SelfImpulse licence transfers any rights in these projects.
 
 Comments in the source describe the app's earlier Tauri-based shell. No Tauri
 code is included in SelfImpulse.
+
+## Product motion libraries
+
+- **Metal FX:** `metal-fx` 2.0.11 by Jakub Antalik, MIT, Copyright (c)
+  2026 Jakub Antalik. Used for the shared liquid-metal primary action and
+  Captain signature. Licence: `LICENSES/metal-fx-MIT.txt`.
+- **Thinking Orbs:** `thinking-orbs` 0.3.2 by Jakub Antalik, MIT, Copyright
+  (c) 2026 Jakub Antalik. Used for real working, composing, connecting,
+  solving, and breathing states. Licence: `LICENSES/thinking-orbs-MIT.txt`.
+- **Glimm:** `glimm` 0.3.1 by Noman Ijaz, MIT, Copyright (c) 2026 Noman
+  Ijaz - iamnoman.com. Used for one-shot send-button border sweeps through
+  its framework-independent core. Licence: `LICENSES/glimm-MIT.txt`.
+- The task deck, role picker, reaction burst, Captain presence, action node,
+  upload treatment, and time scrubber are SelfImpulse-owned interaction
+  implementations. No Bencho block source is included.
 
 ## npm dependencies
 

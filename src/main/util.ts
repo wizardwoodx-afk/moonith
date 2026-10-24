@@ -18,7 +18,7 @@ export async function readJson<T>(file: string, fallback: T): Promise<T> {
 
 export async function atomicWriteJson(file: string, value: unknown): Promise<void> {
   await fs.mkdir(dirname(file), { recursive: true })
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
+  const tmp = `${file}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`
   await fs.writeFile(tmp, JSON.stringify(value, null, 2), 'utf8')
   await fs.rename(tmp, file)
 }

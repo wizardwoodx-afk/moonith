@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PublicSettings, Task, TaskSummary } from '@shared/types'
+import { DEFAULT_GOVERNANCE_SETTINGS } from '@shared/governance'
 import {
   buildActivity,
   collectArtifacts,
@@ -125,7 +126,8 @@ describe('company view', () => {
       defaultPermissionMode: 'manual',
       customInstructions: '',
       allowShell: false,
-      onboardingComplete: true
+      onboardingComplete: true,
+      governance: structuredClone(DEFAULT_GOVERNANCE_SETTINGS)
     }
     expect(engineSummary(null).ready).toBe(false)
     expect(engineSummary(base).ready).toBe(false)

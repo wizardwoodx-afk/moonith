@@ -1,0 +1,33 @@
+{
+  "integration": "SelfImpulse-owned typed workflow capability layer",
+  "updated": "2026-10-24",
+  "upstream": {
+    "name": "@mastra/core",
+    "version": "1.79.0",
+    "released": "2026-10-21",
+    "license": "Apache-2.0",
+    "copyright": "Copyright (c) 2025 Kepler Software, Inc."
+  },
+  "implementation": "Targeted local implementation informed by the audited public workflow/agent-run API and documentation. No upstream distribution files were copied.",
+  "sourceFilesCopied": [],
+  "mergedFeatures": [
+    "typed steps and Zod input/output/suspend/resume validation",
+    "sequential, parallel, branch, bounded foreach, and bounded loop composition",
+    "durable timers",
+    "snapshots and active-run recovery",
+    "suspend/resume with persisted resume data",
+    "watch, async event stream, and cancellation",
+    "shared model/tool step execution for Captain and Crew"
+  ],
+  "excluded": [
+    "hosted studio and server adapters",
+    "enterprise/ee content",
+    "duplicate provider and model registries",
+    "duplicate memory, storage, vector, MCP, and tool systems",
+    "upstream distribution bundle and its dependency tree"
+  ],
+  "licenseFiles": [
+    "LICENSE.txt",
+    "NOTICE.txt"
+  ]
+}

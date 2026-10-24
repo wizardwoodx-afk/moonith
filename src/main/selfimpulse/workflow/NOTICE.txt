@@ -1,0 +1,8 @@
+Workflow design and API concepts were audited from Mastra Core 1.79.0.
+Upstream copyright: Copyright (c) 2025 Kepler Software, Inc.
+Upstream license: Apache License 2.0.
+
+This directory contains a SelfImpulse-owned targeted implementation. No
+upstream distribution files, enterprise/ee content, hosted studio, provider
+registry, memory implementation, or server adapter is copied into it.
+The full Apache License 2.0 text is retained in LICENSE.txt.

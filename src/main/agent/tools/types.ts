@@ -6,6 +6,9 @@ export interface ToolContext {
   workspace: string
   roots: string[]
   allowShell: boolean
+  /** Stable identities supplied by the agent runtime for durable delegation. */
+  durableRunId?: string
+  callId?: string
   addArtifact: (absPath: string, previewAbsPath?: string) => Promise<Artifact | null>
   setBrowser: (state: BrowserState) => void
   setPlan: (steps: string[]) => void

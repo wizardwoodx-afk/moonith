@@ -14,6 +14,7 @@ export const SETTINGS_PANES = [
   'agent',
   'agent-team',
   'skills',
+  'learning',
   'sub-agents',
   'mcp',
   'connectors',
@@ -21,6 +22,7 @@ export const SETTINGS_PANES = [
   'gateway',
   'work-files',
   'desktop',
+  'enterprise',
   'audit',
   'about'
 ] as const
@@ -236,6 +238,14 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     status: 'live'
   },
   {
+    id: 'learning',
+    label: 'RSIRALS learning',
+    group: 'Agents',
+    summary: 'Measured runtime policies, utility memory, verified skills, and learning receipts.',
+    keywords: ['rsirals', 'recursive', 'learning', 'self-improving', 'strategy', 'lessons', 'receipts'],
+    status: 'live'
+  },
+  {
     id: 'sub-agents',
     label: 'Sub-agents',
     group: 'Agents',
@@ -318,6 +328,27 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
       'actions',
       'grounding',
       'automation'
+    ],
+    status: 'live'
+  },
+  {
+    id: 'enterprise',
+    label: 'Enterprise controls',
+    group: 'SelfImpulse',
+    summary: 'Agent roles, data-loss prevention, and signed runtime evidence.',
+    keywords: [
+      'enterprise',
+      'rbac',
+      'role',
+      'policy',
+      'least privilege',
+      'dlp',
+      'data loss',
+      'redact',
+      'block',
+      'secrets',
+      'compliance',
+      'governance'
     ],
     status: 'live'
   },

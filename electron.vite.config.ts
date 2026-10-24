@@ -64,7 +64,7 @@ export default defineConfig({
           resolve: {
             alias: { '@shared': shared }
           },
-          // The vendored graph runtime (langgraph) is one large circular module
+          // The SELF-ΡΟΗ runtime is one large circular module
           // graph. Rolldown's minifier recurses hard enough to overflow the
           // default thread stack on Windows; the unminified main bundle is a
           // few hundred KB larger and needs no minification inside Electron.

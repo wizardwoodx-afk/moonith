@@ -1,0 +1,5 @@
+//#region src/utils/zod-to-json-schema/parsers/boolean.d.ts
+export type JsonSchema7BooleanType = {
+  type: "boolean";
+};
+//#endregion

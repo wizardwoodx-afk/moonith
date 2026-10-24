@@ -19,7 +19,7 @@
 import { createHash, createHmac, hkdfSync, timingSafeEqual } from 'node:crypto'
 import type { AuditEntry } from '@shared/audit'
 
-const ZERO_HASH = '0'.repeat(64)
+export const AUDIT_ZERO_HASH = '0'.repeat(64)
 
 /* Domain separation for the key derivation: the seal key is derived from the
  * keychain secret rather than being the secret itself, so the stored secret
@@ -47,7 +47,7 @@ function sortDeep(value: unknown): unknown {
   return value
 }
 
-function canonicalJson(value: unknown): string {
+export function canonicalAuditJson(value: unknown): string {
   return JSON.stringify(sortDeep(value))
 }
 
@@ -70,6 +70,21 @@ function parseLine(line: string): Record<string, unknown> | null {
   }
 }
 
+export function createChainedAuditLine(
+  entry: AuditEntry,
+  i: number,
+  prev: string
+): { line: string; hash: string; unsigned: Record<string, unknown> } {
+  const body = { i, entry, prev }
+  const hash = sha256hex(canonicalAuditJson(body))
+  const unsigned = { ...body, hash }
+  return { line: canonicalAuditJson(unsigned), hash, unsigned }
+}
+
+export function signAuditPayload(value: unknown, sealKey: Buffer): string {
+  return createHmac('sha256', sealKey).update(canonicalAuditJson(value)).digest('hex')
+}
+
 /**
  * Builds the export: one canonical line per entry, chained, plus the signed
  * trailer. Returns the lines WITHOUT the trailing newline — joining with
@@ -77,15 +92,15 @@ function parseLine(line: string): Record<string, unknown> | null {
  */
 export function buildAuditChain(entries: readonly AuditEntry[], sealKey: Buffer): string[] {
   const lines: string[] = []
-  let prev = ZERO_HASH
+  let prev = AUDIT_ZERO_HASH
   entries.forEach((entry, i) => {
-    const hash = sha256hex(canonicalJson({ i, entry, prev }))
-    lines.push(canonicalJson({ i, entry, prev, hash }))
-    prev = hash
+    const chained = createChainedAuditLine(entry, i, prev)
+    lines.push(chained.line)
+    prev = chained.hash
   })
   const trailer = { trailer: true, entries: entries.length, head: prev }
-  const sig = createHmac('sha256', sealKey).update(canonicalJson(trailer)).digest('hex')
-  lines.push(canonicalJson({ ...trailer, sig }))
+  const sig = createHmac('sha256', sealKey).update(canonicalAuditJson(trailer)).digest('hex')
+  lines.push(canonicalAuditJson({ ...trailer, sig }))
   return lines
 }
 
@@ -125,7 +140,7 @@ export function verifyAuditChain(lines: readonly string[], sealKey: Buffer): Aud
   }
 
   const dataCount = lines.length - 1
-  let prev = ZERO_HASH
+  let prev = AUDIT_ZERO_HASH
   for (let index = 0; index < dataCount; index += 1) {
     const lineNumber = index + 1
     const parsed = parseLine(lines[index])
@@ -143,7 +158,7 @@ export function verifyAuditChain(lines: readonly string[], sealKey: Buffer): Aud
         reason: `the chain breaks at line ${lineNumber} — an entry was deleted, inserted or reordered`
       }
     }
-    if (sha256hex(canonicalJson(body)) !== hash) {
+    if (sha256hex(canonicalAuditJson(body)) !== hash) {
       return {
         ok: false,
         line: lineNumber,
@@ -170,7 +185,7 @@ export function verifyAuditChain(lines: readonly string[], sealKey: Buffer): Aud
 
   /* Signed over the same trailer shape buildAuditChain signed. */
   const expected = createHmac('sha256', sealKey)
-    .update(canonicalJson({ trailer: true, entries: entryCount, head }))
+    .update(canonicalAuditJson({ trailer: true, entries: entryCount, head }))
     .digest('hex')
   if (!timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) {
     return {

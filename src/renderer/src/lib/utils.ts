@@ -110,7 +110,22 @@ export function cronDescription(cron: string): string {
     '*/30 * * * *': 'Every 30 minutes',
     '0 8 1 * *': 'First of the month at 08:00'
   }
-  return map[cron.trim()] ?? 'Custom schedule'
+  const normalized = cron.trim()
+  if (map[normalized]) return map[normalized]
+  const fixed = /^(\d{1,2})\s+(\d{1,2})\s+(.+)$/.exec(normalized)
+  if (fixed) {
+    const minute = Number(fixed[1])
+    const hour = Number(fixed[2])
+    if (minute < 60 && hour < 24) {
+      const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+      const suffix = fixed[3]
+      if (suffix === '* * *') return `Every day at ${time}`
+      if (suffix === '* * 1-5') return `Weekdays at ${time}`
+      if (suffix === '* * 1') return `Every Monday at ${time}`
+      if (suffix === '1 * *') return `First of the month at ${time}`
+    }
+  }
+  return 'Custom schedule'
 }
 
 export function countdownHint(): string {

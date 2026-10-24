@@ -4,16 +4,34 @@ export type TaskStatus = 'draft' | 'running' | 'waiting' | 'paused' | 'done' | '
 export type ProviderKind = 'anthropic' | 'openai' | 'compatible'
 
 import type {
+  AuditEventQuery,
+  AuditEventView,
   AuditExportResult,
   AuditSummary,
   AuditVerifyResult
 } from './audit'
+import type {
+  AgentRole,
+  DlpInspection,
+  GovernanceSettings,
+  SensitiveDataCategory
+} from './governance'
+import type {
+  EnterpriseAuthorization,
+  EnterpriseControlMutation,
+  EnterpriseControlSnapshot,
+  EnterpriseControlState,
+  EnterpriseDecision,
+  EnterpriseRevisionInfo
+} from './enterpriseControl'
+import type { RsiralsSnapshot } from './rsirals'
 
 export type {
   AuditExportResult,
   AuditSummary,
   AuditVerifyResult
 } from './audit'
+export type { AgentRole, DlpInspection, GovernanceSettings } from './governance'
 
 export interface McpServerConfig {
   id: string
@@ -223,6 +241,7 @@ export interface PublicSettings {
   customInstructions: string
   allowShell: boolean
   onboardingComplete: boolean
+  governance: GovernanceSettings
   /** The transplanted the earlier shell backend: provider registry, tiers, memory, gateway. */
   backend?: BackendSettingsPublic
 }
@@ -237,6 +256,7 @@ export interface SettingsPatch {
   customInstructions?: string
   allowShell?: boolean
   onboardingComplete?: boolean
+  governance?: GovernanceSettings
 }
 
 export interface TestProviderResult {
@@ -270,8 +290,12 @@ export interface ChatMessage {
   name?: string
   error?: boolean
   attachments?: AttachmentRef[]
+  /** Reactions selected by the local profile, persisted with this message. */
+  reactions?: string[]
   hidden?: boolean
 }
+
+export const MESSAGE_REACTIONS = ['👍', '❤️', '🎉', '👀', '✅', '💡'] as const
 
 export type PlanStatus = 'pending' | 'active' | 'done'
 
@@ -364,6 +388,8 @@ export interface Task {
   mode: TaskMode
   status: TaskStatus
   permissionMode: PermissionMode
+  /** Least-privilege role enforced for Captain and every inherited Crew run. */
+  agentRole?: AgentRole
   providerId?: string
   model?: string
   folders: string[]
@@ -397,6 +423,7 @@ export interface CreateTaskInput {
   providerId?: string
   model?: string
   permissionMode: PermissionMode
+  agentRole?: AgentRole
   folders?: string[]
 }
 
@@ -406,10 +433,17 @@ export interface SendMessageInput {
   attachments?: AttachmentRef[]
 }
 
+export interface MessageReactionInput {
+  taskId: string
+  messageId: string
+  emoji: string
+}
+
 export interface UpdateTaskInput {
   taskId: string
   mode?: TaskMode
   permissionMode?: PermissionMode
+  agentRole?: AgentRole
   providerId?: string
   model?: string
   title?: string
@@ -740,6 +774,13 @@ export interface BackendApi {
   onEvent: (cb: (event: BackendEvent) => void) => () => void
 }
 
+export interface EnterpriseControlApi {
+  snapshot: () => Promise<EnterpriseControlSnapshot>
+  mutate: (mutation: EnterpriseControlMutation) => Promise<EnterpriseControlSnapshot>
+  authorize: (request: EnterpriseAuthorization) => Promise<EnterpriseDecision>
+  revision: (revision: number) => Promise<{ info: EnterpriseRevisionInfo; state: EnterpriseControlState }>
+}
+
 export interface KnightApi {
   getAppInfo: () => Promise<AppInfo>
   getSettings: () => Promise<PublicSettings>
@@ -756,10 +797,12 @@ export interface KnightApi {
   stopTask: (id: string) => Promise<void>
   resumeTask: (id: string) => Promise<void>
   updateTask: (input: UpdateTaskInput) => Promise<Task>
+  reactToMessage: (input: MessageReactionInput) => Promise<Task>
   addFolder: (id: string) => Promise<Task | null>
   removeFolder: (id: string, folder: string) => Promise<Task>
   pickFolder: () => Promise<string | null>
   pickFiles: () => Promise<AttachmentRef[]>
+  attachDroppedFiles: (files: File[]) => Promise<AttachmentRef[]>
 
   respondApproval: (decision: ApprovalDecision) => Promise<void>
   openArtifact: (taskId: string, relPath: string) => Promise<void>
@@ -817,8 +860,15 @@ export interface KnightApi {
   onApprovalRequest: (cb: (request: ApprovalRequest) => void) => () => void
 
   auditSummary: () => Promise<AuditSummary>
+  auditEvents: (query?: AuditEventQuery) => Promise<AuditEventView[]>
   auditExport: () => Promise<AuditExportResult | null>
   auditVerify: () => Promise<AuditVerifyResult | null>
+  inspectDlp: (
+    text: string,
+    categories?: SensitiveDataCategory[]
+  ) => Promise<DlpInspection>
+  enterpriseControl: EnterpriseControlApi
+  rsiralsSnapshot: () => Promise<RsiralsSnapshot>
 
   backend: BackendApi
 }

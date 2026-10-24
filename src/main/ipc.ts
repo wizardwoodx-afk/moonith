@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs'
 import { basename } from 'node:path'
 import { IPC } from '@shared/ipc'
 import { REA_SERVER_CONFIG } from '@shared/constants'
+import { normalizeAgentRole } from '@shared/governance'
 import type {
   AttachmentRef,
   ChannelInput,
@@ -12,6 +13,7 @@ import type {
   McpServerConfig,
   McpServerStatus,
   MemoryInput,
+  MessageReactionInput,
   ProviderInput,
   SendMessageInput,
   SettingsPatch,
@@ -51,10 +53,15 @@ import { usageService } from './services/usage'
 import { connectorsManager } from './services/connectors'
 import { channelService } from './services/channels'
 import { subAgentService } from './services/subagents'
+import { toggleMessageReaction } from './services/reactions'
 import { applyTitleBarTheme } from './window'
 import { getBackend } from './backend'
 import { registerBackendIpc, setBackendEventTarget } from './backend/ipc'
 import { registerAuditIpc } from './audit'
+import { registerEnterpriseControlIpc } from './enterpriseControl/ipc'
+import { registerRsiralsIpc } from './selfimpulse/mission/rsiralsIpc'
+import { requireLocalEnterprise } from './enterpriseControl/runtime'
+import { runtimeAudit } from './audit/runtime'
 import type { BackendSettingsPublic } from '@shared/types'
 
 function publishTask(task: Task): void {
@@ -130,6 +137,18 @@ export function registerIpc(): void {
     const previous = store.getPublicSettings()
     const settings = await store.saveSettings(patch)
     applyTitleBarTheme()
+    if (JSON.stringify(previous.governance) !== JSON.stringify(settings.governance)) {
+      void runtimeAudit.record({
+        actor: 'system',
+        actorId: 'local-policy-administrator',
+        action: 'policy.settings_updated',
+        outcome: 'ok',
+        metadata: {
+          previous: previous.governance,
+          current: settings.governance
+        }
+      })
+    }
     if (JSON.stringify(settings.mcpServers) !== JSON.stringify(previous.mcpServers)) {
       void restartMcp()
     }
@@ -179,9 +198,34 @@ export function registerIpc(): void {
     if (!task) throw new Error('Task not found.')
     if (input.mode !== undefined) task.mode = input.mode
     if (input.permissionMode !== undefined) task.permissionMode = input.permissionMode
+    const previousRole = task.agentRole
+    if (input.agentRole !== undefined) {
+      task.agentRole = normalizeAgentRole(input.agentRole, previousRole ?? 'executor')
+    }
     if (input.providerId !== undefined) task.providerId = input.providerId || undefined
     if (input.model !== undefined) task.model = input.model || undefined
     if (input.title !== undefined && input.title.trim()) task.title = input.title.trim()
+    await store.saveTask(task)
+    if (previousRole !== task.agentRole) {
+      void runtimeAudit.record({
+        actor: 'system',
+        actorId: 'local-policy-administrator',
+        taskId: task.id,
+        role: task.agentRole,
+        action: 'policy.role_changed',
+        outcome: 'ok',
+        target: task.agentRole,
+        metadata: { previousRole: previousRole ?? 'executor' }
+      })
+    }
+    publishTask(task)
+    return task
+  })
+
+  ipcMain.handle(IPC.taskReact, async (_event, input: MessageReactionInput) => {
+    const task = store.getTask(String(input?.taskId ?? ''))
+    if (!task) throw new Error('Task not found.')
+    toggleMessageReaction(task, String(input?.messageId ?? ''), String(input?.emoji ?? ''))
     await store.saveTask(task)
     publishTask(task)
     return task
@@ -202,6 +246,13 @@ export function registerIpc(): void {
     })
     if (result.canceled) return []
     const refs = await Promise.all(result.filePaths.map((path) => fileRef(path)))
+    return refs.filter((ref): ref is AttachmentRef => Boolean(ref))
+  })
+
+  ipcMain.handle(IPC.filesFromDrop, async (_event, paths: string[]) => {
+    if (!Array.isArray(paths)) return []
+    const unique = [...new Set(paths.filter((path) => typeof path === 'string' && path))].slice(0, 40)
+    const refs = await Promise.all(unique.map((path) => fileRef(path)))
     return refs.filter((ref): ref is AttachmentRef => Boolean(ref))
   })
 
@@ -229,7 +280,8 @@ export function registerIpc(): void {
     return task
   })
 
-  ipcMain.handle(IPC.approvalRespond, (_event, decision: { id: string; approved: boolean; always?: boolean }) => {
+  ipcMain.handle(IPC.approvalRespond, async (_event, decision: { id: string; approved: boolean; always?: boolean }) => {
+    await requireLocalEnterprise('approval.decide', 'approval', decision.id)
     approvals.respond(decision.id, decision.approved, decision.always)
   })
 
@@ -328,10 +380,22 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.skillsCreate, (_event, draft: SkillDraft) => skillService.create(draft))
   ipcMain.handle(IPC.skillsRemove, (_event, id: string) => skillService.remove(id))
 
-  ipcMain.handle(IPC.memoryList, () => memoryService.list())
-  ipcMain.handle(IPC.memoryAdd, (_event, input: MemoryInput) => memoryService.add(input))
-  ipcMain.handle(IPC.memoryRemove, (_event, id: string) => memoryService.remove(id))
-  ipcMain.handle(IPC.memoryImport, (_event, text: string) => memoryService.importText(text))
+  ipcMain.handle(IPC.memoryList, async () => {
+    await requireLocalEnterprise('memory.read', 'memory', 'captain')
+    return memoryService.list()
+  })
+  ipcMain.handle(IPC.memoryAdd, async (_event, input: MemoryInput) => {
+    await requireLocalEnterprise('memory.write', 'memory', 'captain')
+    return memoryService.add(input)
+  })
+  ipcMain.handle(IPC.memoryRemove, async (_event, id: string) => {
+    await requireLocalEnterprise('memory.write', 'memory', 'captain')
+    return memoryService.remove(id)
+  })
+  ipcMain.handle(IPC.memoryImport, async (_event, text: string) => {
+    await requireLocalEnterprise('memory.write', 'memory', 'captain')
+    return memoryService.importText(text)
+  })
 
   ipcMain.handle(IPC.usageSummary, () => usageService.summary())
 
@@ -367,6 +431,8 @@ export function registerIpc(): void {
 
   registerBackendIpc()
   registerAuditIpc()
+  registerEnterpriseControlIpc()
+  registerRsiralsIpc()
 }
 
 async function safeArtifactPath(taskId: string, relPath: string): Promise<string> {

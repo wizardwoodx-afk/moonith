@@ -1,0 +1,51 @@
+import { ensureSelfRoiConfig } from "../executor/utils/config.js";
+import { messagesStateReducer } from "./messages_reducer.js";
+import { StateGraph } from "./state.js";
+import { coerceMessageLikeToMessage } from "../../core/messages/index.js";
+//#region src/graph/message.ts
+/** @ignore */
+var MessageGraph = class extends StateGraph {
+	constructor() {
+		super({ channels: { __root__: {
+			reducer: messagesStateReducer,
+			default: () => []
+		} } });
+	}
+};
+/**
+* Manually push a message to a message stream.
+*
+* This is useful when you need to push a manually created message before the node
+* has finished executing.
+*
+* When a message is pushed, it will be automatically persisted to the state after the node has finished executing.
+* To disable persisting, set `options.stateKey` to `null`.
+*
+* @param message The message to push. The message must have an ID set, otherwise an error will be thrown.
+* @param options RunnableConfig / Runtime coming from node context.
+*/
+function pushMessage(message, options) {
+	const { stateKey: userStateKey, ...userConfig } = options ?? {};
+	const config = ensureSelfRoiConfig(userConfig);
+	let stateKey = userStateKey ?? "messages";
+	if (userStateKey === null) stateKey = void 0;
+	const validMessage = coerceMessageLikeToMessage(message);
+	if (!validMessage.id) throw new Error("Message ID is required.");
+	const callbacks = (() => {
+		if (Array.isArray(config.callbacks)) return config.callbacks;
+		if (typeof config.callbacks !== "undefined") return config.callbacks.handlers;
+		return [];
+	})();
+	const messagesHandler = callbacks.find((cb) => "name" in cb && cb.name === "StreamMessagesHandler");
+	const protocolMessagesHandler = callbacks.find((cb) => "name" in cb && cb.name === "StreamProtocolMessagesHandler");
+	if (messagesHandler || protocolMessagesHandler) {
+		const metadata = config.metadata ?? {};
+		const namespace = (metadata.self_roi_checkpoint_ns ?? "").split("|");
+		if (messagesHandler) messagesHandler._emit([namespace, metadata], validMessage, void 0, false);
+		else if (protocolMessagesHandler) protocolMessagesHandler.emitFinalMessage([namespace, metadata], validMessage, void 0, false);
+	}
+	if (stateKey) config.configurable?.__executor_send?.([[stateKey, validMessage]]);
+	return validMessage;
+}
+//#endregion
+export { MessageGraph, pushMessage };

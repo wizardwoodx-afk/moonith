@@ -18,6 +18,12 @@ import type {
   Task,
   TaskSummary
 } from '@shared/types'
+import {
+  DEFAULT_GOVERNANCE_SETTINGS,
+  normalizeAgentRole,
+  normalizeGovernanceSettings,
+  type GovernanceSettings
+} from '@shared/governance'
 import { getPaths, ensureTaskWorkspace, taskWorkspace } from './paths'
 import { atomicWriteJson, newId, nowIso, readJson } from './util'
 
@@ -61,6 +67,7 @@ interface StoredSettings {
   customInstructions: string
   allowShell: boolean
   onboardingComplete: boolean
+  governance: GovernanceSettings
 }
 
 const DEFAULT_SETTINGS: StoredSettings = {
@@ -71,7 +78,8 @@ const DEFAULT_SETTINGS: StoredSettings = {
   defaultPermissionMode: 'manual',
   customInstructions: '',
   allowShell: false,
-  onboardingComplete: false
+  onboardingComplete: false,
+  governance: DEFAULT_GOVERNANCE_SETTINGS
 }
 
 function sealSecret(secret: string): string {
@@ -120,6 +128,7 @@ class Store {
   private settings: StoredSettings | null = null
   private tasks = new Map<string, Task>()
   private schedules: ScheduleRecord[] = []
+  private taskWrites = new Map<string, Promise<void>>()
   private initialized = false
 
   async init(): Promise<void> {
@@ -129,6 +138,7 @@ class Store {
 
     const rawSettings = await readJson<Partial<StoredSettings>>(getPaths().settingsFile, {})
     this.settings = { ...DEFAULT_SETTINGS, ...rawSettings }
+    this.settings.governance = normalizeGovernanceSettings(rawSettings.governance)
     this.settings.providers = Array.isArray(rawSettings.providers) ? rawSettings.providers : []
     this.settings.mcpServers = Array.isArray(rawSettings.mcpServers)
       ? rawSettings.mcpServers.map(sanitizeMcpServer)
@@ -226,7 +236,8 @@ class Store {
       defaultPermissionMode: settings.defaultPermissionMode,
       customInstructions: settings.customInstructions,
       allowShell: settings.allowShell,
-      onboardingComplete: settings.onboardingComplete
+      onboardingComplete: settings.onboardingComplete,
+      governance: normalizeGovernanceSettings(settings.governance)
     }
   }
 
@@ -358,6 +369,9 @@ class Store {
     if (patch.customInstructions !== undefined) settings.customInstructions = patch.customInstructions
     if (patch.allowShell !== undefined) settings.allowShell = patch.allowShell
     if (patch.onboardingComplete !== undefined) settings.onboardingComplete = patch.onboardingComplete
+    if (patch.governance !== undefined) {
+      settings.governance = normalizeGovernanceSettings(patch.governance, settings.governance)
+    }
 
     if (
       settings.defaultProviderId &&
@@ -413,7 +427,18 @@ class Store {
   async saveTask(task: Task): Promise<void> {
     task.updatedAt = nowIso()
     this.tasks.set(task.id, task)
-    await atomicWriteJson(this.getTaskFilePath(task.id), task)
+    // Parallel Crew completions may persist the same task at once. Serialize
+    // those writes so an older snapshot cannot rename over a newer one.
+    const previous = this.taskWrites.get(task.id) ?? Promise.resolve()
+    const write = previous
+      .catch(() => undefined)
+      .then(() => atomicWriteJson(this.getTaskFilePath(task.id), task))
+    this.taskWrites.set(task.id, write)
+    try {
+      await write
+    } finally {
+      if (this.taskWrites.get(task.id) === write) this.taskWrites.delete(task.id)
+    }
   }
 
   async createTask(input: CreateTaskInput): Promise<Task> {
@@ -425,6 +450,10 @@ class Store {
       mode: input.mode,
       status: 'draft',
       permissionMode: input.permissionMode,
+      agentRole: normalizeAgentRole(
+        input.agentRole,
+        this.getSettings().governance.defaultRole
+      ),
       providerId: input.providerId,
       model: input.model,
       folders: uniqueFolders(input.folders ?? []),

@@ -16,7 +16,7 @@ import type {
 import { approvals } from '../approvals'
 import { sendTaskEvent, toast } from '../emitter'
 import { store } from '../store'
-import { ensureTaskWorkspace } from '../paths'
+import { ensureTaskWorkspace, getPaths } from '../paths'
 import { isWithin } from '../security'
 import { newId, nowIso, truncate } from '../util'
 import { addUsage } from './types'
@@ -31,17 +31,50 @@ import { memoryService } from '../services/memory'
 import { skillService } from '../services/skills'
 import { subAgentService } from '../services/subagents'
 import { usageService } from '../services/usage'
-import { runEngineTurn, type ToolOutcome } from './engine'
+import { governanceService, type GovernanceActor } from '../services/governance'
+import { runEngineTurn, toEngineHistory, turnFailureMessage, type ToolOutcome } from './engine'
 import { getBackend } from '../backend'
 import { backendSkillsDir } from '../backend/paths'
 import { Provider, resolveConfig } from '../backend/provider'
-import type { ModelMessage } from '../backend/core/types'
+import { DurableStore } from '../selfimpulse/durable/index'
+import type { DurableContext, DurableEvent } from '../selfimpulse/durable/index'
+import { createStep, executeStep } from '../selfimpulse/workflow/index'
+import { authorizeNativeTaskTool } from '../enterpriseControl/runtime'
+
+let durableStore: DurableStore | undefined
+
+function getDurableStore(): DurableStore {
+  durableStore ??= new DurableStore(getPaths().durable)
+  return durableStore
+}
 
 interface RunState {
   taskId: string
   controller: AbortController
   stopped: boolean
   pendingSteer: boolean
+}
+
+/** Existing task-role RBAC and native enterprise policy are both mandatory. */
+async function enterpriseToolDenial(
+  task: Task,
+  actor: GovernanceActor,
+  tool: AgentTool
+): Promise<string | null> {
+  if (actor.actor === 'system') return 'Enterprise Control Plane has no agent identity for this action.'
+  try {
+    const decision = await authorizeNativeTaskTool({
+      taskId: task.id,
+      actor: actor.actor,
+      agentName: actor.actorId,
+      toolName: tool.name
+    })
+    return decision.allowed ? null : decision.reason
+  } catch (error) {
+    return `Enterprise Control Plane could not authorize the action; failing closed. ${
+      error instanceof Error ? error.message : String(error)
+    }`
+  }
 }
 
 const MAX_ROUNDS = 50
@@ -83,6 +116,20 @@ class AgentRuntime {
 
   isRunning(taskId: string): boolean {
     return this.runs.has(taskId)
+  }
+
+  /** Recover only active work. Paused tasks remain under explicit user control. */
+  async recoverActiveTasks(): Promise<void> {
+    const active = store
+      .listTasks()
+      .filter((task) => task.status === 'running' || task.status === 'waiting')
+    for (const task of active) {
+      if (!this.runs.has(task.id)) await this.resume(task.id)
+    }
+  }
+
+  async flushDurability(): Promise<void> {
+    await durableStore?.flush()
   }
 
   async sendMessage(input: SendMessageInput): Promise<Task> {
@@ -132,6 +179,12 @@ class AgentRuntime {
   async stop(taskId: string): Promise<void> {
     const task = store.getTask(taskId)
     if (!task) return
+    governanceService.audit(
+      task,
+      { actor: 'system', actorId: 'local-user' },
+      'task.stop_requested',
+      'info'
+    )
     const run = this.runs.get(taskId)
     if (run) {
       run.stopped = true
@@ -150,6 +203,7 @@ class AgentRuntime {
     const task = this.requireTask(taskId)
     if (this.runs.has(taskId)) return
     if (!task.messages.length) return
+    this.prepareReplay(task)
     task.status = 'running'
     task.error = undefined
     task.completedAt = undefined
@@ -184,8 +238,12 @@ class AgentRuntime {
 
       const settings = store.getPublicSettings()
       const provider = this.resolveEngineProvider(task, settings)
-      const tools = await this.collectTools(task, run, provider, settings)
-      const toolMap = new Map(tools.map((tool) => [tool.name, tool]))
+      const allTools = await this.collectTools(task, run, provider, settings)
+      const tools = governanceService.permittedTools(task, allTools)
+      /* Keep the complete map for the second, action-time check. A cached or
+       * injected call for a hidden tool must receive a policy denial, not an
+       * ambiguous "unknown tool" response. */
+      const toolMap = new Map(allTools.map((tool) => [tool.name, tool]))
       const skills = await skillService.promptIndex().catch(() => '')
       const lastUser = [...task.messages]
         .reverse()
@@ -193,13 +251,13 @@ class AgentRuntime {
       const memory = await memoryService
         .promptIndex(`${task.title}\n${task.objective}\n${lastUser ?? ''}`, task.folders)
         .catch(() => '')
-      const system = buildSystemPrompt({
+      const system = `${buildSystemPrompt({
         task,
         workspace: ensureTaskWorkspace(task.id),
         settings,
         skills,
         memory
-      })
+      })}\n\nEnterprise agent role: ${governanceService.role(task)}. Only tools granted to this role are listed. If a previously planned action is denied by policy, do not retry it or attempt to bypass the boundary; explain the limitation and choose an allowed alternative.`
 
       const backend = getBackend()
 
@@ -207,22 +265,14 @@ class AgentRuntime {
       // and the user message itself.
       const lastUserIndex = findLastUserIndex(task.messages)
       const userMessage = lastUserIndex >= 0 ? task.messages[lastUserIndex] : undefined
-      const history: ModelMessage[] = task.messages
-        .slice(0, lastUserIndex < 0 ? task.messages.length : lastUserIndex)
-        .filter((message) => message.role === 'user' || message.role === 'assistant')
-        .map((message) => ({
-          role: message.role as ModelMessage['role'],
-          content: message.content,
-          ...(message.toolCalls?.length
-            ? {
-                toolCalls: message.toolCalls.map((call) => ({
-                  id: call.id,
-                  name: call.name,
-                  args: (call.arguments ?? {}) as Record<string, unknown>
-                }))
-              }
-            : {})
-        }))
+      const history = toEngineHistory(
+        task.messages.slice(0, lastUserIndex < 0 ? task.messages.length : lastUserIndex)
+      )
+      const durableRunId = `captain:${task.id}:${userMessage?.id ?? 'no-user'}`
+      const durable = await getDurableStore().context(durableRunId, {
+        signal: run.controller.signal,
+        onEvent: (event) => this.handleDurableEvent(task, event)
+      })
 
       if (task.status !== 'running') {
         task.status = 'running'
@@ -238,12 +288,19 @@ class AgentRuntime {
       task.messages.push(assistantMessage)
       this.publish(task)
 
-      const toolContext = this.createToolContext(task, settings)
+      const toolContext = this.createToolContext(task, settings, durableRunId)
       const context = [skills, memory].filter(Boolean).join('\n\n')
 
       const result = await runEngineTurn({
         provider,
         tools,
+        durable,
+        protectModelMessages: (messages) =>
+          governanceService.protectModelMessages(
+            task,
+            { actor: 'captain', actorId: 'Captain', runId: durableRunId },
+            messages
+          ),
         systemPrompt: system,
         history,
         userMessage: userMessage?.content ?? '',
@@ -281,32 +338,59 @@ class AgentRuntime {
             { id: callId, name, arguments: args },
             run,
             toolContext,
-            assistantMessage.id
+            assistantMessage.id,
+            durable
           ),
         emit: (event, payload) => this.handleEngineEvent(task, event, payload)
       })
 
       assistantMessage.content = result.finalResponse || assistantMessage.content
-      task.usage = addUsage(task.usage, {
-        input: result.usage.prompt,
-        output: result.usage.completion,
-        total: result.usage.total
-      })
-      await usageService
-        .record({
-          agentId: 'Captain',
-          providerId: provider.settings.providerId ?? 'knight',
-          model: provider.settings.model ?? '',
-          usage: {
+      if (!durable.hasCompleted('telemetry:usage')) {
+        const previousUsage = task.usage
+        await durable.run('telemetry:usage', async () => {
+          task.usage = addUsage(previousUsage, {
             input: result.usage.prompt,
             output: result.usage.completion,
             total: result.usage.total
-          }
+          })
+          await usageService
+            .record({
+              agentId: 'Captain',
+              providerId: provider.settings.providerId ?? 'knight',
+              model: provider.settings.model ?? '',
+              usage: {
+                input: result.usage.prompt,
+                output: result.usage.completion,
+                total: result.usage.total
+              }
+            })
+            .catch(() => undefined)
+          // Persist the usage and final transcript before the journal marks
+          // this telemetry step complete. Replay then skips both additions.
+          await this.commit(task)
         })
-        .catch(() => undefined)
+      }
       await this.commit(task)
       if (run.stopped) return
+      if (result.stopReason === 'interrupted') {
+        await this.finish(task, 'paused')
+        governanceService.audit(
+          task,
+          { actor: 'captain', actorId: 'Captain', runId: durableRunId },
+          'task.paused',
+          'info'
+        )
+        return
+      }
+      const failure = turnFailureMessage(result)
+      if (failure) throw new Error(failure)
       await this.finish(task, 'done')
+      governanceService.audit(
+        task,
+        { actor: 'captain', actorId: 'Captain', runId: durableRunId },
+        'task.completed',
+        'ok'
+      )
     } catch (error) {
       if (run.stopped) {
         await this.commit(task).catch(() => undefined)
@@ -314,6 +398,14 @@ class AgentRuntime {
       }
       task.error = providerError(error)
       task.status = 'error'
+      governanceService.audit(
+        task,
+        { actor: 'captain', actorId: 'Captain' },
+        'task.failed',
+        'error',
+        undefined,
+        task.error
+      )
       await this.commit(task).catch(() => undefined)
       toast('error', task.error)
     } finally {
@@ -427,6 +519,9 @@ class AgentRuntime {
     context: ToolContext
   ): Promise<{ content: string; isError?: boolean }> {
     const run = await subAgentService.begin({
+      id: context.callId
+        ? `${context.durableRunId ?? `captain:${task.id}`}:crew:${context.callId}`
+        : undefined,
       taskId: task.id,
       taskTitle: task.title,
       name,
@@ -434,13 +529,32 @@ class AgentRuntime {
       provider: provider.settings.providerId ?? 'knight',
       model: provider.settings.model ?? ''
     })
-    // Sub-agents never prompt, so 'always' tools are withheld from them entirely.
-    const allowed = tools.filter(
-      (tool) =>
-        tool.name !== 'delegate_to_crew' &&
-        (tool.approval === 'never' || (tool.approval === 'policy' && task.permissionMode === 'skip'))
+    const actor: GovernanceActor = {
+      actor: 'crew',
+      actorId: run.id,
+      runId: `crew:${run.id}`
+    }
+    governanceService.audit(
+      task,
+      actor,
+      'crew.started',
+      'info',
+      name,
+      undefined,
+      { instructionHash: governanceService.payloadHash(instruction) }
     )
-    const toolMap = new Map(allowed.map((tool) => [tool.name, tool]))
+    // Sub-agents never prompt, so 'always' tools are withheld from them entirely.
+    // Role filtering is intersected with (never unioned with) this restriction.
+    const crewCandidates = tools.filter((tool) => tool.name !== 'delegate_to_crew')
+    const allowed = governanceService
+      .permittedTools(task, crewCandidates)
+      .filter(
+        (tool) =>
+          tool.approval === 'never' ||
+          (tool.approval === 'policy' && task.permissionMode === 'skip')
+      )
+    const allowedNames = new Set(allowed.map((tool) => tool.name))
+    const toolMap = new Map(crewCandidates.map((tool) => [tool.name, tool]))
     const workspace = ensureTaskWorkspace(task.id)
     const system = `You are ${name}, a Crew sub-agent inside SelfImpulse. The Captain delegated one focused job to you.
 Do the job with the tools you have, verify what you can, then reply with a compact report: findings, file paths, and anything the Captain must know.
@@ -448,14 +562,22 @@ You never address the user directly, never ask questions, and never claim work y
 Workspace: ${workspace}
 Granted folders:
 ${context.roots.map((root) => `- ${root}`).join('\n')}
-${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace.' : 'This job is read-only: do not modify files or run shell commands.'}`
+${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace.' : 'This job is read-only: do not modify files or run shell commands.'}
+Inherited enterprise role: ${governanceService.role(task)}. Your tools are the intersection of that role and the Crew restrictions above; delegation cannot widen them.`
     const subContext: ToolContext = { ...context, setPlan: () => undefined }
     const backend = getBackend()
 
     try {
+      const durable = await getDurableStore().context(`crew:${run.id}`, {
+        signal: parent.controller.signal,
+        onEvent: (event) => this.handleDurableEvent(task, event)
+      })
       const result = await runEngineTurn({
         provider,
         tools: allowed,
+        durable,
+        protectModelMessages: (messages) =>
+          governanceService.protectModelMessages(task, actor, messages),
         systemPrompt: system,
         history: [],
         userMessage: instruction,
@@ -487,8 +609,42 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
               detail: 'Unknown tool',
               at: nowIso()
             })
+            governanceService.audit(
+              task,
+              actor,
+              'tool.completed',
+              'error',
+              toolName,
+              'Unknown tool'
+            )
             await subAgentService.saveRun(run)
             return { content: `Unknown tool "${toolName}".`, isError: true }
+          }
+          const decision = governanceService.authorize(task, actor, tool)
+          let denial = decision.allowed ? null : decision.reason
+          if (!denial && !allowedNames.has(tool.name)) {
+            denial = 'The Crew no-prompt boundary does not grant this tool to sub-agents.'
+            governanceService.audit(
+              task,
+              actor,
+              'crew.policy',
+              'denied',
+              tool.name,
+              denial
+            )
+          }
+          if (!denial) denial = await enterpriseToolDenial(task, actor, tool)
+          if (denial) {
+            run.steps.push({
+              id: stepId,
+              tool: tool.name,
+              title: tool.title,
+              status: 'error',
+              detail: denial,
+              at: nowIso()
+            })
+            await subAgentService.saveRun(run)
+            return { content: `Policy denied ${tool.name}: ${denial}`, isError: true }
           }
           const record: SubAgentStep = {
             id: stepId,
@@ -513,6 +669,25 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
               }
               parsedArgs = parsed.data
             }
+            const protection = governanceService.protectToolArguments(
+              task,
+              actor,
+              tool,
+              parsedArgs as Record<string, unknown>
+            )
+            parsedArgs = protection.args
+            record.detail = tool.summarize
+              ? tool.summarize(parsedArgs)
+              : truncate(JSON.stringify(parsedArgs), 240)
+            governanceService.audit(
+              task,
+              actor,
+              'tool.started',
+              'info',
+              tool.name,
+              undefined,
+              { callId, argsHash: governanceService.payloadHash(parsedArgs) }
+            )
             const outcome = await tool.execute(parsedArgs, subContext)
             content = truncate(outcome.content, 30000)
             isError = Boolean(outcome.isError)
@@ -520,39 +695,65 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
             content = `Tool error: ${error instanceof Error ? error.message : String(error)}`
             isError = true
           }
+          governanceService.audit(
+            task,
+            actor,
+            'tool.completed',
+            isError ? 'error' : 'ok',
+            tool.name,
+            isError ? content : undefined,
+            { callId, outputHash: governanceService.payloadHash(content) }
+          )
           record.status = isError ? 'error' : 'ok'
           record.detail = isError ? truncate(content, 400) : record.detail
           await subAgentService.saveRun(run)
           return { content, isError }
         },
-        emit: () => undefined
+        emit: (event, payload) => this.recordEngineAudit(task, actor, event, payload)
       })
 
-      await usageService
-        .record({
-          agentId: `Crew · ${name}`,
-          providerId: provider.settings.providerId ?? 'knight',
-          model: provider.settings.model ?? '',
-          usage: {
-            input: result.usage.prompt,
-            output: result.usage.completion,
-            total: result.usage.total
-          }
+      if (!durable.hasCompleted('telemetry:usage')) {
+        await durable.run('telemetry:usage', async () => {
+          await usageService
+            .record({
+              agentId: `Crew · ${name}`,
+              providerId: provider.settings.providerId ?? 'knight',
+              model: provider.settings.model ?? '',
+              usage: {
+                input: result.usage.prompt,
+                output: result.usage.completion,
+                total: result.usage.total
+              }
+            })
+            .catch(() => undefined)
         })
-        .catch(() => undefined)
+      }
+
+      if (parent.stopped || result.stopReason === 'interrupted') {
+        await subAgentService.finish(run, 'stopped', { error: 'The parent task was stopped.' })
+        governanceService.audit(task, actor, 'crew.completed', 'info', name, 'Stopped')
+        return { content: `${name} stopped because the task was stopped.`, isError: true }
+      }
+      const failure = turnFailureMessage(result)
+      if (failure) throw new Error(failure)
 
       const summary =
         (result.finalResponse ?? '').trim() || `${name} finished without a written report.`
       run.summary = truncate(summary, 8000)
       await subAgentService.finish(run, 'done', { summary: run.summary })
+      governanceService.audit(task, actor, 'crew.completed', 'ok', name, undefined, {
+        summaryHash: governanceService.payloadHash(run.summary)
+      })
       return { content: `Crew report from ${name}:\n\n${truncate(summary, 20000)}` }
     } catch (error) {
       if (parent.stopped) {
         await subAgentService.finish(run, 'stopped', { error: 'The parent task was stopped.' })
+        governanceService.audit(task, actor, 'crew.completed', 'info', name, 'Stopped')
         return { content: `${name} stopped because the task was stopped.`, isError: true }
       }
       const message = error instanceof Error ? error.message : String(error)
       await subAgentService.finish(run, 'error', { error: message })
+      governanceService.audit(task, actor, 'crew.completed', 'error', name, message)
       return { content: `Crew sub-agent failed: ${message}`, isError: true }
     }
   }
@@ -595,8 +796,79 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
     })
   }
 
+  private recordEngineAudit(
+    task: Task,
+    actor: GovernanceActor,
+    event: string,
+    payload: unknown
+  ): void {
+    const data = (payload ?? {}) as Record<string, unknown>
+    const turnId = typeof data.turnId === 'string' ? data.turnId : undefined
+    switch (event) {
+      case 'provider:attempt':
+        governanceService.audit(
+          task,
+          actor,
+          'model.provider',
+          'info',
+          String(data.providerId ?? 'unknown'),
+          undefined,
+          { turnId, model: data.model }
+        )
+        break
+      case 'agent:turn_done':
+        governanceService.audit(
+          task,
+          actor,
+          'turn.completed',
+          data.stopReason === 'error' ? 'error' : 'ok',
+          String(data.stopReason ?? 'unknown'),
+          undefined,
+          {
+            turnId,
+            apiCallCount: data.apiCallCount,
+            toolCalls: data.toolCalls,
+            usage: data.usage
+          }
+        )
+        break
+      case 'agent:error':
+        governanceService.audit(
+          task,
+          actor,
+          'model.error',
+          'error',
+          undefined,
+          String(data.error ?? 'The model call failed.'),
+          { turnId }
+        )
+        break
+      case 'agent:review_done':
+        governanceService.audit(task, actor, 'review.completed', 'ok', undefined, undefined, {
+          turnId,
+          wrote: data.wrote
+        })
+        break
+      case 'agent:crew_parallel':
+        governanceService.audit(task, actor, 'crew.parallel', 'info', undefined, undefined, {
+          turnId,
+          count: data.count,
+          callIds: data.callIds
+        })
+        break
+      default:
+        break
+    }
+  }
+
   /** ImpulseCore's own events, mapped onto the task surface the renderer sees. */
   private handleEngineEvent(task: Task, event: string, payload: unknown): void {
+    this.recordEngineAudit(
+      task,
+      { actor: 'captain', actorId: 'Captain' },
+      event,
+      payload
+    )
     const data = (payload ?? {}) as Record<string, unknown>
     switch (event) {
       case 'agent:nudge':
@@ -611,8 +883,21 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       case 'agent:budget_warning':
         toast('info', String(data.message ?? 'The turn is close to its step budget.'))
         break
+      case 'agent:crew_parallel':
+        toast('info', `Running ${Number(data.count ?? 2)} Crew agents in parallel.`)
+        break
       case 'provider:attempt':
         if (data.providerId) toast('info', `Using ${String(data.providerId)}.`)
+        break
+      case 'agent:durable':
+        if (data.type === 'step_retry') {
+          toast('info', `Retrying ${String(data.key ?? 'a durable step')}…`)
+        }
+        break
+      case 'agent:workflow_step':
+        if (data.kind === 'approval' && data.type === 'step_replayed') {
+          toast('info', 'Using the recorded approval decision.')
+        }
         break
       case 'agent:error':
         toast('error', String(data.error ?? 'The agent run failed.'))
@@ -622,13 +907,22 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
     }
   }
 
-  private createToolContext(task: Task, settings: PublicSettings): ToolContext {
+  private handleDurableEvent(task: Task, event: DurableEvent): void {
+    this.handleEngineEvent(task, 'agent:durable', event)
+  }
+
+  private createToolContext(
+    task: Task,
+    settings: PublicSettings,
+    durableRunId: string
+  ): ToolContext {
     const workspace = ensureTaskWorkspace(task.id)
     return {
       task,
       workspace,
       roots: [...new Set([workspace, ...task.folders])],
       allowShell: settings.allowShell,
+      durableRunId,
       addArtifact: (absPath, previewAbsPath) =>
         this.registerArtifact(task, absPath, previewAbsPath),
       setBrowser: (state) => {
@@ -648,13 +942,48 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
     call: ToolCallInfo,
     run: RunState,
     context: ToolContext,
-    messageId: string
+    messageId: string,
+    durable?: DurableContext
   ): Promise<ToolOutcome> {
     const tool = toolMap.get(call.name)
     const rawArgs = (call.arguments ?? {}) as Record<string, unknown>
+    const actor: GovernanceActor = {
+      actor: 'captain',
+      actorId: 'Captain',
+      runId: durable?.runId ?? `captain:${task.id}`
+    }
+    const assistantMessage = task.messages.find(
+      (message) => message.id === messageId && message.role === 'assistant'
+    )
+    if (assistantMessage && !(assistantMessage.toolCalls ?? []).some((item) => item.id === call.id)) {
+      assistantMessage.toolCalls = [...(assistantMessage.toolCalls ?? []), call]
+    }
 
     if (!tool) {
       const content = `Unknown tool "${call.name}".`
+      governanceService.audit(task, actor, 'tool.completed', 'error', call.name, content)
+      this.appendToolMessage(task, call, content, true)
+      await this.commit(task)
+      return { content, isError: true }
+    }
+
+    const decision = governanceService.authorize(task, actor, tool)
+    let denial = decision.allowed ? null : decision.reason
+    if (!denial) denial = await enterpriseToolDenial(task, actor, tool)
+    if (denial) {
+      const content = `Policy denied ${tool.name}: ${denial} Do not retry or bypass this action.`
+      task.steps.push({
+        id: newId('step'),
+        tool: tool.name,
+        title: tool.title,
+        detail: denial,
+        status: 'error',
+        error: 'Denied by agent role policy',
+        messageId,
+        startedAt: nowIso(),
+        endedAt: nowIso()
+      })
+      if (task.steps.length > MAX_STEPS) task.steps.splice(0, task.steps.length - MAX_STEPS)
       this.appendToolMessage(task, call, content, true)
       await this.commit(task)
       return { content, isError: true }
@@ -668,6 +997,15 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
           .map((issue) => `${issue.path.join('.') || 'arguments'}: ${issue.message}`)
           .join('; ')
         const content = `Invalid arguments for ${tool.name}: ${issues}`
+        governanceService.audit(
+          task,
+          actor,
+          'tool.completed',
+          'error',
+          tool.name,
+          content,
+          { callId: call.id, argsHash: governanceService.payloadHash(rawArgs) }
+        )
         this.appendToolMessage(task, call, content, true)
         await this.commit(task)
         return { content, isError: true }
@@ -675,13 +1013,42 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       args = parsed.data
     }
 
+    let effectiveRawArgs = rawArgs
+    try {
+      const protection = governanceService.protectToolArguments(
+        task,
+        actor,
+        tool,
+        args as Record<string, unknown>
+      )
+      args = protection.args
+      effectiveRawArgs = protection.args
+    } catch (error) {
+      const content = error instanceof Error ? error.message : String(error)
+      task.steps.push({
+        id: newId('step'),
+        tool: tool.name,
+        title: tool.title,
+        detail: 'Blocked by data-loss prevention before tool execution',
+        status: 'error',
+        error: content,
+        messageId,
+        startedAt: nowIso(),
+        endedAt: nowIso()
+      })
+      if (task.steps.length > MAX_STEPS) task.steps.splice(0, task.steps.length - MAX_STEPS)
+      this.appendToolMessage(task, call, content, true)
+      await this.commit(task)
+      return { content, isError: true }
+    }
+
     const step: StepRecord = {
       id: newId('step'),
       tool: tool.name,
       title: tool.title,
-      detail: tool.summarize ? tool.summarize(args) : truncate(JSON.stringify(rawArgs), 240),
+      detail: tool.summarize ? tool.summarize(args) : truncate(JSON.stringify(effectiveRawArgs), 240),
       status: 'waiting',
-      args: rawArgs,
+      args: effectiveRawArgs,
       messageId,
       startedAt: nowIso()
     }
@@ -704,15 +1071,68 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       task.status = 'waiting'
       await this.commit(task)
 
-      const approved = await approvals.request(task.id, {
-        tool: tool.name,
-        title: tool.title,
-        summary: step.detail || tool.title,
-        details: approvalDetails(tool, rawArgs),
-        risk: tool.risk,
-        allowAlways: true
-      })
+      const requestApproval = () => {
+        governanceService.audit(
+          task,
+          actor,
+          'approval.requested',
+          'requested',
+          tool.name,
+          step.detail || tool.title,
+          { callId: call.id, argsHash: governanceService.payloadHash(effectiveRawArgs) }
+        )
+        return approvals.request(task.id, {
+          tool: tool.name,
+          title: tool.title,
+          summary: step.detail || tool.title,
+          details: approvalDetails(tool, effectiveRawArgs),
+          risk: tool.risk,
+          allowAlways: true
+        })
+      }
+      const approved = durable
+        ? await executeStep(
+            createStep<void, boolean>({
+              id: `approval:${call.id}`,
+              execute: requestApproval
+            }),
+            undefined,
+            {
+              durable,
+              signal: run.controller.signal,
+              runId: durable.runId,
+              validateOutput: () => {
+                if (run.stopped || run.controller.signal.aborted) {
+                  throw (
+                    run.controller.signal.reason ?? new DOMException('The task was stopped.', 'AbortError')
+                  )
+                }
+              },
+              onEvent: (event) =>
+                this.handleEngineEvent(task, 'agent:workflow_step', {
+                  ...event,
+                  kind: 'approval',
+                  callId: call.id,
+                  error:
+                    event.error instanceof Error
+                      ? event.error.message
+                      : event.error
+                        ? String(event.error)
+                        : undefined
+                })
+            }
+          )
+        : await requestApproval()
 
+      governanceService.audit(
+        task,
+        actor,
+        run.stopped ? 'approval.cancelled' : 'approval.decision',
+        run.stopped ? 'info' : approved ? 'approved' : 'denied',
+        tool.name,
+        undefined,
+        { callId: call.id }
+      )
       if (run.stopped) {
         step.status = 'error'
         step.error = 'Stopped'
@@ -736,11 +1156,24 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
     }
 
     step.status = 'running'
+    governanceService.audit(
+      task,
+      actor,
+      'tool.started',
+      'info',
+      tool.name,
+      undefined,
+      {
+        callId: call.id,
+        argsHash: governanceService.payloadHash(effectiveRawArgs),
+        approval: needsApproval ? 'human' : 'not-required'
+      }
+    )
     await this.commit(task)
 
     let outcome: ToolOutcome
     try {
-      const result = await tool.execute(args, context)
+      const result = await tool.execute(args, { ...context, callId: call.id })
       step.status = result.isError ? 'error' : 'ok'
       step.output = truncate(result.content, 6000)
       if (result.isError) step.error = truncate(firstLine(result.content), 500)
@@ -748,7 +1181,7 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       outcome = {
         content: truncate(result.content, 30_000),
         isError: result.isError,
-        mutatedPaths: mutatedPathsFor(tool.name, rawArgs)
+        mutatedPaths: mutatedPathsFor(tool.name, effectiveRawArgs)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -758,6 +1191,20 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       this.appendToolMessage(task, call, `Tool error: ${message}`, true)
       outcome = { content: `Tool error: ${message}`, isError: true }
     }
+    governanceService.audit(
+      task,
+      actor,
+      'tool.completed',
+      outcome.isError ? 'error' : 'ok',
+      tool.name,
+      step.error,
+      {
+        callId: call.id,
+        outputHash: governanceService.payloadHash(outcome.content),
+        mutatedPaths: outcome.mutatedPaths ?? [],
+        durationMs: Math.max(0, Date.now() - new Date(step.startedAt).getTime())
+      }
+    )
     step.endedAt = nowIso()
     await this.commit(task)
     return outcome
@@ -778,6 +1225,35 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       name: call.name,
       error: isError
     })
+  }
+
+  /** Remove only the interrupted attempt; durable entries reconstruct it. */
+  private prepareReplay(task: Task): void {
+    const lastUser = findLastUserIndex(task.messages)
+    if (lastUser < 0) return
+    const removedMessageIds = new Set(
+      task.messages
+        .slice(lastUser + 1)
+        .filter((message) => message.role === 'assistant' || message.role === 'tool')
+        .map((message) => message.id)
+    )
+    if (!removedMessageIds.size) return
+
+    task.messages = task.messages.filter(
+      (message, index) =>
+        index <= lastUser || (message.role !== 'assistant' && message.role !== 'tool')
+    )
+    for (const step of task.steps) {
+      if (
+        step.messageId &&
+        removedMessageIds.has(step.messageId) &&
+        (step.status === 'running' || step.status === 'waiting')
+      ) {
+        step.status = 'error'
+        step.error = 'Interrupted; durable replay will retry this step.'
+        step.endedAt = nowIso()
+      }
+    }
   }
 
   private async reconcileToolResults(task: Task): Promise<void> {

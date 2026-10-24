@@ -1,10 +1,11 @@
-node_modules/
-out/
-release/
-release-selfimpulse/
-dist/
+/node_modules/
+/out/
+/release/
+/release-selfimpulse/
+/dist/
 *.log
 .DS_Store
 .env
 .env.*
-dev-data/
+/dev-data/
+/deliverables/

@@ -1,0 +1,3 @@
+//#region src/messages/format.d.ts
+export type MessageStringFormat = "pretty";
+//#endregion

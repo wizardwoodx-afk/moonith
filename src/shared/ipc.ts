@@ -14,10 +14,12 @@ export const IPC = {
   taskStop: 'task:stop',
   taskResume: 'task:resume',
   taskUpdate: 'task:update',
+  taskReact: 'task:react',
   taskAddFolder: 'task:add-folder',
   taskRemoveFolder: 'task:remove-folder',
   pickFolder: 'dialog:pick-folder',
   pickFiles: 'dialog:pick-files',
+  filesFromDrop: 'files:from-drop',
 
   approvalRespond: 'approval:respond',
   artifactOpen: 'artifact:open',

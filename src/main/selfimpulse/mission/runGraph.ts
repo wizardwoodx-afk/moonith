@@ -83,7 +83,7 @@ import {
   START,
   StateGraph,
   interrupt,
-} from "../../vendor/graphruntime/runtime/index.js";
+} from "../roi/runtime/index.js";
 import type { CliAgentTeam } from "./agentTeam";
 import { composeAssignments, dispatchChannel } from "./missionAssignments";
 import { loadAutonomy } from "./autonomyStore";
@@ -92,7 +92,8 @@ import { prepareAutonomy, settleAutonomyAfterRun, type AutonomyRequest, type Set
 import { CapLedger } from "./caps";
 import { getHarness } from "./harnessAdapters";
 import { globalAgentBus, type InterAgentMessage } from "./interAgentChannel";
-import { loadLessons, mergeLessons, reflectOnMission, saveLessons } from "./lessons";
+import { nextRunStrategy, settleSelfEvolution } from "./selfEvolveRuntime";
+import { authorizeEnterpriseMission } from "./enterpriseAdmission";
 import { buildProofReceipt, verifyProofReceipt, type ProofReceipt } from "./receipts";
 import { executeTeam, type SeatAssignment, type TeamRunReport, type TeamRunnerDeps } from "./teamExecutor";
 import {
@@ -163,6 +164,12 @@ export interface MissionGraphRunArgs {
    * be continued is not a pause.
    */
   durable?: boolean;
+  /** Test/host injection for the native Enterprise Control Plane admission check. */
+  enterpriseAuthorization?: (request: {
+    missionId: string;
+    teamId: string;
+    seats: Array<{ id: string; name: string }>;
+  }) => Promise<unknown>;
 }
 
 export interface MissionGraphRunResult {
@@ -310,7 +317,21 @@ function buildMissionGraph(args: MissionGraphRunArgs, emit: MissionGraphEmit, fo
       now,
     );
     const autonomy = state.autonomyRequest ?? prepareAutonomy();
-    emit({ phase: "execute", note: `executeTeam under the governance arena + budget ledger` });
+    const admission = {
+      missionId: args.missionId,
+      teamId: team.id,
+      seats: team.seats.map((seat) => ({ id: seat.id, name: `${seat.role} · ${seat.id}` })),
+    };
+    if (args.enterpriseAuthorization) {
+      await args.enterpriseAuthorization(admission);
+    } else {
+      await authorizeEnterpriseMission(admission);
+    }
+    const strategy = nextRunStrategy();
+    emit({
+      phase: "execute",
+      note: `executeTeam under the governance arena + budget ledger${strategy ? ` · RSIRALS ${strategy.id}${strategy.heldOut ? " (held-out transfer)" : " (development)"}` : ""}`,
+    });
     const report = await executeTeam(
       {
         team,
@@ -322,6 +343,7 @@ function buildMissionGraph(args: MissionGraphRunArgs, emit: MissionGraphEmit, fo
         ...(args.testCommand ? { testCommand: args.testCommand } : {}),
         ledger,
         autonomy,
+        strategy,
       },
       deps,
     );
@@ -411,19 +433,35 @@ function buildMissionGraph(args: MissionGraphRunArgs, emit: MissionGraphEmit, fo
     });
 
     const failedSeats = report.seats.filter((s) => s.outcome === "failed" || s.outcome === "timeout");
-    const freshLessons = reflectOnMission({
+    const failureClasses = [
+      ...(failedSeats.length > 0 ? ["SEAT_FAILED"] : []),
+      ...((report.repetition?.length ?? 0) > 0 ? ["REPEATED_FAILURE"] : []),
+    ];
+    const learning = await settleSelfEvolution({
       missionId: args.missionId,
+      goal: objective,
       simulated,
       verified: report.status === "completed" && report.seats.some((s) => s.verified),
-      failureClasses: failedSeats.length > 0 ? ["seat-failed"] : ["seat-failed"].slice(0, 0),
+      failureClasses,
       repairLadder: [],
       repaired: false,
-      seatOutcomes: report.seats.map((s) => ({ role: s.role, passed: s.verified })),
+      seatOutcomes: report.seats.map((s) => ({
+        role: s.role,
+        label: s.seatId,
+        harness: s.harness,
+        passed: s.verified,
+      })),
+      strategyId: report.strategy?.id ?? null,
+      heldOut: report.strategy?.heldOut === true,
+      usedLessonIds: report.lessonIds ?? [],
+      // Tokens-only providers leave dollar cost UNKNOWN. Do not turn that
+      // absence into a flattering measured-zero cost for policy selection.
+      costUsd: report.seats.some((seat) => (seat.usage?.costUsd ?? null) === null && (seat.usage?.tokens ?? 0) > 0)
+        ? undefined
+        : report.spentUsd,
+      policyTokens: report.seats.reduce((sum, seat) => sum + Math.max(0, seat.usage?.tokens ?? 0), 0),
       now: state.tFinished,
     });
-    const memory = loadLessons();
-    const merged = mergeLessons(memory, freshLessons, state.tFinished);
-    saveLessons(merged, "agent");
 
     const receipt = await buildProofReceipt({
       mission: args.missionId,
@@ -460,7 +498,7 @@ function buildMissionGraph(args: MissionGraphRunArgs, emit: MissionGraphEmit, fo
       receipt,
       receiptOk,
       candidateIds,
-      lessonsAdded: freshLessons.length,
+      lessonsAdded: learning.lessonsLearned,
       banditTrials: Object.values(autonomyNow.bandit.arms).reduce((a, b) => a + b.pulls, 0),
       updatedTeam: settled.applied ? settled.updatedTeam : null,
     };

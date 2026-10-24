@@ -37,13 +37,19 @@ export interface StrategyParams {
   mosaic: boolean;
 }
 
+import {
+  comparePolicyArms,
+  regularizedPolicyScore,
+  type ArmComparison,
+} from "./rsiralsPolicy";
+
 export interface StrategyVersion {
   id: string;
   gen: number;
   params: StrategyParams;
   parentId: string | null;
   status: "candidate" | "adopted" | "retired";
-  score: number | null;        // verified-rate over MEASURED runs this strategy governed
+  score: number | null;        // regularized utility over MEASURED runs this strategy governed
   evaluatedOn: number;         // measured runs scored (own attributed runs only)
   note: string;
   createdAt: number;
@@ -125,7 +131,15 @@ export function proposeVariation(s: ImprovementState, now: number): ImprovementS
   const dim = DIMS[(gen - 2) % DIMS.length];
   const params: StrategyParams = { ...parent.params };
   if (dim === "reviewDepth") params.reviewDepth = params.reviewDepth === 1 ? 2 : 1;
-  else if (dim === "checkBias") params.checkBias = params.checkBias >= 0.75 ? 0.25 : params.checkBias + 0.25;
+  else if (dim === "checkBias") {
+    // Sparse edits with an annealed numeric step: later generations make
+    // smaller moves instead of repeatedly jumping across the whole space.
+    const step = Math.max(0.05, 0.25 * Math.pow(0.85, Math.max(0, gen - 2)));
+    params.checkBias = params.checkBias >= 0.75
+      ? Math.max(0, params.checkBias - step)
+      : Math.min(1, params.checkBias + step);
+    params.checkBias = Math.round(params.checkBias * 1000) / 1000;
+  }
   else if (dim === "serialExec") params.serialExec = !params.serialExec;
   else if (dim === "lessonBudget") params.lessonBudget = params.lessonBudget >= 6 ? 1 : params.lessonBudget + 1;
   else params.mosaic = !params.mosaic; // 11.12 — regime dimension: MOSAIC extract on/off
@@ -144,11 +158,21 @@ export function proposeVariation(s: ImprovementState, now: number): ImprovementS
 }
 
 /** A run's outcome, attributed to the strategy whose parameters governed it. */
-export interface RunOutcome { verified: boolean; simulated: boolean; strategyId: string | null }
+export interface RunOutcome {
+  verified: boolean;
+  simulated: boolean;
+  strategyId: string | null;
+  /** Reserved after development; never used to choose the promising arm. */
+  heldOut?: boolean;
+  /** Contaminated evidence is excluded rather than rewarded or punished. */
+  evidenceLeak?: boolean;
+  costUsd?: number;
+  policyTokens?: number;
+}
 
 /** Score = verified-rate over REAL runs. All-simulated => null (nothing observed). */
 export function scoreRuns(runs: RunOutcome[]): { score: number | null; measured: number } {
-  const real = runs.filter((r) => !r.simulated);
+  const real = runs.filter((r) => !r.simulated && r.evidenceLeak !== true);
   if (real.length === 0) return { score: null, measured: 0 };
   return {
     score: real.filter((r) => r.verified).length / real.length,
@@ -156,7 +180,7 @@ export function scoreRuns(runs: RunOutcome[]): { score: number | null; measured:
   };
 }
 
-export interface ArmScore { score: number | null; measured: number; attributed: number }
+export interface ArmScore { score: number | null; quality: number | null; measured: number; attributed: number }
 
 /** Each arm scored ONLY on runs executed under its own parameters. */
 export function armScores(s: ImprovementState, runs: RunOutcome[]): { baseline: ArmScore; candidate: ArmScore | null; baselineId: string | null; candidateId: string | null } {
@@ -164,7 +188,10 @@ export function armScores(s: ImprovementState, runs: RunOutcome[]): { baseline: 
   const candidate = s.versions.find((v) => v.status === "candidate") ?? null;
   const score = (id: string | null): ArmScore => {
     const own = runs.filter((r) => r.strategyId === id);
-    return { ...scoreRuns(own), attributed: own.length };
+    const version = s.versions.find((v) => v.id === id);
+    if (!version) return { score: null, quality: null, measured: 0, attributed: own.length };
+    const regularized = regularizedPolicyScore(own, version.params);
+    return { score: regularized.score, quality: regularized.quality, measured: regularized.measured, attributed: own.length };
   };
   return {
     baseline: score(baseline?.id ?? null),
@@ -172,6 +199,31 @@ export function armScores(s: ImprovementState, runs: RunOutcome[]): { baseline: 
     baselineId: baseline?.id ?? null,
     candidateId: candidate?.id ?? null,
   };
+}
+
+/** Full two-arm comparison used by both assignment and settlement. */
+export function compareCandidate(s: ImprovementState, runs: RunOutcome[]): ArmComparison | null {
+  const baseline = adoptedVersion(s);
+  const candidate = s.versions.find((v) => v.status === "candidate") ?? null;
+  if (!baseline || !candidate) return null;
+  return comparePolicyArms({
+    baselineRuns: runs.filter((r) => r.strategyId === baseline.id),
+    candidateRuns: runs.filter((r) => r.strategyId === candidate.id),
+    baselineParams: baseline.params,
+    candidateParams: candidate.params,
+    minTrials: MIN_TRIALS,
+    adoptMargin: ADOPT_MARGIN,
+  });
+}
+
+/**
+ * A promising candidate reserves the next balanced pair for transfer evaluation.
+ * Those outcomes settle the experiment but do not contribute to its development
+ * margin, which prevents the selection statistic from consuming its own test set.
+ */
+export function nextAssignmentHeldOut(s: ImprovementState, runs: RunOutcome[]): boolean {
+  const comparison = compareCandidate(s, runs);
+  return comparison?.awaitingHeldOut === true;
 }
 
 /**
@@ -213,37 +265,33 @@ export function settleCandidate(s: ImprovementState, runs: RunOutcome[], _now: n
   if (!candidate) return { ...s, versions };
 
   const cand = arms.candidate as ArmScore;
+  const comparison = compareCandidate(s, runs);
+  if (!comparison) return { ...s, versions };
   const verdict = (status: "adopted" | "retired", note: string): ImprovementState => ({
     versions: versions.map((v) => {
       if (v.id === candidate.id) return { ...v, status, score: cand.score, evaluatedOn: cand.measured, note };
-      if (status === "adopted" && v.id === baseline.id) return { ...v, status: "retired" as const, note: `retired — candidate ${candidate.id} beat it ${cand.score?.toFixed(2)} to ${base.score?.toFixed(2)} on ${cand.measured}/${base.measured} measured runs` };
+      if (status === "adopted" && v.id === baseline.id) return { ...v, status: "retired" as const, note: `retired — ${comparison.reason}` };
       return v;
     }),
     adoptedId: status === "adopted" ? candidate.id : s.adoptedId,
   });
 
-  const bothTrials = cand.measured >= MIN_TRIALS && base.measured >= MIN_TRIALS;
   const capped = cand.attributed >= TRIAL_CAP || base.attributed >= TRIAL_CAP;
 
-  if (!bothTrials) {
+  if (comparison.decision === "wait") {
     if (capped) {
       return verdict("retired",
-        `retired inconclusive at the ${TRIAL_CAP}-run cap — candidate ${cand.measured}/${MIN_TRIALS}, baseline ${base.measured}/${MIN_TRIALS} measured; no verdict on insufficient trials`);
+        `retired inconclusive at the ${TRIAL_CAP}-run cap — ${comparison.reason}`);
     }
     return {
       ...s,
       versions: versions.map((v) => v.id === candidate.id
-        ? { ...v, note: `waiting — candidate ${cand.measured}/${MIN_TRIALS}, baseline ${base.measured}/${MIN_TRIALS} measured runs; each arm scored only on runs it governed` }
+        ? { ...v, score: cand.score, evaluatedOn: cand.measured, note: `waiting — ${comparison.reason}` }
         : v),
     };
   }
 
-  const better = (cand.score as number) > (base.score as number) + ADOPT_MARGIN;
-  return better
-    ? verdict("adopted",
-        `adopted at ${(cand.score as number).toFixed(2)} over ${cand.measured} own measured runs (baseline ${(base.score as number).toFixed(2)} over ${base.measured}) — margin ${((cand.score as number) - (base.score as number)).toFixed(2)} > ${ADOPT_MARGIN}`)
-    : verdict("retired",
-        `retired at ${(cand.score as number).toFixed(2)} over ${cand.measured} own measured runs — baseline held ${(base.score as number).toFixed(2)} over ${base.measured}; no strict margin`);
+  return verdict(comparison.decision === "adopt" ? "adopted" : "retired", comparison.reason);
 }
 
 /** 11.12.1 — ablation clarity: which dimensions differ between two param sets. */

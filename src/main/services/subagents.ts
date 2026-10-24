@@ -31,6 +31,7 @@ class SubAgentService {
   }
 
   async begin(input: {
+    id?: string
     taskId: string
     taskTitle: string
     name: string
@@ -39,8 +40,20 @@ class SubAgentService {
     model: string
   }): Promise<SubAgentRun> {
     const runs = await this.load()
+    const existing = input.id ? runs.find((item) => item.id === input.id) : undefined
+    if (existing) {
+      if (existing.status === 'running') {
+        throw new Error(`Crew run "${existing.id}" is already active.`)
+      }
+      existing.status = 'running'
+      existing.error = undefined
+      existing.endedAt = undefined
+      await this.save()
+      this.publish(existing)
+      return existing
+    }
     const run: SubAgentRun = {
-      id: newId('crew'),
+      id: input.id ?? newId('crew'),
       taskId: input.taskId,
       taskTitle: input.taskTitle,
       name: input.name,

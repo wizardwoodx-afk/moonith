@@ -17,6 +17,7 @@ import type {
 import { getBackend, WORK_MODES, type BackendSettings } from './index'
 import { availableProviders, DEFAULT_TIER_CONFIG, MODEL_TIERS, tierModel } from './provider'
 import { styles } from './themes'
+import { requireLocalEnterprise } from '../enterpriseControl/runtime'
 
 /**
  * The backend, exposed to the renderer.
@@ -167,11 +168,15 @@ export function registerBackendIpc(): void {
     })
   })
 
-  ipcMain.handle(IPC.backendMemoryList, () => memoryNotes())
+  ipcMain.handle(IPC.backendMemoryList, async () => {
+    await requireLocalEnterprise('memory.read', 'memory', 'backend')
+    return memoryNotes()
+  })
 
   ipcMain.handle(
     IPC.backendMemoryAdd,
-    (_event, input: { text: string; scope?: string; tags?: string[] }) => {
+    async (_event, input: { text: string; scope?: string; tags?: string[] }) => {
+      await requireLocalEnterprise('memory.write', 'memory', 'backend')
       backend.memory.add({
         text: input.text,
         scope: input.scope ?? 'global',
@@ -181,12 +186,14 @@ export function registerBackendIpc(): void {
     }
   )
 
-  ipcMain.handle(IPC.backendMemoryRemove, (_event, id: string) => {
+  ipcMain.handle(IPC.backendMemoryRemove, async (_event, id: string) => {
+    await requireLocalEnterprise('memory.write', 'memory', 'backend')
     backend.memory.remove(id)
     return memoryNotes()
   })
 
-  ipcMain.handle(IPC.backendMemoryImport, (_event, text: string) => {
+  ipcMain.handle(IPC.backendMemoryImport, async (_event, text: string) => {
+    await requireLocalEnterprise('memory.write', 'memory', 'backend')
     backend.memory.importText(text)
     return memoryNotes()
   })

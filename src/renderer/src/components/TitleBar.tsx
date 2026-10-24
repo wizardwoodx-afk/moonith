@@ -19,6 +19,7 @@ import type { ReactNode } from 'react'
 import { useApp } from '../store'
 import { startNewTask } from '../lib/navigation'
 import { Popover } from './ui'
+import { ActiveWorkIsland } from '../motion/ActiveWorkIsland'
 
 function MenuAction({
   icon: Icon,
@@ -257,6 +258,7 @@ export function TitleBar({
         </Popover>
       </nav>
 
+      <ActiveWorkIsland />
       <div className="flex-1" />
     </header>
   )

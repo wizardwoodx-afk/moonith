@@ -22,6 +22,10 @@ export interface Lesson {
   createdAt: number;
   lastUsedAt: number;
   useCount: number;
+  /** Bounded correlational utility from runs that actually retrieved this lesson. */
+  utility?: number;          // 0..1; defaults to the uninformative prior 0.5
+  utilityCount?: number;     // real attributed retrieval outcomes, not simulations
+  retrievalCount?: number;   // retrieval exposure, separate from repeated evidence
   /** 11.12 MOSAIC — causal edges: decision/action/observation/outcome chain. */
   causal?: CausalEdge;
 }
@@ -50,6 +54,7 @@ const FAILURE_TEXT: Record<string, string> = {
   REPEATED_FAILURE: "The same failure recurred — isolate the failing task before retrying it a third time.",
   SEQUENTIAL_BOTTLENECK: "Exclusive tasks serialized the run — split independent work before assigning it.",
   UNMEASURED_COST: "Cost arrived unmeasured — treat the run's totals as absent, not zero.",
+  SEAT_FAILED: "A seat failed or timed out — preserve its verification detail and isolate the failing step before the next delegation.",
 };
 
 export interface ReflectInput {
@@ -153,7 +158,8 @@ export function retrieveLessons(memory: Lesson[], goal: string, k: number, now: 
     let overlap = 0;
     g.forEach((w) => { if (t.has(w)) overlap += 1; });
     const recency = 1 / (1 + (now - l.lastUsedAt) / 86_400_000);
-    return { l, score: decayedStrength(l, now) * (1 + overlap) * (0.5 + 0.5 * recency) };
+    const utility = typeof l.utility === "number" ? Math.max(0, Math.min(1, l.utility)) : 0.5;
+    return { l, score: decayedStrength(l, now) * (1 + overlap) * (0.5 + 0.5 * recency) * (0.75 + 0.5 * utility) };
   });
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, k).map((s) => s.l);
@@ -187,13 +193,58 @@ export function retrieveCausal(memory: Lesson[], condition: string, k: number, n
   return scored.slice(0, k).map((x) => x.l);
 }
 
-export function lessonsForBriefing(memory: Lesson[], goal: string, now: number): string[] {
+export interface LessonBriefingSelection {
+  lessons: Lesson[];
+  lines: string[];
+  lessonIds: string[];
+}
+
+/** Select once and retain ids so settlement credits only memory actually used. */
+export function selectLessonsForBriefing(memory: Lesson[], goal: string, now: number): LessonBriefingSelection {
   const scars = retrieveLessons(memory.filter((l) => l.kind === "failure"), goal, RETRIEVE_K, now);
   const scarIds = new Set(scars.map((l) => l.id));
   const rest = retrieveLessons(memory, goal, RETRIEVE_K, now).filter((l) => !scarIds.has(l.id));
-  return [...scars, ...rest].slice(0, RETRIEVE_K).map(
-    (l) => (l.kind === "failure" ? `[org memory scar] ${l.text}` : `[org memory] ${l.text}`),
-  );
+  const lessons = [...scars, ...rest].slice(0, RETRIEVE_K);
+  return {
+    lessons,
+    lessonIds: lessons.map((l) => l.id),
+    lines: lessons.map((l) => (l.kind === "failure" ? `[org memory scar] ${l.text}` : `[org memory] ${l.text}`)),
+  };
+}
+
+export function lessonsForBriefing(memory: Lesson[], goal: string, now: number): string[] {
+  return selectLessonsForBriefing(memory, goal, now).lines;
+}
+
+/**
+ * MemRL-style utility credit without weight updates or unsupported causality:
+ * only explicitly retrieved lesson ids receive a bounded exponential update.
+ * Simulated runs contribute nothing. Retrieval exposure is kept separate from
+ * `useCount`, which still means repeated measured evidence for skill proposals.
+ */
+export function creditLessonUtility(
+  memory: Lesson[],
+  lessonIds: string[],
+  outcome: { verified: boolean; simulated: boolean; costUsd?: number },
+  now: number,
+): Lesson[] {
+  if (outcome.simulated || lessonIds.length === 0) return memory.map((l) => ({ ...l }));
+  const used = new Set(lessonIds);
+  const cost = typeof outcome.costUsd === "number" && Number.isFinite(outcome.costUsd) ? Math.max(0, outcome.costUsd) : 0;
+  const target = Math.max(0, Math.min(1, (outcome.verified ? 1 : 0) - 0.02 * Math.log1p(cost)));
+  return memory.map((lesson) => {
+    if (!used.has(lesson.id)) return { ...lesson };
+    const count = Math.max(0, lesson.utilityCount ?? 0) + 1;
+    const prior = typeof lesson.utility === "number" ? Math.max(0, Math.min(1, lesson.utility)) : 0.5;
+    const rate = 1 / Math.max(4, Math.min(8, count));
+    return {
+      ...lesson,
+      utility: prior + (target - prior) * rate,
+      utilityCount: count,
+      retrievalCount: Math.max(0, lesson.retrievalCount ?? 0) + 1,
+      lastUsedAt: now,
+    };
+  });
 }
 
 import { enforceWrite } from "./ledger";

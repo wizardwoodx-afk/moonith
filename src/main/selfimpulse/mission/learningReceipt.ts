@@ -27,6 +27,8 @@ export interface LearningReceipt {
   missionId: string;
   lessons: LearningReceiptLesson[];
   strategyChange: string | null;
+  memoryCredit?: { lessonIds: string[]; verified: boolean; model: string };
+  evaluation?: { heldOut: boolean; evidenceLeak: boolean; costUsd: number | null; policyTokens: number | null };
   evidenceDigest: string;
   signature?: IssuerSignature;
   signatureNote?: string;
@@ -39,6 +41,8 @@ export function canonicalDigestInput(r: {
   missionId: string;
   lessons: LearningReceiptLesson[];
   strategyChange: string | null;
+  memoryCredit?: { lessonIds: string[]; verified: boolean; model: string };
+  evaluation?: { heldOut: boolean; evidenceLeak: boolean; costUsd: number | null; policyTokens: number | null };
 }): string {
   return JSON.stringify({
     lessons: r.lessons
@@ -46,6 +50,10 @@ export function canonicalDigestInput(r: {
       .sort((a, b) => a.id.localeCompare(b.id)),
     missionId: r.missionId,
     strategyChange: r.strategyChange,
+    memoryCredit: r.memoryCredit
+      ? { ...r.memoryCredit, lessonIds: [...r.memoryCredit.lessonIds].sort() }
+      : undefined,
+    evaluation: r.evaluation,
   }, (_k, v: unknown) => {
     if (v && typeof v === "object" && !Array.isArray(v)) {
       return Object.keys(v as Record<string, unknown>).sort()
@@ -67,6 +75,8 @@ export async function issueLearningReceipt(args: {
   missionId: string;
   lessons: LearningReceiptLesson[];
   strategyChange: string | null;
+  memoryCredit?: { lessonIds: string[]; verified: boolean; model: string };
+  evaluation?: { heldOut: boolean; evidenceLeak: boolean; costUsd: number | null; policyTokens: number | null };
   now?: number;
 }): Promise<LearningReceipt> {
   const now = args.now ?? Date.now();
@@ -80,6 +90,8 @@ export async function issueLearningReceipt(args: {
     missionId: args.missionId,
     lessons: args.lessons,
     strategyChange: args.strategyChange,
+    ...(args.memoryCredit ? { memoryCredit: args.memoryCredit } : {}),
+    ...(args.evaluation ? { evaluation: args.evaluation } : {}),
     evidenceDigest: digest,
   };
   if (signingSupported()) {

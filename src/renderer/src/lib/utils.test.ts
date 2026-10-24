@@ -46,9 +46,10 @@ describe('renderer utils', () => {
     expect(kindLabel('pdf')).toBe('PDF')
   })
 
-  it('describes known cron presets', () => {
+  it('describes known presets and adjusted fixed times without hiding custom intervals', () => {
     expect(cronDescription('0 9 * * 1-5')).toBe('Weekdays at 09:00')
-    expect(cronDescription('15 6 * * *')).toBe('Custom schedule')
+    expect(cronDescription('15 6 * * *')).toBe('Every day at 06:15')
+    expect(cronDescription('*/15 6 * * *')).toBe('Custom schedule')
   })
 
   it('groups tasks by recency', () => {

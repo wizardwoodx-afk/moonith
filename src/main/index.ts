@@ -23,9 +23,12 @@ import { browserService } from './services/browser'
 import { tableService } from './services/table'
 import { channelService } from './services/channels'
 import { approvals } from './approvals'
+import { agentRuntime } from './agent/runtime'
 import { isWithin } from './security'
 import { mimeForPath } from './services/documents'
 import { setBackendEventTarget } from './backend/ipc'
+import { setEnterpriseMissionAuthorizer } from './selfimpulse/mission/enterpriseAdmission'
+import { authorizeMissionTeam } from './enterpriseControl/runtime'
 import { APP_NAME, signatureLine } from '@shared/identity'
 
 // Fixed before anything resolves `userData`, including the single-instance lock.
@@ -243,6 +246,7 @@ if (!gotLock) {
     try {
       migrateLegacyUserData()
       await store.init()
+      setEnterpriseMissionAuthorizer(authorizeMissionTeam)
       console.log(`[${APP_NAME.toLowerCase()}] ${signatureLine(app.getVersion())}`)
       const engine = initSelfImpulseEngine()
       console.log(
@@ -263,6 +267,9 @@ if (!gotLock) {
       scheduler.init()
       void mcpManager.startAll()
       void channelService.start()
+      void agentRuntime.recoverActiveTasks().catch((error) => {
+        console.error('[recovery] Active agent runs could not be recovered:', error)
+      })
 
       app.on('activate', () => {
         if (getMainWindow()) showMainWindow()
@@ -293,6 +300,9 @@ if (!gotLock) {
     tableService.dispose()
     channelService.dispose()
     void mcpManager.closeAll()
+    void agentRuntime.flushDurability().catch((error) => {
+      console.error('[shutdown] Durable journals could not be flushed:', error)
+    })
     tray?.destroy()
     tray = null
   })

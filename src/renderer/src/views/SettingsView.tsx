@@ -88,6 +88,8 @@ import {
 } from './settings/CapabilityPanes'
 import { DesktopPane, GatewayPane, TiersPane, WorkFilesPane } from './settings/BackendPanes'
 import { AuditPane } from './settings/AuditPane'
+import { EnterprisePane } from './settings/EnterprisePane'
+import { LearningPane } from './settings/LearningPane'
 
 const NAV_ICONS: Record<
   SettingsPaneId,
@@ -115,6 +117,8 @@ const NAV_ICONS: Record<
   gateway: ServerCog,
   'work-files': Building2,
   desktop: Monitor,
+  enterprise: ShieldCheck,
+  learning: Brain,
   audit: ScrollText,
   about: Info
 }
@@ -321,6 +325,7 @@ export function SettingsView() {
                   {tab === 'agent' ? <AgentPane settings={settings} /> : null}
                   {tab === 'agent-team' ? <AgentTeamsPane /> : null}
                   {tab === 'skills' ? <SkillsPane /> : null}
+                  {tab === 'learning' ? <LearningPane /> : null}
                   {tab === 'sub-agents' ? <SubAgentsPane /> : null}
                   {tab === 'appearance' ? <AppearancePane /> : null}
                   {tab === 'colors' ? <ColorsPane /> : null}
@@ -335,6 +340,7 @@ export function SettingsView() {
                   {tab === 'gateway' ? <GatewayPane /> : null}
                   {tab === 'work-files' ? <WorkFilesPane /> : null}
                   {tab === 'desktop' ? <DesktopPane /> : null}
+                  {tab === 'enterprise' ? <EnterprisePane settings={settings} /> : null}
                   {tab === 'audit' ? <AuditPane /> : null}
                   {tab === 'about' ? <AboutTab /> : null}
                 </>
