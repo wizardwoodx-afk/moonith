@@ -128,3 +128,10 @@ release-selfimpulse/ dist/ *.log .env* dev-data/`) and by the nested
 reports under `.superpowers/` are intentionally not versioned.
 
 Baseline = verified fixes (250/250 tests, typecheck, build, dist) not yet committed.
+Post-commit HEAD: `f671d2e824d2102d3be1fdf00da4b90ebe6f7bf7`
+(`f671d2e fix(security,governance): land the 0.3.0 audit remediation before the Moonith
+merge`, branch `feat/merged-agent`, parent = BASE `0d1f91a`; 57 files changed,
+11,417 insertions(+), 211 deletions(-)). This one line is the only change to the tree
+after that commit and is deliberately left uncommitted, because a committed file cannot
+contain its own sha and Task 0 authorises exactly one commit; the next task's
+`git add -A` carries it.
