@@ -45,17 +45,19 @@ export class SecretStore {
     writeFileSync(this.file, JSON.stringify(data, null, 2), 'utf8')
   }
 
-  /** Encrypt a value with the OS keychain. Falls back to plaintext if unavailable. */
+  /** Encrypt a value with the OS keychain. Refuses to persist plaintext. */
   put(key: string, value: string): boolean {
     if (!value) {
       this.remove(key)
       return false
     }
+    if (!this.canEncrypt()) {
+      throw new Error(
+        'Secure storage is unavailable, so the secret was not saved. Unlock the OS keychain and try again.'
+      )
+    }
     const data = this.read()
-    const canEncrypt = safeStorage.isEncryptionAvailable()
-    data[key] = canEncrypt
-      ? { enc: safeStorage.encryptString(value).toString('base64') }
-      : { plain: value }
+    data[key] = { enc: safeStorage.encryptString(value).toString('base64') }
     this.write(data)
     return true
   }
@@ -70,7 +72,26 @@ export class SecretStore {
         return ''
       }
     }
-    return entry.plain || ''
+    // Legacy plaintext profiles are re-sealed as soon as the keychain is ready.
+    if (entry.plain) {
+      if (this.canEncrypt()) {
+        try {
+          this.put(key, entry.plain)
+        } catch {
+          /* Keep returning the readable value even if the re-seal fails. */
+        }
+      }
+      return entry.plain
+    }
+    return ''
+  }
+
+  private canEncrypt(): boolean {
+    try {
+      return safeStorage.isEncryptionAvailable()
+    } catch {
+      return false
+    }
   }
 
   remove(key: string): void {
@@ -102,7 +123,12 @@ export class GatewayToken {
     let token = this.secrets.get('gatewayToken')
     if (!token) {
       token = randomBytes(32).toString('base64url')
-      this.secrets.put('gatewayToken', token)
+      try {
+        this.secrets.put('gatewayToken', token)
+      } catch {
+        /* Keep it in memory: refusing to write plaintext is correct, and a
+         * fresh token next launch beats one stored unprotected. */
+      }
     }
     this.value = token
     return token

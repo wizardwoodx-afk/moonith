@@ -55,6 +55,7 @@ import { applyTitleBarTheme } from './window'
 import { getBackend } from './backend'
 import { registerBackendIpc, setBackendEventTarget } from './backend/ipc'
 import { registerAuditIpc } from './audit'
+import { registerEnterpriseIpc, noteGrantedFolder } from './enterprise/ipc'
 import type { BackendSettingsPublic } from '@shared/types'
 
 function publishTask(task: Task): void {
@@ -131,7 +132,9 @@ export function registerIpc(): void {
     const settings = await store.saveSettings(patch)
     applyTitleBarTheme()
     if (JSON.stringify(settings.mcpServers) !== JSON.stringify(previous.mcpServers)) {
-      void restartMcp()
+      void restartMcp().catch((error) => {
+        console.error('[mcp] could not restart configured servers:', error)
+      })
     }
     /* Provider and permission changes are inputs to the engine's binding.
      * Rebuild it now, so the user does not have to restart the app to make
@@ -192,7 +195,11 @@ export function registerIpc(): void {
       title: 'Choose a folder for this task',
       properties: ['openDirectory', 'createDirectory']
     })
-    return result.canceled ? null : result.filePaths[0] ?? null
+    const folder = result.canceled ? null : result.filePaths[0] ?? null
+    /* A folder the user pointed at in a native dialog is the only way an
+     * arbitrary root becomes trusted enough for a repository scan. */
+    if (folder) noteGrantedFolder(folder)
+    return folder
   })
 
   ipcMain.handle(IPC.pickFiles, async () => {
@@ -214,6 +221,7 @@ export function registerIpc(): void {
     })
     if (result.canceled || !result.filePaths[0]) return null
     const folder = result.filePaths[0]
+    noteGrantedFolder(folder)
     if (!task.folders.includes(folder)) task.folders.push(folder)
     await store.saveTask(task)
     publishTask(task)
@@ -367,6 +375,7 @@ export function registerIpc(): void {
 
   registerBackendIpc()
   registerAuditIpc()
+  registerEnterpriseIpc()
 }
 
 async function safeArtifactPath(taskId: string, relPath: string): Promise<string> {

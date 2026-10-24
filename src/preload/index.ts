@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/ipc'
 import { AUDIT_IPC } from '@shared/audit'
+import { AION_IPC, NOMOS_IPC, SPHRAGIS_IPC } from '@shared/enterprise'
 import type {
   ApprovalRequest,
   ApprovalDecision,
@@ -125,6 +126,32 @@ const api: KnightApi = {
   auditSummary: () => ipcRenderer.invoke(AUDIT_IPC.summary),
   auditExport: () => ipcRenderer.invoke(AUDIT_IPC.export),
   auditVerify: () => ipcRenderer.invoke(AUDIT_IPC.verify),
+
+  /* ── Nomos: the governance gate ─────────────────────────────────────────── */
+  governanceSummary: () => ipcRenderer.invoke(NOMOS_IPC.summary),
+  governanceRecent: (limit?: number) => ipcRenderer.invoke(NOMOS_IPC.recent, limit),
+  governanceEngageKill: (reason: string) => ipcRenderer.invoke(NOMOS_IPC.kill, { reason }),
+  governanceReleaseKill: () => ipcRenderer.invoke(NOMOS_IPC.release),
+
+  /* ── Sphragis: the signed receipt chain ─────────────────────────────────── */
+  receiptSummary: () => ipcRenderer.invoke(SPHRAGIS_IPC.summary),
+  receiptRecent: (limit?: number) => ipcRenderer.invoke(SPHRAGIS_IPC.recent, limit),
+  receiptVerify: () => ipcRenderer.invoke(SPHRAGIS_IPC.verify),
+
+  /* ── Aion: the durable missions ─────────────────────────────────────────── */
+  missionList: () => ipcRenderer.invoke(AION_IPC.list),
+  missionGet: (missionId: string) => ipcRenderer.invoke(AION_IPC.get, missionId),
+  missionApprove: (input: {
+    missionId: string
+    approve: boolean
+    by: string
+    note?: string
+  }) => ipcRenderer.invoke(AION_IPC.approve, input),
+  missionCancel: (missionId: string) => ipcRenderer.invoke(AION_IPC.cancel, missionId),
+  missionResume: (missionId: string) => ipcRenderer.invoke(AION_IPC.resume, missionId),
+  missionReconcile: (missionId: string, resolution?: 'done' | 'failed') =>
+    ipcRenderer.invoke(AION_IPC.reconcile, { missionId, resolution }),
+  missionStartRepoScan: (root: string) => ipcRenderer.invoke(AION_IPC.startRepoScan, { root }),
 
   backend: {
     settings: () => ipcRenderer.invoke(IPC.backendSettingsGet),

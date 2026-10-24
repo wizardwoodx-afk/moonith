@@ -14,11 +14,14 @@ import type {
   ToolCallInfo
 } from '@shared/types'
 import { approvals } from '../approvals'
+import { LOCAL_PRINCIPAL_ID, nomosGate } from '../nomos'
+import { digestOfValue, receiptService, requiresReceipt } from '../sphragis'
 import { sendTaskEvent, toast } from '../emitter'
 import { store } from '../store'
 import { ensureTaskWorkspace } from '../paths'
 import { isWithin } from '../security'
 import { newId, nowIso, truncate } from '../util'
+import { captainActionIds, governToolCall, registerCrewSeat } from './governed'
 import { addUsage } from './types'
 import { providerError } from './providers'
 import { buildSystemPrompt } from './prompt'
@@ -80,6 +83,10 @@ function attachmentManifest(attachments: AttachmentRef[]): string {
 
 class AgentRuntime {
   private runs = new Map<string, RunState>()
+  /** Live sub-agent runs per registered seat id. A seat is only revoked and
+   *  forgotten when the last run using it ends, so tearing one run down never
+   *  pulls the identity out from under a concurrent one. */
+  private crewSeats = new Map<string, number>()
 
   isRunning(taskId: string): boolean {
     return this.runs.has(taskId)
@@ -173,7 +180,13 @@ class AgentRuntime {
       pendingSteer: false
     }
     this.runs.set(taskId, state)
-    void this.loop(taskId, state)
+    void this.loop(taskId, state).catch((error) => {
+      // The loop has its own error handling; this guard exists so a failure
+      // before it (a task deleted mid-launch) cannot become an unhandled
+      // rejection that leaves a stale run behind.
+      this.runs.delete(taskId)
+      console.error('[agent] the run loop failed:', error)
+    })
   }
 
   private async loop(taskId: string, run: RunState): Promise<void> {
@@ -440,6 +453,18 @@ class AgentRuntime {
         tool.name !== 'delegate_to_crew' &&
         (tool.approval === 'never' || (tool.approval === 'policy' && task.permissionMode === 'skip'))
     )
+    /* Register the seat once, before any tool call: its authority is the
+     * narrowing of the Captain's scopes to exactly the tools this sub-agent
+     * was granted. If registration fails there is no seat to act under, so
+     * the job is refused here rather than letting every call fail later with
+     * nomos-identity-unknown. */
+    const seat = registerCrewSeat(name, allowed)
+    if (!seat.ok) {
+      const content = `The Crew seat “${name}” could not be registered (${seat.reason}). The job was not started.`
+      await subAgentService.finish(run, 'error', { error: content })
+      return { content, isError: true }
+    }
+    this.crewSeats.set(seat.agentId, (this.crewSeats.get(seat.agentId) ?? 0) + 1)
     const toolMap = new Map(allowed.map((tool) => [tool.name, tool]))
     const workspace = ensureTaskWorkspace(task.id)
     const system = `You are ${name}, a Crew sub-agent inside SelfImpulse. The Captain delegated one focused job to you.
@@ -502,8 +527,45 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
           }
           run.steps.push(record)
           await subAgentService.saveRun(run)
+
+          /* Every sub-agent tool call crosses the same gate as the
+           * Captain's, under the seat's delegated identity. Sub-agents
+           * never prompt, so a steer is a refusal here. */
+          const actionIds = {
+            runId: task.id,
+            taskId: task.id,
+            actionId: newId('act'),
+            /* The identity the registry actually created, never a name
+             * recomputed here: a seat id is the registry's to mint. */
+            agentId: seat.agentId,
+            principalId: LOCAL_PRINCIPAL_ID
+          }
+          const decision = await governToolCall({
+            ids: actionIds,
+            tool: tool.name,
+            args,
+            sideEffect: tool.sideEffect,
+            risk: tool.risk,
+            approval: tool.approval,
+            permissionMode: task.permissionMode
+          })
+          if (decision.decision !== 'allow') {
+            const reason =
+              decision.decision === 'steer' ? 'a sub-agent cannot ask for approval' : decision.reason
+            const content = `Blocked by the governance gate (${decision.rule}): ${reason}`
+            if (decision.decision === 'steer') {
+              // The action never ran because it was refused.
+              nomosGate().recordOutcome(actionIds.actionId, 'denied')
+            }
+            record.status = 'error'
+            record.detail = truncate(content, 400)
+            await subAgentService.saveRun(run)
+            return { content, isError: true }
+          }
+
           let content = ''
           let isError = false
+          let receiptOpen = false
           try {
             let parsedArgs: unknown = args
             if (tool.schema) {
@@ -513,13 +575,39 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
               }
               parsedArgs = parsed.data
             }
-            const outcome = await tool.execute(parsedArgs, subContext)
-            content = truncate(outcome.content, 30000)
-            isError = Boolean(outcome.isError)
+            /* The same receipt barrier as the Captain path: a high-impact
+             * sub-agent tool mints its intent before the effect and its
+             * result after it. A seat is never approved by a human, so the
+             * authorization is the gate's allow and nothing more. */
+            if (requiresReceipt({ sideEffect: tool.sideEffect, risk: tool.risk })) {
+              await receiptService().recordIntent({
+                ids: actionIds,
+                tool: tool.name,
+                action: decision.capability,
+                args,
+                authorization: {
+                  decision: decision.decision,
+                  rule: decision.rule,
+                  reason: decision.reason,
+                  approvedBy: null,
+                  approvedAt: null
+                }
+              })
+              receiptOpen = true
+            }
+            const toolOutcome = await tool.execute(parsedArgs, subContext)
+            content = truncate(toolOutcome.content, 30000)
+            isError = Boolean(toolOutcome.isError)
           } catch (error) {
             content = `Tool error: ${error instanceof Error ? error.message : String(error)}`
             isError = true
           }
+          if (receiptOpen) {
+            await receiptService().recordResult(decision.actionId, isError ? 'failure' : 'success', {
+              digest: digestOfValue({ content })
+            })
+          }
+          nomosGate().recordOutcome(decision.actionId, isError ? 'failure' : 'success')
           record.status = isError ? 'error' : 'ok'
           record.detail = isError ? truncate(content, 400) : record.detail
           await subAgentService.saveRun(run)
@@ -554,6 +642,21 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       const message = error instanceof Error ? error.message : String(error)
       await subAgentService.finish(run, 'error', { error: message })
       return { content: `Crew sub-agent failed: ${message}`, isError: true }
+    } finally {
+      /* The seat's authority ends with the run. Revoke first — a call that
+       * slips through after the abort is then refused at the gate — and then
+       * forget it, so a long-lived process does not accumulate one identity
+       * per sub-agent run. A concurrent run on the same seat keeps it alive
+       * until it too finishes. */
+      const remaining = (this.crewSeats.get(seat.agentId) ?? 1) - 1
+      if (remaining > 0) {
+        this.crewSeats.set(seat.agentId, remaining)
+      } else {
+        this.crewSeats.delete(seat.agentId)
+        const identities = nomosGate().identities
+        identities.revokeAgent(seat.agentId, 'crew run finished')
+        identities.forgetAgent(seat.agentId)
+      }
     }
   }
 
@@ -690,14 +793,35 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       task.steps.splice(0, task.steps.length - MAX_STEPS)
     }
 
-    // 'always' tools (shell, recursive delete) ask in every mode, including skip.
-    // Only an explicit per-task "always allow" for this tool bypasses the prompt.
-    const needsApproval =
-      tool.approval !== 'never' &&
-      !approvals.isAlwaysAllowed(task.id, tool.name) &&
-      (tool.approval === 'always' ||
-        task.permissionMode === 'manual' ||
-        (task.permissionMode !== 'skip' && tool.risk === 'high'))
+    /* The gate judges first — identity, capability, kill switch, risk and
+     * approval, decided the same way on every path. Its steer already
+     * encodes the old needsApproval policy (high risk, 'always', manual
+     * mode, low trust) PLUS the identity and capability checks, so the
+     * approval question is now simply: did the gate steer, and has the
+     * user not already always-allowed this tool for this task? */
+    const actionIds = captainActionIds(task.id, task.id)
+    const decision = await governToolCall({
+      ids: actionIds,
+      tool: tool.name,
+      args: rawArgs,
+      sideEffect: tool.sideEffect,
+      risk: tool.risk,
+      approval: tool.approval,
+      permissionMode: task.permissionMode
+    })
+
+    // A denial never reaches the tool: zero side effects, no approval prompt.
+    if (decision.decision === 'deny') {
+      step.status = 'error'
+      step.error = decision.reason
+      step.endedAt = nowIso()
+      const content = `Blocked by the governance gate (${decision.rule}): ${decision.reason}`
+      this.appendToolMessage(task, call, content, true)
+      await this.commit(task)
+      return { content, isError: true }
+    }
+
+    const needsApproval = decision.decision === 'steer' && !approvals.isAlwaysAllowed(task.id, tool.name)
 
     if (needsApproval) {
       step.status = 'waiting'
@@ -714,6 +838,9 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       })
 
       if (run.stopped) {
+        /* The user stopped the run while this action waited: it never ran,
+         * so the governance record must not keep an open outcome. */
+        nomosGate().recordOutcome(decision.actionId, 'denied')
         step.status = 'error'
         step.error = 'Stopped'
         step.endedAt = nowIso()
@@ -723,6 +850,8 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
         return { content, isError: true }
       }
       if (!approved) {
+        // The human said no: the action was refused, not failed.
+        nomosGate().recordOutcome(decision.actionId, 'denied')
         step.status = 'error'
         step.error = 'Permission denied'
         step.endedAt = nowIso()
@@ -733,10 +862,35 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
         return { content, isError: true }
       }
       task.status = 'running'
+      // The human approved a steered action: annotate the gate record.
+      nomosGate().recordApproval(decision.actionId, 'human')
     }
 
     step.status = 'running'
     await this.commit(task)
+
+    /* The receipt barrier: a high-impact tool (it executes something, or it
+     * is high-risk) mints a signed intent BEFORE the effect and a result
+     * AFTER it. Low-risk reads are journaled by the governance record
+     * alone — a receipt for every read would be noise. */
+    const gate = nomosGate()
+    const receipts = receiptService()
+    const needsReceipt = requiresReceipt({ sideEffect: tool.sideEffect, risk: tool.risk })
+    if (needsReceipt) {
+      await receipts.recordIntent({
+        ids: actionIds,
+        tool: tool.name,
+        action: decision.capability,
+        args: rawArgs,
+        authorization: {
+          decision: decision.decision,
+          rule: decision.rule,
+          reason: decision.reason,
+          approvedBy: needsApproval ? 'human' : null,
+          approvedAt: needsApproval ? nowIso() : null
+        }
+      })
+    }
 
     let outcome: ToolOutcome
     try {
@@ -744,9 +898,16 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       step.status = result.isError ? 'error' : 'ok'
       step.output = truncate(result.content, 6000)
       if (result.isError) step.error = truncate(firstLine(result.content), 500)
-      this.appendToolMessage(task, call, truncate(result.content, 30_000), result.isError)
+      const content = truncate(result.content, 30_000)
+      if (needsReceipt) {
+        await receipts.recordResult(decision.actionId, result.isError ? 'failure' : 'success', {
+          digest: digestOfValue({ content })
+        })
+      }
+      gate.recordOutcome(decision.actionId, result.isError ? 'failure' : 'success')
+      this.appendToolMessage(task, call, content, result.isError)
       outcome = {
-        content: truncate(result.content, 30_000),
+        content,
         isError: result.isError,
         mutatedPaths: mutatedPathsFor(tool.name, rawArgs)
       }
@@ -755,8 +916,15 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       step.status = 'error'
       step.error = truncate(message, 500)
       step.output = truncate(message, 6000)
-      this.appendToolMessage(task, call, `Tool error: ${message}`, true)
-      outcome = { content: `Tool error: ${message}`, isError: true }
+      const content = `Tool error: ${message}`
+      if (needsReceipt) {
+        await receipts.recordResult(decision.actionId, 'failure', {
+          digest: digestOfValue({ content })
+        })
+      }
+      gate.recordOutcome(decision.actionId, 'failure')
+      this.appendToolMessage(task, call, content, true)
+      outcome = { content, isError: true }
     }
     step.endedAt = nowIso()
     await this.commit(task)

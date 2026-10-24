@@ -1,4 +1,7 @@
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
+import { accessSync, constants, existsSync, statSync } from 'node:fs'
+import { delimiter, isAbsolute, join } from 'node:path'
+import { shell } from 'electron'
 import { click, focusWindow, hotkey, screenshot, scroll, type as typeText } from './computer'
 import type { Screenshot } from './computer'
 
@@ -310,6 +313,92 @@ export interface UiTarsRunOptions {
   onStep?: (step: UiTarsStep) => void
 }
 
+const HAS_CONTROL_CHARS = /[\u0000-\u001f\u007f]/
+
+/** Files the OS would run through a script host or shell, not a document viewer. */
+const SHELL_SCRIPT = /\.(bat|cmd|ps1|psm1|vbs|vbe|js|jse|wsf|wsh|msc|scr|com|exe|lnk|hta|cpl)$/i
+
+/** A URL is only safe to hand to the OS browser when it is plain http(s). */
+export function safeUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const raw = value.trim()
+  if (!raw || HAS_CONTROL_CHARS.test(raw)) return null
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return null
+  }
+  return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null
+}
+
+function isRunnable(file: string): boolean {
+  try {
+    if (!statSync(file).isFile()) return false
+  } catch {
+    return false
+  }
+  if (process.platform === 'win32') return /\.(exe|com)$/i.test(file)
+  try {
+    accessSync(file, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Resolve a model-supplied app name or path to a real executable without a
+ * shell. Bare names are looked up on PATH; .cmd/.bat/.ps1 shims are refused
+ * because running them would require the very shell this avoids.
+ */
+export function resolveAppExecutable(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const app = value.trim()
+  if (!app || HAS_CONTROL_CHARS.test(app)) return null
+  if (isAbsolute(app) || app.includes('/') || app.includes('\\')) {
+    return isRunnable(app) ? app : null
+  }
+  const exts = process.platform === 'win32' ? (process.env.PATHEXT || '.EXE;.COM').split(';') : ['']
+  for (const dir of (process.env.PATH || '').split(delimiter)) {
+    if (!dir) continue
+    for (const ext of exts) {
+      const candidate = join(dir, app + ext.toLowerCase())
+      if (isRunnable(candidate)) return candidate
+    }
+  }
+  return null
+}
+
+function launchExecutable(file: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const child = spawn(file, [], { detached: true, stdio: 'ignore', windowsHide: true, shell: false })
+      child.once('error', () => resolve(false))
+      child.once('spawn', () => {
+        child.unref()
+        resolve(true)
+      })
+    } catch {
+      resolve(false)
+    }
+  })
+}
+
+async function launchApp(app: string): Promise<boolean> {
+  const executable = resolveAppExecutable(app)
+  if (executable) return launchExecutable(executable)
+  // A local file (document, folder) opens through its default handler; this
+  // never goes through a command line either. Scripts and shortcuts are
+  // refused because the OS would execute them through a shell or host.
+  const local = isAbsolute(app) || app.includes('/') || app.includes('\\')
+  if (local && !SHELL_SCRIPT.test(app) && existsSync(app)) {
+    const error = await shell.openPath(app).catch(() => 'failed')
+    return !error
+  }
+  return false
+}
+
 export class GroundedActions {
   settings: UiTarsSettings
   emit: UiTarsEmit | undefined
@@ -464,14 +553,25 @@ export class GroundedActions {
         await new Promise((r) => setTimeout(r, 1500))
         return { ok: true, action: type, seconds: 1.5 }
       case 'open_app': {
-        const app = (inputs.app || inputs.content || '') as string
-        if (app) execFile('cmd', ['/c', 'start', '', app], { windowsHide: true })
-        return { ok: true, action: type, app }
+        const app = String(inputs.app ?? inputs.content ?? '').trim()
+        if (!app) return { ok: false, action: type, app, error: 'No application to open' }
+        const launched = await launchApp(app)
+        return launched
+          ? { ok: true, action: type, app }
+          : { ok: false, action: type, app, error: `Could not open ${app}` }
       }
       case 'navigate': {
-        const url = (inputs.url || inputs.content || '') as string
-        if (url) execFile('cmd', ['/c', 'start', '', url], { windowsHide: true })
-        return { ok: true, action: type, url }
+        const raw = String(inputs.url ?? inputs.content ?? '').trim()
+        const url = safeUrl(raw)
+        if (!url) {
+          return { ok: false, action: type, url: raw, error: 'Only http and https URLs can be opened' }
+        }
+        try {
+          await shell.openExternal(url)
+          return { ok: true, action: type, url }
+        } catch {
+          return { ok: false, action: type, url, error: 'The browser could not be opened' }
+        }
       }
       case 'back':
       case 'navigate_back':

@@ -29,18 +29,29 @@ function provenance(): Record<string, string> {
 }
 
 /**
- * The shipped CSP forbids inline scripts. `@vitejs/plugin-react` injects an
- * inline react-refresh preamble into the dev server's HTML, which that policy
- * would block, so relax `script-src` for `serve` only. `apply: 'serve'` keeps
- * this out of the production build entirely — the packaged app keeps the
- * strict policy that `src/renderer/index.html` declares.
+ * The shipped CSP forbids inline scripts and outbound sockets. Two things
+ * only the dev server needs are relaxed here, and only for `serve`:
+ *
+ *   - `@vitejs/plugin-react` injects an inline react-refresh preamble into
+ *     the dev server's HTML, which `script-src 'self'` would block.
+ *   - Vite's HMR client opens a WebSocket back to the dev server, which
+ *     `connect-src 'self' knight-file:` (the production policy) would block.
+ *
+ * `apply: 'serve'` keeps this out of the production build entirely — the
+ * packaged app keeps the strict policy that `src/renderer/index.html`
+ * declares.
  */
-function devInlineScriptCsp(): Plugin {
+function devCsp(): Plugin {
   return {
     name: 'selfimpulse-dev-csp',
     apply: 'serve',
     transformIndexHtml(html: string): string {
-      return html.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
+      return html
+        .replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
+        .replace(
+          "connect-src 'self' knight-file:",
+          "connect-src 'self' knight-file: ws://localhost:* ws://127.0.0.1:*"
+        )
     }
   }
 }
@@ -89,7 +100,7 @@ export default defineConfig({
               '@renderer': resolve('src/renderer/src')
             }
           },
-          plugins: [react(), tailwindcss(), devInlineScriptCsp()]
+          plugins: [react(), tailwindcss(), devCsp()]
         }
       })
 })

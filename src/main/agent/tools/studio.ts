@@ -260,7 +260,15 @@ export const studioCommandsTool = defineTool({
     app: z.string().optional().describe('Engine id, for example "pinax". Omit to list every engine.'),
     search: z.string().max(80).optional().describe('Filter, for example "chart" or "format."')
   }),
-  sideEffect: 'read',
+  /* This tool SPAWNS an external binary (execFile, no shell) to ask it for
+   * its registry. "Listing" describes the output, not the effect: the same
+   * process could do anything, so it is classified exactly like studio_run —
+   * execute / high / always-approval. That makes it acquire the shell.exec
+   * capability, mint signed receipts and reach a human, instead of slipping
+   * past the receipt barrier as a "read". */
+  sideEffect: 'execute',
+  risk: 'high',
+  approval: 'always',
   execute: async (args) => {
     if (!args.app) return { content: describeApps() }
     const app = STUDIO_APPS[args.app]

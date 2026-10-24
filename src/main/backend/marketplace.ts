@@ -9,11 +9,12 @@
  *
  * Ported from the earlier desktop shell.
  */
-import { exec } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { npxCommand } from './npx'
 import type { BackendStore } from './store'
 
 export const BASE_URL = 'https://market.lobehub.com'
@@ -158,22 +159,29 @@ function toCredentials(value: unknown): MarketplaceCredentials | null {
   return { ...value, clientId: String(clientId), clientSecret: String(clientSecret) }
 }
 
-const quote = (s: string): string =>
-  process.platform === 'win32'
-    ? `"${String(s).replace(/"/g, '\\"')}"`
-    : `'${String(s).replace(/'/g, "'\\''")}'`
-
 function runCli(args: string[], { env = {}, cwd, timeout = 180000 }: RunCliOptions = {}): Promise<CliResult> {
   return new Promise((resolve, reject) => {
-    const cmd = ['npx', '-y', CLI, ...args].map(quote).join(' ')
-    exec(
-      cmd,
+    let invocation: ReturnType<typeof npxCommand>
+    try {
+      invocation = npxCommand(['-y', CLI, ...args], {
+        ...process.env,
+        MARKET_BASE_URL: BASE_URL,
+        ...env
+      })
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error(String(err)))
+      return
+    }
+    execFile(
+      invocation.command,
+      invocation.args,
       {
         cwd,
         timeout,
-        env: { ...process.env, MARKET_BASE_URL: BASE_URL, ...env },
+        env: invocation.env,
         maxBuffer: 24 * 1024 * 1024,
-        windowsHide: true
+        windowsHide: true,
+        shell: false
       },
       (err, stdout, stderr) => {
         if (err && !stdout) {

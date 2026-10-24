@@ -15,6 +15,30 @@ export type {
   AuditVerifyResult
 } from './audit'
 
+import type {
+  GovernanceRecordView,
+  GovernanceSummaryView,
+  KillSwitchState,
+  MissionStatusView,
+  MissionStepView,
+  MissionSummaryView,
+  ReceiptSummaryView,
+  ReceiptVerifyView,
+  ReceiptView
+} from './enterprise'
+
+export type {
+  GovernanceRecordView,
+  GovernanceSummaryView,
+  KillSwitchState,
+  MissionStatusView,
+  MissionStepView,
+  MissionSummaryView,
+  ReceiptSummaryView,
+  ReceiptVerifyView,
+  ReceiptView
+} from './enterprise'
+
 export interface McpServerConfig {
   id: string
   name: string
@@ -819,6 +843,36 @@ export interface KnightApi {
   auditSummary: () => Promise<AuditSummary>
   auditExport: () => Promise<AuditExportResult | null>
   auditVerify: () => Promise<AuditVerifyResult | null>
+
+  /* ── Nomos: the governance gate ─────────────────────────────────────────── */
+  governanceSummary: () => Promise<GovernanceSummaryView>
+  governanceRecent: (limit?: number) => Promise<GovernanceRecordView[]>
+  governanceEngageKill: (reason: string) => Promise<KillSwitchState>
+  governanceReleaseKill: () => Promise<KillSwitchState>
+
+  /* ── Sphragis: the signed receipt chain ─────────────────────────────────── */
+  receiptSummary: () => Promise<ReceiptSummaryView>
+  receiptRecent: (limit?: number) => Promise<ReceiptView[]>
+  receiptVerify: () => Promise<ReceiptVerifyView>
+
+  /* ── Aion: the durable missions ─────────────────────────────────────────── */
+  missionList: () => Promise<MissionSummaryView[]>
+  missionGet: (missionId: string) => Promise<MissionSummaryView | null>
+  missionApprove: (input: {
+    missionId: string
+    approve: boolean
+    by: string
+    note?: string
+  }) => Promise<MissionSummaryView | null>
+  missionCancel: (missionId: string) => Promise<MissionSummaryView | null>
+  missionResume: (missionId: string) => Promise<MissionSummaryView | null>
+  /** Settle a mission interrupted mid-step. With no resolution the step's own
+   *  reconcile hook is asked; with one, the human's verdict wins. */
+  missionReconcile: (
+    missionId: string,
+    resolution?: 'done' | 'failed'
+  ) => Promise<MissionSummaryView | null>
+  missionStartRepoScan: (root: string) => Promise<MissionSummaryView>
 
   backend: BackendApi
 }

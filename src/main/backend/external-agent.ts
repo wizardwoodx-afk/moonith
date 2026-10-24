@@ -17,6 +17,7 @@
 import { execFile, type ExecException } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { npxCommand } from './npx'
 import { isSafeRef, scrubEnv } from './security'
 import type { BackendStore } from './store'
 
@@ -199,23 +200,36 @@ function latestVersionString(value: { version?: string } | string | undefined): 
 
 /**
  * Run the marketplace CLI with an argument array — never a shell string, so a
- * skill reference can never turn into a command.
+ * skill reference or agent prompt can never turn into a command. On Windows the
+ * npx shim is resolved to its JS entrypoint instead of going through cmd.exe.
  */
 function run(cli: string, args: string[], { timeout = 300000, cwd }: RunOptions = {}): Promise<RunResult> {
   return new Promise((resolve) => {
+    let invocation: ReturnType<typeof npxCommand>
+    try {
+      // The CLI knows its own registry; overriding it with the API path breaks
+      // its routes, so only the site is pinned. Credentials never leak to it.
+      invocation = npxCommand(['-y', cli, ...args], scrubEnv({ SKILL_REGISTRY_SITE }))
+    } catch (err) {
+      resolve({
+        code: 1,
+        stdout: '',
+        stderr: err instanceof Error ? err.message : String(err),
+        error: null
+      })
+      return
+    }
     execFile(
-      'npx',
-      ['-y', cli, ...args],
+      invocation.command,
+      invocation.args,
       {
         encoding: 'utf8',
         timeout,
         cwd,
         maxBuffer: 8 * 1024 * 1024,
         windowsHide: true,
-        shell: process.platform === 'win32',
-        // The CLI knows its own registry; overriding it with the API path breaks
-        // its routes, so only the site is pinned. Credentials never leak to it.
-        env: scrubEnv({ SKILL_REGISTRY_SITE })
+        shell: false,
+        env: invocation.env
       },
       (err, stdout, stderr) => {
         resolve({ code: err ? err.code ?? 1 : 0, stdout: stdout || '', stderr: stderr || '', error: err })

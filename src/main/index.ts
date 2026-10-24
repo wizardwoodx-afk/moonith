@@ -26,6 +26,7 @@ import { approvals } from './approvals'
 import { isWithin } from './security'
 import { mimeForPath } from './services/documents'
 import { setBackendEventTarget } from './backend/ipc'
+import { aionOrchestrator } from './aion'
 import { APP_NAME, signatureLine } from '@shared/identity'
 
 // Fixed before anything resolves `userData`, including the single-instance lock.
@@ -261,8 +262,30 @@ if (!gotLock) {
       if (mainWindow) setBackendEventTarget(mainWindow)
 
       scheduler.init()
-      void mcpManager.startAll()
-      void channelService.start()
+      /* Neither service may take the app down if it fails to start: startup
+       * continues, the failure is logged, and the service's own page reports
+       * the state it is actually in. */
+      void mcpManager.startAll().catch((error) => {
+        console.error('[mcp] could not start configured servers:', error)
+      })
+      void channelService.start().catch((error) => {
+        console.error('[channels] could not start the channel service:', error)
+      })
+
+      /* Missions left behind by the previous process come back exactly as
+       * they were: parked at an approval, sleeping on a durable timer, or
+       * settled by the interrupted step's own reconcile hook — and the ones
+       * that cannot settle themselves come back marked for reconciliation.
+       * Driven, not awaited: startup must not wait on parked work, and
+       * nothing replays on its own. */
+      void aionOrchestrator()
+        .resumeAll()
+        .then((resumed) => {
+          if (resumed.length) console.log(`[aion] resumed ${resumed.length} mission(s) from the journal`)
+        })
+        .catch((error) => {
+          console.error('[aion] could not resume missions from the journal:', error)
+        })
 
       app.on('activate', () => {
         if (getMainWindow()) showMainWindow()
@@ -279,6 +302,12 @@ if (!gotLock) {
       })
       app.quit()
     }
+  }).catch((error) => {
+    /* The handler above already reports startup failures; this guard covers a
+     * failure inside that reporting (the dialog itself), so the rejection can
+     * never go unhandled. */
+    console.error('[startup] SelfImpulse could not finish starting:', error)
+    app.quit()
   })
 
   app.on('window-all-closed', () => {
@@ -292,7 +321,9 @@ if (!gotLock) {
     browserService.disposeAll()
     tableService.dispose()
     channelService.dispose()
-    void mcpManager.closeAll()
+    void mcpManager.closeAll().catch((error) => {
+      console.error('[mcp] could not close servers on quit:', error)
+    })
     tray?.destroy()
     tray = null
   })

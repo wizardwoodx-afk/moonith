@@ -74,22 +74,35 @@ const DEFAULT_SETTINGS: StoredSettings = {
   onboardingComplete: false
 }
 
-function sealSecret(secret: string): string {
-  const buffer = safeStorage.isEncryptionAvailable()
-    ? safeStorage.encryptString(secret)
-    : Buffer.from(secret, 'utf8')
-  return `${safeStorage.isEncryptionAvailable() ? 'enc' : 'plain'}:${buffer.toString('base64')}`
+function canEncrypt(): boolean {
+  try {
+    return safeStorage.isEncryptionAvailable()
+  } catch {
+    return false
+  }
 }
 
-function openSecret(sealed: string | undefined): string | undefined {
+/** Encrypt for storage, or refuse: secrets are never persisted as plaintext. */
+export function sealSecret(secret: string): string {
+  if (!canEncrypt()) {
+    throw new Error(
+      'Secure storage is unavailable, so the secret was not saved. Unlock the OS keychain and try again.'
+    )
+  }
+  return `enc:${safeStorage.encryptString(secret).toString('base64')}`
+}
+
+export function openSecret(sealed: string | undefined): string | undefined {
   if (!sealed) return undefined
   const [kind, payload] = sealed.split(':', 2)
   if (!payload) return undefined
   try {
     const buffer = Buffer.from(payload, 'base64')
-    if (kind === 'enc' && safeStorage.isEncryptionAvailable()) {
+    if (kind === 'enc' && canEncrypt()) {
       return safeStorage.decryptString(buffer)
     }
+    // Legacy profiles stored secrets as `plain:`; keep reading them until they
+    // are migrated on the next start where the keychain is available.
     if (kind === 'plain') return buffer.toString('utf8')
   } catch {
     return undefined
@@ -116,7 +129,7 @@ function titleFromObjective(objective: string): string {
   return clean.length > 70 ? `${clean.slice(0, 67)}…` : clean || 'New task'
 }
 
-class Store {
+export class Store {
   private settings: StoredSettings | null = null
   private tasks = new Map<string, Task>()
   private schedules: ScheduleRecord[] = []
@@ -168,7 +181,30 @@ class Store {
     }
 
     this.schedules = await readJson<ScheduleRecord[]>(getPaths().schedulesFile, [])
+
+    // Legacy `plain:` secrets become encrypted as soon as the keychain is available.
+    if (this.migratePlainSecrets()) {
+      await atomicWriteJson(getPaths().settingsFile, this.settings)
+    }
     this.initialized = true
+  }
+
+  /** Re-seals secrets from older profiles; returns true when anything changed. */
+  private migratePlainSecrets(): boolean {
+    if (!canEncrypt()) return false
+    const settings = this.getSettings()
+    let changed = false
+    const migrate = (holder: { secret?: string }): void => {
+      if (!holder.secret?.startsWith('plain:')) return
+      const value = openSecret(holder.secret)
+      if (value === undefined) return
+      holder.secret = sealSecret(value)
+      changed = true
+    }
+    settings.providers.forEach(migrate)
+    migrate(settings.connectors)
+    settings.channels.forEach(migrate)
+    return changed
   }
 
   private getSettings(): StoredSettings {

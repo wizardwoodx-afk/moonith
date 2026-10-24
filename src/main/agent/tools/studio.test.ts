@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { CLI_SHAPE, STUDIO_APPS, buildListArgs, buildRunArgs } from './studio'
+import { CLI_SHAPE, STUDIO_APPS, buildListArgs, buildRunArgs, studioCommandsTool, studioRunTool } from './studio'
+import { requiresReceipt } from '../../sphragis/schema'
+import { capabilityForTool } from '../../nomos/policy'
+import type { ToolContext } from './types'
 
 const bare = { input: null, output: null, roots: [] }
 
@@ -119,5 +122,40 @@ describe('studio run argv', () => {
   it('lists tools rather than commands for the PDF engine', () => {
     expect(buildListArgs('chartes')).toEqual(['tools'])
     expect(buildListArgs('pinax', 'chart')).toEqual(['commands', '--search', 'chart'])
+  })
+})
+
+describe('studio tool classification', () => {
+  it('classifies studio_commands as a spawned, high-risk, approval-required action', () => {
+    /* It spawns an external CLI, so it is executable — not a read. The old
+     * 'read' classification skipped receipts, the shell.exec capability and
+     * the human approval that studio_run gets. */
+    expect(studioCommandsTool.sideEffect).toBe('execute')
+    expect(studioCommandsTool.risk).toBe('high')
+    expect(studioCommandsTool.approval).toBe('always')
+    expect(
+      requiresReceipt({ sideEffect: studioCommandsTool.sideEffect, risk: studioCommandsTool.risk })
+    ).toBe(true)
+    expect(capabilityForTool(studioCommandsTool.name, studioCommandsTool.sideEffect)).toBe('shell.exec')
+  })
+
+  it('mirrors studio_run, which is the same class of action', () => {
+    expect(studioCommandsTool.risk).toBe(studioRunTool.risk)
+    expect(studioCommandsTool.approval).toBe(studioRunTool.approval)
+    expect(
+      requiresReceipt({ sideEffect: studioRunTool.sideEffect, risk: studioRunTool.risk })
+    ).toBe(true)
+    /* Still distinct: listing is not a document run. */
+    expect(studioCommandsTool.sideEffect).toBe('execute')
+    expect(studioRunTool.sideEffect).toBe('write')
+  })
+
+  it('still lists every engine without spawning anything', async () => {
+    /* The no-app path is pure: it keeps studio_commands useful as the
+     * discovery door without any subprocess. */
+    const result = await studioCommandsTool.execute({}, {} as ToolContext)
+    expect(result.isError).toBeUndefined()
+    expect(result.content).toContain('pinax')
+    expect(Object.keys(STUDIO_APPS)).toHaveLength(15)
   })
 })

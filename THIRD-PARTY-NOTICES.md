@@ -46,6 +46,9 @@ nothing in the SelfImpulse licence transfers any rights in these projects.
 - The package names appear in `PROVENANCE.json` and in the vendored import
   paths and must stay for the code to build. The vendored README points at
   `docs/legal/THIRD-PARTY-NOTICES.md`; this file is the notice it means.
+- The persistence guide (`docs/docs/concepts/persistence.md`) and the
+  human-in-the-loop guide (`docs/docs/agents/human-in-the-loop.md`)
+  informed how the existing mission graph checkpoints and interrupts.
 
 ## Paperclip — the retry-lane accounting
 
@@ -83,6 +86,60 @@ nothing in the SelfImpulse licence transfers any rights in these projects.
   keep their data, and internal identifiers such as the `window.knight`
   API, the `knight-file:` protocol, the `KNIGHT_*` environment variables and
   stored preference keys are kept for compatibility.
+
+## Nomos — the governance gate
+
+- **Upstream:** Microsoft — Agent Governance Toolkit
+  (`github.com/microsoft/agent-governance-toolkit`), with the TypeScript
+  SDK at `agent-governance-typescript` and the feature matrix at
+  `docs/PACKAGE-FEATURE-MATRIX.md`
+- **Licence:** MIT
+- **Used for:** the ideas, not the code. The governance gate in
+  `src/main/nomos/` — named Nomos (νόμος, "law") — follows its model:
+  deterministic policy evaluation over registered identities; agents
+  holding scoped capabilities under a principal; delegation that can only
+  narrow a parent's scopes; a trust score that informs scrutiny but
+  authorises nothing by itself; governance decision records; and a kill
+  control that refuses every action while engaged.
+- No upstream code was copied or linked, and the upstream name appears
+  nowhere in the source. This entry is the attribution.
+
+## Sphragis — the signed action receipts
+
+- **Upstream:** Agent Receipts / Obsigna
+  (`github.com/agent-receipts/obsigna`), protocol specification under
+  `spec/`
+- **Licence:** MIT for the specification (see `spec/LICENSE`). The wider
+  repository states no licence in its root; that is recorded here
+  honestly, and only the specification's ideas informed this layer.
+- **Used for:** the ideas, not the code. The receipt layer in
+  `src/main/sphragis/` — named Sphragis (σφραγίς, "seal") — follows its
+  receipt schema and action taxonomy: Ed25519-signed receipts, chain
+  linking, independent verification, and the recording of principal,
+  agent, action, authorization and outcome with digests instead of raw
+  content.
+- No upstream code was copied or linked, and the upstream name appears
+  nowhere in the source. This entry is the attribution.
+
+## Aion — the durable mission runner
+
+- **Upstream:** Restate (`github.com/restatedev/restate`), with the
+  TypeScript SDK at `github.com/restatedev/sdk-typescript` and the
+  service concepts at `docs.restate.dev/concepts/services/`
+- **Licence:** Business Source License 1.1. Licensor: Restate Software,
+  Inc. and Restate GmbH. Additional Use Grant: the software may not be
+  used to operate a public Restate platform service. Change Date: four
+  years after release; Change License: Apache License 2.0.
+- **Used for:** the ideas, not the code. The durable mission runner in
+  `src/main/aion/` — named Aion (αἰών, "enduring time") — follows its
+  model of durable workflow execution: an append-only journal per
+  mission, durable timers, step journal and recovery, retry policy,
+  stable workflow and action ids, idempotent service calls, signals, and
+  query and introspection.
+- SelfImpulse implements its own local durable-execution engine on the
+  desktop; it does not embed, link or communicate with Restate in any
+  form. No upstream code was copied, and the upstream name appears
+  nowhere in the source. This entry is the attribution.
 
 ## Historical references
 
