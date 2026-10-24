@@ -29,6 +29,7 @@
  * to review, and the base branch stays pristine until a human decides to merge.
  */
 
+import { mainStorage } from "../persist/mainStorage";
 import * as path from "node:path";
 
 import type { HarnessId } from "../domain/harness";
@@ -161,7 +162,7 @@ export interface TeamRunRequest {
    *
    * Omitted: a fresh, empty ledger — which is exactly the old behaviour, because
    * nothing has been applied yet. Supply one that survives the process (the
-   * default localStorage-backed ledger does) and a re-run resumes instead of
+   * default shared-storage-backed ledger does) and a re-run resumes instead of
    * re-applying: a step an earlier run settled is read BEFORE dispatch and is
    * not dispatched again. See `SeatStepLedger`.
    */
@@ -462,15 +463,15 @@ function isStepRecord(r: unknown): r is SeatStepRecord {
  * A step ledger.
  *
  * Persistence is best-effort and NEVER a precondition for running: the default
- * store is `globalThis.localStorage` when the host has one (browser and Tauri),
- * absent in plain Node, and the ledger falls back to memory there so probes stay
- * headless. Pass `store: null` to force memory, or a Storage-shaped object to
+ * store is the shared Storage boundary (browser storage or native files in
+ * Electron), and the ledger falls back to memory only when a caller explicitly
+ * requests that mode or a probe has no storage. Pass `store: null` to force memory, or a Storage-shaped object to
  * thread a host's own store. A corrupt or unreadable ledger is read as an EMPTY
  * ledger — it can never fail a mission, and it can never claim a step settled.
  */
 export function createSeatStepLedger(opts?: { store?: StepStore | null }): SeatStepLedger {
   const store: StepStore | null =
-    opts && "store" in opts ? (opts.store ?? null) : ((globalThis.localStorage as StepStore | undefined) ?? null);
+    opts && "store" in opts ? (opts.store ?? null) : (mainStorage() as StepStore);
   const mem = new Map<string, SeatStepRecord>();
   let loaded = false;
 

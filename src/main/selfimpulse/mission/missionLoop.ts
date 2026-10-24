@@ -59,6 +59,7 @@
  *     passed to a cycle governs settlement; OFF also disables the evolution
  *     fold. Nothing the loop "learns" edits a team silently in SUGGEST.
  */
+import { mainStorage } from "../persist/mainStorage";
 import { uid } from "../app/id";
 import {
   PREBUILT_TEAMS,
@@ -205,7 +206,7 @@ function emptyLoopState(): MissionLoopState {
 
 export function loadMissionLoopState(): MissionLoopState {
   try {
-    const raw = globalThis.localStorage?.getItem(LS_KEY);
+    const raw = mainStorage().getItem(LS_KEY);
     if (!raw) return emptyLoopState();
     const parsed = JSON.parse(raw) as Partial<MissionLoopState>;
     if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.cycles)) return emptyLoopState();
@@ -227,7 +228,7 @@ export function loadMissionLoopState(): MissionLoopState {
 export function saveMissionLoopState(next: MissionLoopState): void {
   next.updatedAt = new Date().toISOString();
   try {
-    globalThis.localStorage?.setItem(LS_KEY, JSON.stringify(next));
+    mainStorage().setItem(LS_KEY, JSON.stringify(next));
   } catch {
     /* memory-only when storage is unavailable */
   }

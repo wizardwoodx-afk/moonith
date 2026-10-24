@@ -59,7 +59,7 @@ const PATTERNS: Array<{
   {
     category: 'secret',
     expression:
-      /\b(?:api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|password|passwd|secret)\b["']?\s*[:=]\s*(?:"[^"\r\n]{4,}"|'[^'\r\n]{4,}'|[^\s,;]{6,})/gi
+      /\b(?:api[_-]?key|apiKey|access[_-]?token|accessToken|auth[_-]?token|authToken|client[_-]?secret|clientSecret|password|passwd|secret)\b["']?\s*[:=]\s*(?:"[^"\r\n]{4,}"|'[^'\r\n]{4,}'|[^\s,;]{6,})/gi
   },
   {
     category: 'email',
@@ -82,7 +82,7 @@ const PATTERNS: Array<{
 ]
 
 const SENSITIVE_FIELD =
-  /^(?:api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|password|passwd|secret|authorization|private[_-]?key)$/i
+  /^(?:api[_-]?key|apiKey|access[_-]?token|accessToken|auth[_-]?token|authToken|client[_-]?secret|clientSecret|password|passwd|secret|authorization|private[_-]?key|privateKey)$/i
 
 function validPaymentCard(value: string): boolean {
   const digits = value.replace(/\D/g, '')
@@ -110,6 +110,31 @@ export function detectSensitiveData(
   text: string,
   categories?: readonly SensitiveDataCategory[]
 ): SensitiveMatch[] {
+  return detectSensitiveDataInternal(text, categories, true)
+}
+
+const BASE64_CANDIDATE = /(?<![A-Za-z0-9+/=])(?:[A-Za-z0-9+/]{4}){5,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![A-Za-z0-9+/=])/g
+
+function decodeSensitiveBase64(value: string): string | null {
+  if (value.length < 20 || value.length > 100_000) return null
+  try {
+    const padded = value + '='.repeat((4 - (value.length % 4)) % 4)
+    const binary = atob(padded)
+    if (btoa(binary).replace(/=+$/, '') !== value.replace(/=+$/, '')) return null
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    if (!decoded || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(decoded)) return null
+    return decoded
+  } catch {
+    return null
+  }
+}
+
+function detectSensitiveDataInternal(
+  text: string,
+  categories: readonly SensitiveDataCategory[] | undefined,
+  includeEncoded: boolean
+): SensitiveMatch[] {
   if (!text) return []
   const enabled = enabledSet(categories)
   const candidates: SensitiveMatch[] = []
@@ -122,6 +147,21 @@ export function detectSensitiveData(
       const start = match.index
       if (start === undefined) continue
       candidates.push({ category, start, end: start + value.length })
+    }
+  }
+
+  if (includeEncoded) {
+    BASE64_CANDIDATE.lastIndex = 0
+    for (const match of text.matchAll(BASE64_CANDIDATE)) {
+      const value = match[0]
+      const start = match.index
+      if (start === undefined) continue
+      const decoded = decodeSensitiveBase64(value)
+      if (!decoded) continue
+      const nested = detectSensitiveDataInternal(decoded, categories, false)
+      if (nested.length) {
+        candidates.push({ category: nested[0].category, start, end: start + value.length })
+      }
     }
   }
 

@@ -1,3 +1,4 @@
+import { mainStorage } from "../persist/mainStorage";
 /**
  * VH 11.11 SELF-EVOLVING — inter-task lessons memory.
  *
@@ -250,19 +251,16 @@ export function creditLessonUtility(
 import { enforceWrite } from "./ledger";
 
 export function loadLessons(): Lesson[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) {
-      const p = JSON.parse(raw) as Lesson[];
-      if (Array.isArray(p)) return p.filter((l) => l && typeof l.text === "string");
-    }
-  } catch { /* storage unavailable */ }
-  return [];
+  const raw = mainStorage().getItem(LS_KEY);
+  if (!raw) return [];
+  const parsed = JSON.parse(raw) as unknown;
+  if (!Array.isArray(parsed)) throw new Error("Persisted lessons are not an array; refusing to discard them.");
+  return (parsed as Lesson[]).filter((lesson) => lesson && typeof lesson.text === "string");
 }
 
 export function saveLessons(memory: Lesson[], writer: "human" | "agent" | "experiment" = "agent"): void {
   // 11.12.3 — governed write: each record is checked against the ledger matrix
   // (failure -> SCAR, everything else -> PRECEDENT) before anything lands.
   for (const l of memory) enforceWrite(l.kind === "failure" ? "SCAR" : "PRECEDENT", writer);
-  try { localStorage.setItem(LS_KEY, JSON.stringify(memory)); } catch { /* ignore */ }
+  mainStorage().setItem(LS_KEY, JSON.stringify(memory));
 }

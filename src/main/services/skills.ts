@@ -1,4 +1,3 @@
-import { execFile } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import { join, relative } from 'node:path'
 import type {
@@ -8,6 +7,7 @@ import type {
   SkillSource,
   SkillSummary
 } from '@shared/types'
+import { runNpx } from '../npx'
 import { getPaths } from '../paths'
 import { isWithin } from '../security'
 import { slugify, truncate } from '../util'
@@ -361,29 +361,18 @@ class SkillService {
     )
   }
 
-  private runCli(
+  private async runCli(
     pkg: string,
     args: string[]
   ): Promise<{ code: number; stdout: string; stderr: string }> {
-    return new Promise((resolve) => {
-      execFile(
-        'npx',
-        ['-y', pkg, ...args],
-        {
-          encoding: 'utf8',
-          timeout: 300000,
-          maxBuffer: 16 * 1024 * 1024,
-          windowsHide: true,
-          shell: process.platform === 'win32',
-          cwd: getPaths().root
-        },
-        (error, stdout, stderr) => {
-          const rawCode = (error as NodeJS.ErrnoException | null)?.code
-          const code = typeof rawCode === 'number' ? rawCode : error ? 1 : 0
-          resolve({ code, stdout: stdout || '', stderr: stderr || '' })
-        }
-      )
+    const result = await runNpx(pkg, args, {
+      timeout: 300000,
+      maxBuffer: 16 * 1024 * 1024,
+      cwd: getPaths().root
     })
+    const rawCode = (result.error as NodeJS.ErrnoException | null)?.code
+    const code = typeof rawCode === 'number' ? rawCode : result.error ? 1 : 0
+    return { code, stdout: result.stdout, stderr: result.stderr }
   }
 
   private resolve(id: string): string {

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { isIP } from 'node:net'
 import { defineTool, toolResultError } from './types'
 import { truncate } from '../../util'
+import { safeEgressFetch } from '../../selfimpulse/security/egressNet'
 
 const MAX_REDIRECTS = 3
 
@@ -127,33 +128,20 @@ function normalizeUrl(value: string): URL {
   return url
 }
 
-function assertPublicUrl(url: URL): void {
-  if (isBlockedHost(url.hostname)) {
-    throw new Error('Refusing to fetch a private or loopback address.')
-  }
-}
-
-/** Fetches with manual redirects so every hop is re-checked against the host guard. */
+/** Fetches through the native DNS-classified, pinned, per-redirect egress boundary. */
 async function fetchPublic(start: URL, signal: AbortSignal): Promise<{ response: Response; url: URL }> {
-  let current = start
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    assertPublicUrl(current)
-    const response = await fetch(current, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8'
-      },
-      signal,
-      redirect: 'manual'
-    })
-    if (response.status < 300 || response.status >= 400) return { response, url: current }
-    const location = response.headers.get('location')
-    if (!location) return { response, url: current }
-    if (hop === MAX_REDIRECTS) throw new Error('Too many redirects.')
-    current = normalizeUrl(new URL(location, current).toString())
-  }
-  throw new Error('Too many redirects.')
+  const response = await safeEgressFetch(start.toString(), {
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131 Safari/537.36',
+      Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8'
+    },
+    signal,
+    redirect: 'manual',
+    maxRedirects: MAX_REDIRECTS
+  })
+  const hops = (response as Response & { egressHops?: Array<{ url: string }> }).egressHops
+  return { response, url: new URL(hops?.at(-1)?.url || response.url || start.toString()) }
 }
 
 export const webFetchTool = defineTool({

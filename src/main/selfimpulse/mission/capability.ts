@@ -17,6 +17,7 @@
  *  - the demo dataset stands in for "company data on this laptop" and is
  *    labelled as such — VH does not pretend to see a real corporate store.
  */
+import { mainStorage } from "../persist/mainStorage";
 import { sha256Hex } from "./learningReceipt";
 import { checkEnvelope, isHumanPrincipal, type AuthorityEnvelope } from "./custody";
 
@@ -112,7 +113,7 @@ export function privacyCanonical(e: Omit<PrivacyLedgerEntry, "digest">): string 
 
 export function loadPrivacyLedger(): PrivacyLedgerEntry[] {
   try {
-    const raw = localStorage.getItem(LS_PRIVACY);
+    const raw = mainStorage().getItem(LS_PRIVACY);
     if (raw) {
       const parsed = JSON.parse(raw) as PrivacyLedgerEntry[];
       if (Array.isArray(parsed)) return parsed;
@@ -125,10 +126,10 @@ const LS_PRIVACY_ANCHOR = "vh.privacy.ledger.anchor";
 
 export function savePrivacyLedger(entries: PrivacyLedgerEntry[]): void {
   try {
-    localStorage.setItem(LS_PRIVACY, JSON.stringify(entries));
+    mainStorage().setItem(LS_PRIVACY, JSON.stringify(entries));
     // the anchor seals the head of the chain: dropping entries to "reset"
     // the budget makes the anchor disagree — truncation is detectable too
-    localStorage.setItem(LS_PRIVACY_ANCHOR, entries.length > 0 ? entries[entries.length - 1].digest : "");
+    mainStorage().setItem(LS_PRIVACY_ANCHOR, entries.length > 0 ? entries[entries.length - 1].digest : "");
   } catch { /* ignore */ }
 }
 
@@ -145,7 +146,7 @@ export async function verifyPrivacyLedger(): Promise<boolean> {
     prev = digest;
   }
   try {
-    const anchor = localStorage.getItem(LS_PRIVACY_ANCHOR);
+    const anchor = mainStorage().getItem(LS_PRIVACY_ANCHOR);
     if (anchor !== null && anchor !== (entries.length > 0 ? entries[entries.length - 1].digest : "")) return false;
   } catch { /* storage unavailable */ }
   return true;
@@ -153,7 +154,7 @@ export async function verifyPrivacyLedger(): Promise<boolean> {
 
 /** Test/demo seam: clear the privacy-budget accounting, durable store included. */
 export function resetCapabilityQueryLedger(): void {
-  try { localStorage.removeItem(LS_PRIVACY); localStorage.removeItem(LS_PRIVACY_ANCHOR); } catch { /* ignore */ }
+  try { mainStorage().removeItem(LS_PRIVACY); mainStorage().removeItem(LS_PRIVACY_ANCHOR); } catch { /* ignore */ }
 }
 
 /** Queries counted against (dataset, requester) in the current window. */

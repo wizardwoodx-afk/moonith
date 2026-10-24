@@ -53,6 +53,7 @@ interface StoredChannel {
   lastMessageAt?: string
   messagesIn: number
   messagesOut: number
+  allowedChatIds: string[]
   error?: string
 }
 
@@ -82,27 +83,38 @@ const DEFAULT_SETTINGS: StoredSettings = {
   governance: DEFAULT_GOVERNANCE_SETTINGS
 }
 
+function requireSecretEncryption(): void {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('The operating system credential store is unavailable. SelfImpulse will not read or write plaintext credentials.')
+  }
+}
+
 function sealSecret(secret: string): string {
-  const buffer = safeStorage.isEncryptionAvailable()
-    ? safeStorage.encryptString(secret)
-    : Buffer.from(secret, 'utf8')
-  return `${safeStorage.isEncryptionAvailable() ? 'enc' : 'plain'}:${buffer.toString('base64')}`
+  requireSecretEncryption()
+  return `enc:${safeStorage.encryptString(secret).toString('base64')}`
 }
 
 function openSecret(sealed: string | undefined): string | undefined {
   if (!sealed) return undefined
   const [kind, payload] = sealed.split(':', 2)
-  if (!payload) return undefined
-  try {
-    const buffer = Buffer.from(payload, 'base64')
-    if (kind === 'enc' && safeStorage.isEncryptionAvailable()) {
-      return safeStorage.decryptString(buffer)
-    }
-    if (kind === 'plain') return buffer.toString('utf8')
-  } catch {
-    return undefined
+  if (kind !== 'enc' || !payload) {
+    throw new Error('A legacy plaintext or invalid credential was refused. Re-enter the credential to store it with OS encryption.')
   }
-  return undefined
+  requireSecretEncryption()
+  try {
+    return safeStorage.decryptString(Buffer.from(payload, 'base64'))
+  } catch (error) {
+    throw new Error(`A credential could not be decrypted and was not returned: ${(error as Error).message}`)
+  }
+}
+
+function normalizeChatIds(value: unknown, strict = false): string[] {
+  if (!Array.isArray(value)) return []
+  const ids = value.map(String).map((id) => id.trim()).filter(Boolean)
+  if (strict && ids.some((id) => !/^-?\d{1,20}$/.test(id))) {
+    throw new Error('Telegram chat IDs must be numeric (group IDs may start with -).')
+  }
+  return [...new Set(ids.filter((id) => /^-?\d{1,20}$/.test(id)))]
 }
 
 function sanitizeMcpServer(config: McpServerConfig): McpServerConfig {
@@ -124,6 +136,23 @@ function titleFromObjective(objective: string): string {
   return clean.length > 70 ? `${clean.slice(0, 67)}…` : clean || 'New task'
 }
 
+async function readStoredSettings(): Promise<Partial<StoredSettings>> {
+  let raw: string
+  try {
+    raw = await fs.readFile(getPaths().settingsFile, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {}
+    throw new Error(`Settings/credential storage cannot be read: ${(error as Error).message}`)
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('expected an object')
+    return parsed as Partial<StoredSettings>
+  } catch (error) {
+    throw new Error(`Settings/credential storage is corrupt; refusing to replace it: ${(error as Error).message}`)
+  }
+}
+
 class Store {
   private settings: StoredSettings | null = null
   private tasks = new Map<string, Task>()
@@ -136,7 +165,7 @@ class Store {
     await fs.mkdir(getPaths().tasks, { recursive: true })
     await fs.mkdir(getPaths().workspaces, { recursive: true })
 
-    const rawSettings = await readJson<Partial<StoredSettings>>(getPaths().settingsFile, {})
+    const rawSettings = await readStoredSettings()
     this.settings = { ...DEFAULT_SETTINGS, ...rawSettings }
     this.settings.governance = normalizeGovernanceSettings(rawSettings.governance)
     this.settings.providers = Array.isArray(rawSettings.providers) ? rawSettings.providers : []
@@ -166,6 +195,7 @@ class Store {
             lastMessageAt: channel.lastMessageAt,
             messagesIn: Number(channel.messagesIn) || 0,
             messagesOut: Number(channel.messagesOut) || 0,
+            allowedChatIds: normalizeChatIds(channel.allowedChatIds),
             error: typeof channel.error === 'string' ? channel.error : undefined
           }))
       : []
@@ -216,6 +246,7 @@ class Store {
       lastMessageAt: channel.lastMessageAt,
       messagesIn: channel.messagesIn,
       messagesOut: channel.messagesOut,
+      allowedChatIds: [...channel.allowedChatIds],
       error: channel.error
     }
   }
@@ -239,6 +270,10 @@ class Store {
       onboardingComplete: settings.onboardingComplete,
       governance: normalizeGovernanceSettings(settings.governance)
     }
+  }
+
+  getGovernanceSettings(): GovernanceSettings {
+    return normalizeGovernanceSettings(this.getSettings().governance)
   }
 
   getConnectorsConfig(): { apiKey?: string; enabled: boolean; toolkits: string[] } {
@@ -284,6 +319,9 @@ class Store {
     if (input.removeToken) secret = undefined
     if (kind === 'webhook' && !secret) secret = sealSecret(`knight_${randomBytes(24).toString('hex')}`)
     if (kind === 'telegram' && input.token?.trim()) secret = sealSecret(input.token.trim())
+    const allowedChatIds = kind === 'telegram'
+      ? normalizeChatIds(input.allowedChatIds ?? existing?.allowedChatIds ?? [], true)
+      : []
 
     const channel: StoredChannel = {
       id,
@@ -295,6 +333,7 @@ class Store {
       lastMessageAt: existing?.lastMessageAt,
       messagesIn: existing?.messagesIn ?? 0,
       messagesOut: existing?.messagesOut ?? 0,
+      allowedChatIds,
       error: existing?.error
     }
     if (existing) {

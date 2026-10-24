@@ -1,3 +1,4 @@
+import { mainStorage } from "../persist/mainStorage";
 /**
  * RSIRALS — Recursive Self-Improving Reinforcement Agentic Learning System.
  *
@@ -104,38 +105,28 @@ export const RSIRALS_ACCEPTANCE_RULE = `RSIRALS: ${MIN_TRIALS} real development 
 
 /** Load the attributed run log; legacy unattributed entries remain audit history only. */
 export function loadExperimentRuns(): RunOutcome[] {
-  try {
-    const raw = localStorage.getItem(RUNS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as RunOutcome[];
-      if (Array.isArray(parsed)) return parsed;
-    }
-    const old = localStorage.getItem(RUNS_KEY_V1);
-    if (old) {
-      const parsed = JSON.parse(old) as Array<{ verified: boolean; simulated: boolean }>;
-      if (Array.isArray(parsed)) {
-        const migrated: RunOutcome[] = parsed.map((run) => ({
-          verified: run.verified,
-          simulated: run.simulated,
-          strategyId: null,
-        }));
-        localStorage.setItem(RUNS_KEY, JSON.stringify(migrated.slice(-100)));
-        localStorage.removeItem(RUNS_KEY_V1);
-        return migrated;
-      }
-    }
-  } catch {
-    /* Storage is an optional host capability; callers receive no false evidence. */
+  const raw = mainStorage().getItem(RUNS_KEY);
+  if (raw) {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) throw new Error("Persisted experiment runs are not an array; refusing to discard them.");
+    return parsed as RunOutcome[];
   }
-  return [];
+  const old = mainStorage().getItem(RUNS_KEY_V1);
+  if (!old) return [];
+  const parsed = JSON.parse(old) as unknown;
+  if (!Array.isArray(parsed)) throw new Error("Legacy experiment runs are invalid; refusing to discard them.");
+  const migrated: RunOutcome[] = (parsed as Array<{ verified: boolean; simulated: boolean }>).map((run) => ({
+    verified: run.verified,
+    simulated: run.simulated,
+    strategyId: null,
+  }));
+  mainStorage().setItem(RUNS_KEY, JSON.stringify(migrated.slice(-100)));
+  mainStorage().removeItem(RUNS_KEY_V1);
+  return migrated;
 }
 
 function saveRunLog(runs: RunOutcome[]): void {
-  try {
-    localStorage.setItem(RUNS_KEY, JSON.stringify(runs.slice(-100)));
-  } catch {
-    /* The mission result remains authoritative if learning persistence is unavailable. */
-  }
+  mainStorage().setItem(RUNS_KEY, JSON.stringify(runs.slice(-100)));
 }
 
 /** The exact strategy and evaluation split the NEXT run must execute. */

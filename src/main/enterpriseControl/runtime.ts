@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { DEFAULT_NAMESPACE_ID, LOCAL_OWNER_PRINCIPAL_ID, type EnterpriseAction, type EnterpriseAuthorization, type EnterpriseDecision, type EnterpriseResourceKind } from '../../shared/enterpriseControl'
 import { runtimeAudit } from '../audit/runtime'
+import { getDefaultAuditKey } from '../audit/keyProvider'
 import { getPaths } from '../paths'
 import { EnterpriseControlService } from './service'
 import { nativeAgentPrincipalId, nativeToolAction } from './policy'
@@ -12,6 +13,7 @@ export function enterpriseControl(): EnterpriseControlService {
   if (!instance) {
     instance = new EnterpriseControlService({
       file: join(getPaths().root, 'enterprise', 'control-plane.json'),
+      loadKey: getDefaultAuditKey,
       audit: (event) =>
         runtimeAudit.record({
           actor: 'system',

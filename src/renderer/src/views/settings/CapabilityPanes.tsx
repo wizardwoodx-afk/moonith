@@ -691,6 +691,7 @@ export function ChannelsPane() {
   const [kind, setKind] = useState<'webhook' | 'telegram'>('webhook')
   const [name, setName] = useState('')
   const [token, setToken] = useState('')
+  const [allowedChatIds, setAllowedChatIds] = useState('')
   const [saving, setSaving] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [removeTarget, setRemoveTarget] = useState<ChannelRecord | null>(null)
@@ -714,6 +715,7 @@ export function ChannelsPane() {
     setKind(next)
     setName(next === 'webhook' ? 'Local webhook' : 'Chat channel')
     setToken('')
+    setAllowedChatIds('')
     setEditing('new')
   }
 
@@ -721,10 +723,12 @@ export function ChannelsPane() {
     setKind(channel.kind)
     setName(channel.name)
     setToken('')
+    setAllowedChatIds(channel.allowedChatIds.join('\n'))
     setEditing(channel)
   }
 
   const save = async (): Promise<void> => {
+    const chatIds = allowedChatIds.split(/[\s,]+/).map((id) => id.trim()).filter(Boolean)
     setSaving(true)
     try {
       if (editing === 'new') {
@@ -733,7 +737,8 @@ export function ChannelsPane() {
             kind,
             name,
             enabled: true,
-            token: kind === 'telegram' ? token : undefined
+            token: kind === 'telegram' ? token : undefined,
+            allowedChatIds: kind === 'telegram' ? chatIds : undefined
           })
         )
       } else if (editing) {
@@ -743,7 +748,8 @@ export function ChannelsPane() {
             kind: editing.kind,
             name,
             enabled: editing.enabled,
-            token: token || undefined
+            token: token || undefined,
+            allowedChatIds: kind === 'telegram' ? chatIds : undefined
           })
         )
       }
@@ -911,8 +917,8 @@ export function ChannelsPane() {
 
                     {channel.kind === 'telegram' ? (
                       <p className="mt-3 text-[10.5px] leading-relaxed text-faint">
-                        The bot polls Telegram from this machine. Messages from any chat the bot can
-                        receive become tasks; replies are sent back to the same chat.
+                        Only {channel.allowedChatIds.length} configured numeric chat ID{channel.allowedChatIds.length === 1 ? '' : 's'} can create tasks.
+                        Unlisted chats are denied; outgoing replies are checked by enterprise DLP.
                       </p>
                     ) : null}
                   </div>
@@ -931,7 +937,7 @@ export function ChannelsPane() {
                     </Button>
                   ) : (
                     <Button size="sm" variant="ghost" onClick={() => openEdit(channel)}>
-                      {channel.hasToken ? 'Replace token' : 'Add token'}
+                      Configure
                     </Button>
                   )}
                   <Button size="sm" variant="ghost" onClick={() => setRemoveTarget(channel)}>
@@ -986,7 +992,7 @@ export function ChannelsPane() {
         subtitle={
           kind === 'webhook'
             ? 'SelfImpulse issues the token and listens only on this machine.'
-            : 'Paste the token BotFather gave your bot.'
+            : 'Paste the BotFather token and authorize only the numeric chat IDs you trust.'
         }
         footer={
           <>
@@ -1008,18 +1014,32 @@ export function ChannelsPane() {
             />
           </FieldGroup>
           {kind === 'telegram' ? (
-            <FieldGroup
-              label="Bot token"
-              hint={editing !== 'new' ? 'Leave blank to keep the saved token' : undefined}
-            >
-              <input
-                type="password"
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                className={inputClass}
-                autoComplete="off"
-              />
-            </FieldGroup>
+            <>
+              <FieldGroup
+                label="Bot token"
+                hint={editing !== 'new' ? 'Leave blank to keep the saved token' : undefined}
+              >
+                <input
+                  type="password"
+                  value={token}
+                  onChange={(event) => setToken(event.target.value)}
+                  className={inputClass}
+                  autoComplete="off"
+                />
+              </FieldGroup>
+              <FieldGroup
+                label="Allowed chat IDs"
+                hint="One numeric ID per line. Group IDs may start with -. Empty keeps the channel locked."
+              >
+                <textarea
+                  value={allowedChatIds}
+                  onChange={(event) => setAllowedChatIds(event.target.value)}
+                  className={cn(inputClass, 'min-h-24 resize-y font-mono text-[11px]')}
+                  placeholder={'123456789\n-1001234567890'}
+                  spellCheck={false}
+                />
+              </FieldGroup>
+            </>
           ) : (
             <p className="text-[11.5px] leading-relaxed text-muted">
               A token is generated and shown on the channel card after you save. Only requests that

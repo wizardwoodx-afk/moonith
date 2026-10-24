@@ -125,6 +125,7 @@ export interface EnterpriseControlSnapshot {
     execution: 'native-in-process'
     defaultPolicy: 'deny'
     denyOverrides: true
+    revisionIntegrity: string
     isolation: string
   }
 }

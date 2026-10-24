@@ -16,9 +16,10 @@
  * Storage: a uniform KV adapter (16.10.1 fix — the 16.9.x-era default cast
  * localStorage to a Map and called .get/.set, which a real Storage does not
  * have; the default browser path was structurally broken). Today the adapter
- * wraps whatever the host offers — localStorage getItem/setItem, an injected
- * Map (probes), or an ephemeral Map when the host has neither. The Tauri FS
- * seat (the same envelope on disk) is the next storage. Nothing phones home.
+ * wraps whatever the host offers — browser localStorage getItem/setItem, an
+ * injected Map (probes), or the native atomic file adapter in Electron. Pure
+ * probes without a configured root use the adapter’s explicit memory mode.
+ * Nothing phones home.
  *
  * 19.7.13 — THE WEBVIEW CRYPTO FIX. Until this build the module hashed with
  * `node:crypto`, which the browser bundle aliases to a stub that THROWS
@@ -33,6 +34,7 @@
  * imports a builtin, so the same code runs on Node, Tauri and the WebView.
  */
 import { pureSha256 } from "../engine/pureHash";
+import { mainStorage } from "../persist/mainStorage";
 import type { MissionRuntime } from "./missionRuntime";
 import type { PersistedMissionState } from "./checkpoints";
 
@@ -65,27 +67,15 @@ export function asKV(store: DurableKVLike): DurableKV {
   return { get: (k) => m.get(k) ?? null, set: (k, v) => void m.set(k, v) };
 }
 
-/** The host default: localStorage when it really exists (with getItem — the
- * 16.10.1 structural fix), else an ephemeral Map (probes, non-persistent
- *  hosts — honest, nothing pretends to persist).
- *
- *  MEMOIZED per module instance on purpose (19.7.16). It used to hand back a
- *  brand-new ephemeral Map on every call, so two callers that both said
- *  "the host default" got two different stores: `durableSave` wrote to one
- *  and the DoneLedger read from another, and the run journal's write seat
- *  was not the seat its resume read. The host default is the host default —
- *  one seat, resolved on first use (not at module load, so a host that
- *  installs a `localStorage` shim in its own body still gets it). */
+/** The host default is the shared Storage boundary: browser localStorage when
+ * present, otherwise the native atomic file adapter (or its explicit memory
+ * mode in a pure probe). It is memoized as one seat so the journal and done
+ * ledger never accidentally write to different stores. */
 let hostDefault: DurableKV | null = null;
 export function defaultDurableKV(): DurableKV {
   if (hostDefault) return hostDefault;
-  const ls = (globalThis as { localStorage?: Storage }).localStorage;
-  if (ls && typeof ls.getItem === "function") hostDefault = asKV(ls);
-  else {
-    // ephemeral: probes and non-persistent hosts — works, persists nothing, says so
-    const mem = new Map<string, string>();
-    hostDefault = { get: (k) => mem.get(k) ?? null, set: (k, v) => void mem.set(k, v) };
-  }
+  const storage = mainStorage();
+  hostDefault = { get: (key) => storage.getItem(key), set: (key, value) => storage.setItem(key, value) };
   return hostDefault;
 }
 

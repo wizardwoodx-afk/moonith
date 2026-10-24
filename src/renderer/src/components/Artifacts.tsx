@@ -233,7 +233,15 @@ function PreviewBody({ artifact, taskId }: { artifact: Artifact; taskId: string 
   }
 
   if (artifact.kind === 'pdf') {
-    return <iframe src={src} title={artifact.name} className="h-[68vh] w-full border-0 bg-white" />
+    return (
+      <iframe
+        src={src}
+        title={artifact.name}
+        sandbox=""
+        referrerPolicy="no-referrer"
+        className="h-[68vh] w-full border-0 bg-white"
+      />
+    )
   }
 
   if (isText) {

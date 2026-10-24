@@ -34,6 +34,16 @@ describe('sensitive-data detection', () => {
     expect(categories).toContain('secret')
   })
 
+  it('detects CamelCase secrets in fenced code and sensitive Base64 payloads', () => {
+    const fenced = '```js\nconst apiKey = "correct-horse-secret"\n```'
+    expect(detectSensitiveData(fenced, ['secret'])).toHaveLength(1)
+    const encoded = Buffer.from('person@example.com', 'utf8').toString('base64')
+    const matches = detectSensitiveData(`encoded: ${encoded}`, ['email'])
+    expect(matches).toHaveLength(1)
+    expect(redactSensitiveText(`encoded: ${encoded}`, ['email']).text).toBe('encoded: [redacted:email]')
+    expect(detectSensitiveData(Buffer.from('ordinary text').toString('base64'), ['email'])).toHaveLength(0)
+  })
+
   it('uses Luhn validation to avoid treating every long number as a card', () => {
     expect(detectSensitiveData('Card 4111 1111 1111 1111', ['credit-card'])).toHaveLength(1)
     expect(detectSensitiveData('Order 4111 1111 1111 1112', ['credit-card'])).toHaveLength(0)

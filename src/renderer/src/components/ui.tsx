@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useRef,
   useState,
   type ButtonHTMLAttributes,
@@ -192,14 +193,56 @@ export function Modal({
   className,
   bodyClassName
 }: ModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+  const titleId = useId()
+  const subtitleId = useId()
+  onCloseRef.current = onClose
+
   useEffect(() => {
     if (!open) return
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const focusable = (): HTMLElement[] => Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    ) ?? []).filter((element) => element.getAttribute('aria-hidden') !== 'true')
+    const frame = requestAnimationFrame(() => {
+      const preferred = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]')
+      ;(preferred ?? focusable()[0] ?? dialogRef.current)?.focus()
+    })
     const handler = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onCloseRef.current()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const elements = focusable()
+      if (!elements.length) {
+        event.preventDefault()
+        dialogRef.current?.focus()
+        return
+      }
+      const first = elements[0]
+      const last = elements[elements.length - 1]
+      const active = document.activeElement
+      if (event.shiftKey && (active === first || !dialogRef.current?.contains(active))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (active === last || !dialogRef.current?.contains(active))) {
+        event.preventDefault()
+        first.focus()
+      }
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [open, onClose])
+    document.addEventListener('keydown', handler)
+    return () => {
+      cancelAnimationFrame(frame)
+      document.removeEventListener('keydown', handler)
+      document.body.style.overflow = previousOverflow
+      previousFocus?.focus()
+    }
+  }, [open])
 
   return createPortal(
     <AnimatePresence>
@@ -212,10 +255,18 @@ export function Modal({
           transition={{ duration: 0.16 }}
         >
           <div
+            aria-hidden="true"
             className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
             onClick={onClose}
           />
           <motion.div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={title ? titleId : undefined}
+            aria-describedby={subtitle ? subtitleId : undefined}
+            aria-label={title ? undefined : 'Dialog'}
+            tabIndex={-1}
             initial={{ opacity: 0, y: 10, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 6, scale: 0.99 }}
@@ -235,10 +286,10 @@ export function Modal({
                 ) : null}
                 <div className="min-w-0 flex-1">
                   {title ? (
-                    <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>
+                    <h2 id={titleId} className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>
                   ) : null}
                   {subtitle ? (
-                    <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">{subtitle}</p>
+                    <p id={subtitleId} className="mt-0.5 text-[12.5px] leading-relaxed text-muted">{subtitle}</p>
                   ) : null}
                 </div>
                 <IconButton onClick={onClose} aria-label="Close">

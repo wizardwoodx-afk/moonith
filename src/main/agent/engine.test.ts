@@ -51,10 +51,23 @@ function fakeProvider(responses: Array<ProviderEvent[] | Error | StreamHandler>)
   return { provider, calls }
 }
 
+function grantedTool(name: string): AgentTool {
+  return {
+    name,
+    title: name,
+    description: name,
+    inputSchema: { type: 'object', properties: {} },
+    sideEffect: 'read',
+    risk: 'low',
+    approval: 'never',
+    execute: async () => ({ content: 'ok' })
+  }
+}
+
 function engineInput(provider: Provider, overrides: Partial<EngineInput> = {}): EngineInput {
   return {
     provider,
-    tools: [],
+    tools: [grantedTool('read_file'), grantedTool('delegate_to_crew')],
     systemPrompt: 'You are Captain.',
     history: [],
     userMessage: 'Do the work.',
@@ -252,6 +265,33 @@ describe('SELF-ΡΟΗ Captain engine', () => {
       event: 'agent:crew_parallel',
       payload: expect.objectContaining({ count: 2, callIds: ['crew_a', 'crew_b'] })
     })
+  })
+
+  it('refuses a forged tool call that is not granted to this turn', async () => {
+    const { provider, calls } = fakeProvider([
+      [{ type: 'tool_call', index: 0, id: 'forged', name: 'run_command', args: '{"command":"calc"}' }, { type: 'done' }],
+      textResponse('The requested tool is not available.')
+    ])
+    const onTool = vi.fn(async () => ({ content: 'must not run' }))
+    const result = await runEngineTurn(engineInput(provider, { tools: [], onTool }))
+    expect(onTool).not.toHaveBeenCalled()
+    expect(result.finalResponse).toContain('not available')
+    expect(JSON.stringify(calls[1].messages)).toContain('not granted to this turn')
+  })
+
+  it('drains live user steering into the next model iteration', async () => {
+    const { provider, calls } = fakeProvider([
+      [{ type: 'tool_call', index: 0, id: 'read-before-steer', name: 'read_file', args: '{}' }, { type: 'done' }],
+      textResponse('Applied the new constraint.')
+    ])
+    const queued = [[{ role: 'user' as const, content: 'Use the new constraint.' }]]
+    const result = await runEngineTurn(engineInput(provider, {
+      drainUserMessages: () => queued.shift() ?? []
+    }))
+    expect(result.finalResponse).toBe('Applied the new constraint.')
+    expect(calls[1].messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'user', content: 'Use the new constraint.' })
+    ]))
   })
 
   it('propagates provider errors instead of returning a successful turn', async () => {

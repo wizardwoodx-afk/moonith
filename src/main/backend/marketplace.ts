@@ -9,11 +9,11 @@
  *
  * Ported from the earlier desktop shell.
  */
-import { exec } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { runNpx } from '../npx'
 import type { BackendStore } from './store'
 
 export const BASE_URL = 'https://market.lobehub.com'
@@ -158,32 +158,17 @@ function toCredentials(value: unknown): MarketplaceCredentials | null {
   return { ...value, clientId: String(clientId), clientSecret: String(clientSecret) }
 }
 
-const quote = (s: string): string =>
-  process.platform === 'win32'
-    ? `"${String(s).replace(/"/g, '\\"')}"`
-    : `'${String(s).replace(/'/g, "'\\''")}'`
-
-function runCli(args: string[], { env = {}, cwd, timeout = 180000 }: RunCliOptions = {}): Promise<CliResult> {
-  return new Promise((resolve, reject) => {
-    const cmd = ['npx', '-y', CLI, ...args].map(quote).join(' ')
-    exec(
-      cmd,
-      {
-        cwd,
-        timeout,
-        env: { ...process.env, MARKET_BASE_URL: BASE_URL, ...env },
-        maxBuffer: 24 * 1024 * 1024,
-        windowsHide: true
-      },
-      (err, stdout, stderr) => {
-        if (err && !stdout) {
-          reject(new Error(String(stderr || err.message).trim().slice(0, 400)))
-          return
-        }
-        resolve({ stdout, stderr })
-      }
-    )
+async function runCli(args: string[], { env = {}, cwd, timeout = 180000 }: RunCliOptions = {}): Promise<CliResult> {
+  const result = await runNpx(CLI, args, {
+    cwd,
+    timeout,
+    env: { MARKET_BASE_URL: BASE_URL, ...env },
+    maxBuffer: 24 * 1024 * 1024
   })
+  if (result.error && !result.stdout) {
+    throw new Error(String(result.stderr || result.error.message).trim().slice(0, 400))
+  }
+  return { stdout: result.stdout, stderr: result.stderr }
 }
 
 function parseJson(text: string): unknown {

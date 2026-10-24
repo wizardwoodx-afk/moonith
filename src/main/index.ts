@@ -30,6 +30,7 @@ import { setBackendEventTarget } from './backend/ipc'
 import { setEnterpriseMissionAuthorizer } from './selfimpulse/mission/enterpriseAdmission'
 import { authorizeMissionTeam } from './enterpriseControl/runtime'
 import { APP_NAME, signatureLine } from '@shared/identity'
+import { configureNodeStorageRoot } from './selfimpulse/persist/nodeStorage'
 
 // Fixed before anything resolves `userData`, including the single-instance lock.
 app.setName('SelfImpulse')
@@ -40,6 +41,7 @@ if (portableData) {
   mkdirSync(portableData, { recursive: true })
   app.setPath('userData', portableData)
 }
+configureNodeStorageRoot(join(app.getPath('userData'), 'selfimpulse'))
 
 let tray: Tray | null = null
 let isQuitting = false

@@ -1,3 +1,4 @@
+import { mainStorage } from "../persist/mainStorage";
 /**
  * VH 11.12 MOSAIC-Ω alignment — belief-state tracking.
  *
@@ -156,19 +157,16 @@ export function beliefDigestInput(memory: Belief[]): string {
 import { enforceWrite } from "./ledger";
 
 export function loadBeliefs(): Belief[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) {
-      const p = JSON.parse(raw) as Belief[];
-      if (Array.isArray(p)) return p;
-    }
-  } catch { /* storage unavailable */ }
-  return [];
+  const raw = mainStorage().getItem(LS_KEY);
+  if (!raw) return [];
+  const parsed = JSON.parse(raw) as unknown;
+  if (!Array.isArray(parsed)) throw new Error("Persisted beliefs are not an array; refusing to discard them.");
+  return parsed as Belief[];
 }
 
 export function saveBeliefs(memory: Belief[], writer: "human" | "agent" | "experiment" = "agent"): void {
   // 11.12.3 — governed write: beliefs are STANCE; the matrix decides who may
   // persist them (the approval asymmetry lives one layer up, in needsApproval).
   for (const _ of memory) enforceWrite("STANCE", writer);
-  try { localStorage.setItem(LS_KEY, JSON.stringify(memory)); } catch { /* ignore */ }
+  mainStorage().setItem(LS_KEY, JSON.stringify(memory));
 }

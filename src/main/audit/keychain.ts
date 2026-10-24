@@ -3,10 +3,9 @@
  * (see sealSecret/openSecret in store.ts): a random secret sealed with
  * Electron's safeStorage and persisted under userData.
  *
- * THE ONE DIFFERENCE FROM store.ts IS DELIBERATE. Settings secrets fall back
- * to plaintext when the OS keychain is unavailable; an audit log must never
- * be produced unsigned, so there is no fallback here — when the keychain
- * cannot be used we refuse and say so, rather than emit a file whose
+ * SETTINGS AND AUDIT BOTH FAIL CLOSED WHEN THE KEYCHAIN IS UNAVAILABLE.
+ * The additional audit rule is that a log must never be produced unsigned:
+ * when the key cannot be opened we refuse rather than emit a file whose
  * signature would prove nothing.
  */
 import { safeStorage } from 'electron'
@@ -15,6 +14,7 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { getPaths } from '../paths'
 import { deriveSealKey } from './chain'
+import { atomicWriteFile } from '../atomic'
 
 const SEAL_KEY_FILE = 'audit-seal-key.json'
 
@@ -49,13 +49,29 @@ async function readOrCreate(): Promise<Buffer> {
     )
   }
   const file = join(getPaths().root, SEAL_KEY_FILE)
-  const stored = await fs
-    .readFile(file, 'utf8')
-    .then((text) => open((JSON.parse(text) as { secret?: unknown }).secret))
-    .catch(() => undefined)
-  if (stored) return deriveSealKey(stored)
+  let raw: string | null = null
+  try {
+    raw = await fs.readFile(file, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw new Error(`The audit signing key cannot be read: ${(error as Error).message}`)
+    }
+  }
+  if (raw !== null) {
+    let encoded: unknown
+    try {
+      encoded = (JSON.parse(raw) as { secret?: unknown }).secret
+    } catch (error) {
+      throw new Error(`The audit signing key is corrupt; refusing to replace it: ${(error as Error).message}`)
+    }
+    const stored = open(encoded)
+    if (!stored) {
+      throw new Error('The audit signing key is invalid or cannot be decrypted; refusing to replace it.')
+    }
+    return deriveSealKey(stored)
+  }
 
   const secret = randomBytes(32).toString('hex')
-  await fs.writeFile(file, JSON.stringify({ secret: seal(secret) }), 'utf8')
+  await atomicWriteFile(file, JSON.stringify({ secret: seal(secret) }), { mode: 0o600 })
   return deriveSealKey(secret)
 }

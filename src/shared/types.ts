@@ -98,6 +98,8 @@ export interface ChannelRecord {
   lastMessageAt?: string
   messagesIn: number
   messagesOut: number
+  /** Telegram is deny-by-default; an empty list authorizes no inbound chat. */
+  allowedChatIds: string[]
   error?: string
 }
 
@@ -108,6 +110,7 @@ export interface ChannelInput {
   enabled: boolean
   token?: string
   removeToken?: boolean
+  allowedChatIds?: string[]
 }
 
 export interface ChannelState {

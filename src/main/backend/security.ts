@@ -1,12 +1,13 @@
 import { safeStorage } from 'electron'
 import { randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { atomicWriteFileSync } from '../atomic'
 
 /**
  * Backend security.
  *
- *  - Secrets at rest are encrypted with the OS keychain (Electron safeStorage).
+ *  - Secrets at rest require the OS keychain; plaintext fallback is disabled.
  *  - The local gateway requires a bearer token and rejects rebound hosts.
  *  - The "ask" permission actually asks: the renderer is prompted and a denial
  *    is the default when nobody answers.
@@ -31,31 +32,40 @@ export class SecretStore {
 
   read(): Record<string, StoredSecret> {
     if (this.cache) return this.cache
-    try {
-      this.cache = JSON.parse(readFileSync(this.file, 'utf8')) as Record<string, StoredSecret>
-    } catch {
+    if (!existsSync(this.file)) {
       this.cache = {}
+      return this.cache
     }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(readFileSync(this.file, 'utf8'))
+    } catch (error) {
+      throw new Error(`Credential storage is unreadable or corrupt at ${this.file}; refusing to replace it. ${(error as Error).message}`)
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error(`Credential storage is invalid at ${this.file}; refusing to replace it.`)
+    }
+    this.cache = parsed as Record<string, StoredSecret>
     return this.cache
   }
 
   write(data: Record<string, StoredSecret>): void {
-    this.cache = data
     mkdirSync(dirname(this.file), { recursive: true })
-    writeFileSync(this.file, JSON.stringify(data, null, 2), 'utf8')
+    atomicWriteFileSync(this.file, JSON.stringify(data, null, 2), { mode: 0o600 })
+    this.cache = data
   }
 
-  /** Encrypt a value with the OS keychain. Falls back to plaintext if unavailable. */
+  /** Empty values remove a secret. Non-empty values require OS encryption. */
   put(key: string, value: string): boolean {
     if (!value) {
       this.remove(key)
       return false
     }
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error('The operating system credential store is unavailable; the credential was not written.')
+    }
     const data = this.read()
-    const canEncrypt = safeStorage.isEncryptionAvailable()
-    data[key] = canEncrypt
-      ? { enc: safeStorage.encryptString(value).toString('base64') }
-      : { plain: value }
+    data[key] = { enc: safeStorage.encryptString(value).toString('base64') }
     this.write(data)
     return true
   }
@@ -63,14 +73,17 @@ export class SecretStore {
   get(key: string): string {
     const entry = this.read()[key]
     if (!entry) return ''
-    if (entry.enc) {
-      try {
-        return safeStorage.decryptString(Buffer.from(entry.enc, 'base64'))
-      } catch {
-        return ''
-      }
+    if (!entry.enc || entry.plain !== undefined) {
+      throw new Error(`Credential "${key}" is plaintext or invalid; re-enter it to migrate to OS encryption.`)
     }
-    return entry.plain || ''
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error('The operating system credential store is unavailable; encrypted credentials cannot be opened.')
+    }
+    try {
+      return safeStorage.decryptString(Buffer.from(entry.enc, 'base64'))
+    } catch (error) {
+      throw new Error(`Credential "${key}" cannot be decrypted; it was not returned. ${(error as Error).message}`)
+    }
   }
 
   remove(key: string): void {

@@ -8,7 +8,9 @@ import {
 } from '../../shared/enterpriseControl'
 import { authorizeEnterprise, createDefaultEnterpriseState, nativeAgentPrincipalId, nativeToolAction } from './policy'
 import { EnterpriseControlService } from './service'
+import { deriveSealKey } from '../audit/chain'
 
+const KEY = deriveSealKey('enterprise-control-test-key')
 let directory = ''
 let file = ''
 let now = Date.parse('2026-10-24T00:00:00.000Z')
@@ -24,7 +26,7 @@ afterEach(async () => {
 })
 
 const service = (): EnterpriseControlService =>
-  new EnterpriseControlService({ file, now: () => (now += 1000) })
+  new EnterpriseControlService({ file, loadKey: async () => KEY, now: () => (now += 1000) })
 
 const agentRequest = (team = 'team.alpha', seat = 'researcher') => ({
   principalId: nativeAgentPrincipalId(team, seat),
@@ -200,6 +202,52 @@ describe('native Enterprise Control Plane persistence and enforcement', () => {
       ).allowed
     ).toBe(true) // the original default owner grant remains independent
     expect((await control.snapshot()).security.isolation).toContain('does not claim')
+  })
+
+  it('migrates a valid legacy unsigned chain once and then enforces signatures', async () => {
+    const control = service()
+    await control.snapshot()
+    await control.ensureAgentPrincipal('team.alpha', 'researcher', 'Researcher')
+    const legacy = JSON.parse(await readFile(file, 'utf8')) as {
+      revisions: Array<{ signature?: string }>
+      head?: unknown
+    }
+    for (const revision of legacy.revisions) delete revision.signature
+    delete legacy.head
+    await writeFile(file, JSON.stringify(legacy), 'utf8')
+    const migrated = service()
+    await migrated.snapshot()
+    const signed = JSON.parse(await readFile(file, 'utf8')) as {
+      revisions: Array<{ signature?: string }>
+      head?: { signature?: string }
+    }
+    expect(signed.revisions.every((revision) => Boolean(revision.signature))).toBe(true)
+    expect(signed.head?.signature).toBeTruthy()
+    await expect(service().snapshot()).resolves.toBeDefined()
+  })
+
+  it('rejects forged signatures and truncation against the signed head', async () => {
+    const control = service()
+    await control.snapshot()
+    await control.ensureAgentPrincipal('team.alpha', 'researcher', 'Researcher')
+    const persisted = JSON.parse(await readFile(file, 'utf8')) as {
+      current: EnterpriseControlState
+      revisions: Array<{ signature: string; state: EnterpriseControlState }>
+      head: { revision: number }
+    }
+    expect(persisted.revisions.every((revision) => revision.signature)).toBe(true)
+    expect(persisted.head.revision).toBe(2)
+
+    const originalSignature = persisted.revisions[0].signature
+    persisted.revisions[0].signature = '0'.repeat(64)
+    await writeFile(file, JSON.stringify(persisted), 'utf8')
+    await expect(service().snapshot()).rejects.toThrow('signature mismatch')
+
+    persisted.revisions[0].signature = originalSignature
+    persisted.revisions.pop()
+    persisted.current = persisted.revisions[persisted.revisions.length - 1].state
+    await writeFile(file, JSON.stringify(persisted), 'utf8')
+    await expect(service().snapshot()).rejects.toThrow('signed revision head')
   })
 
   it('rejects stale writes, recovery-owner lockout, and corrupted storage', async () => {

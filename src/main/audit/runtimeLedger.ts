@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import { dirname } from 'node:path'
-import { randomUUID, timingSafeEqual } from 'node:crypto'
+import { timingSafeEqual } from 'node:crypto'
 import type { AuditEntry, RuntimeAuditIntegrity } from '@shared/audit'
 import {
   AUDIT_ZERO_HASH,
@@ -9,6 +9,7 @@ import {
   signAuditPayload,
   type AuditChainReport
 } from './chain'
+import { atomicWriteFile } from '../atomic'
 
 interface LedgerState {
   entries: AuditEntry[]
@@ -129,15 +130,7 @@ export class RuntimeAuditLedger {
   private async writeAnchor(state: LedgerState): Promise<void> {
     const anchor = { version: 1, entries: state.entries.length, head: state.head }
     const sig = signAuditPayload(anchor, this.sealKey)
-    const temporary = `${this.anchorFile}.${process.pid}.${randomUUID()}.tmp`
-    const handle = await fs.open(temporary, 'w')
-    try {
-      await handle.writeFile(`${canonicalAuditJson({ ...anchor, sig })}\n`, 'utf8')
-      await handle.sync()
-    } finally {
-      await handle.close()
-    }
-    await fs.rename(temporary, this.anchorFile)
+    await atomicWriteFile(this.anchorFile, `${canonicalAuditJson({ ...anchor, sig })}\n`)
   }
 
   private exclusive<T>(operation: () => Promise<T>): Promise<T> {

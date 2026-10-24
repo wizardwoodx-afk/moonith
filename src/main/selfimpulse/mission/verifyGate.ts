@@ -25,6 +25,7 @@
  * Node-import-safe, deterministic, and probed by probe/verifyGate.test.ts.
  */
 
+import { mainStorage } from "../persist/mainStorage";
 export type GatePolicy = "STRICT" | "ADVISORY";
 
 export type GateTier = "cross-vendor" | "cross-seat" | "self-verification" | "unverified";
@@ -105,7 +106,7 @@ const POLICY_KEY = "vh.gatepolicy.v1";
 
 export function loadGatePolicy(): GatePolicy {
   try {
-    const raw = globalThis.localStorage?.getItem(POLICY_KEY);
+    const raw = mainStorage().getItem(POLICY_KEY);
     return raw === "ADVISORY" ? "ADVISORY" : "STRICT";
   } catch {
     return "STRICT";
@@ -114,7 +115,7 @@ export function loadGatePolicy(): GatePolicy {
 
 export function saveGatePolicy(policy: GatePolicy): void {
   try {
-    globalThis.localStorage?.setItem(POLICY_KEY, policy);
+    mainStorage().setItem(POLICY_KEY, policy);
   } catch {
     /* storage unavailable — the in-memory default still governs this session */
   }

@@ -191,6 +191,48 @@ describe('workflow recovery and events', () => {
     expect(streamed.at(-1)).toBe('run_success')
   })
 
+  it('rejects concurrent starts and ignores cancellation after success', async () => {
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const workflow = createWorkflow<number>({ id: 'exclusive' })
+      .then(createStep<number, number>({ id: 'wait', execute: async ({ input }) => { await gate; return input } }))
+      .commit()
+    const run = workflow.createRun({ runId: 'exclusive-run' })
+    const first = run.start(1)
+    await expect(run.start(2)).rejects.toThrow('Cannot start')
+    release()
+    expect((await first).status).toBe('success')
+    run.cancel()
+    expect(run.snapshot().status).toBe('success')
+  })
+
+  it('does not journal a step complete when cancellation wins its ignored abort', async () => {
+    const durable = await new DurableStore(root).context('cancel-ignored')
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const workflow = createWorkflow<number>({ id: 'cancel-ignored' })
+      .then(createStep<number, number>({ id: 'wait', execute: async ({ input }) => { await gate; return input } }))
+      .commit()
+    const run = workflow.createRun({ runId: 'cancel-ignored', durable })
+    const pending = run.start(1)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    run.cancel()
+    release()
+    expect((await pending).status).toBe('canceled')
+    expect(durable.hasCompleted('workflow:cancel-ignored:op:0:wait')).toBe(false)
+  })
+
+  it('names durable input and snapshot state with the run id', async () => {
+    const durable = await new DurableStore(root).context('run-A')
+    const workflow = createWorkflow<number>({ id: 'keyed' })
+      .then(createStep<number, number>({ id: 'identity', execute: ({ input }) => input }))
+      .commit()
+    await workflow.createRun({ runId: 'run-A', durable }).start(7)
+    const keys = Object.keys(durable.snapshot().state)
+    expect(keys).toContain('__workflow:keyed:run-A:input')
+    expect(keys).toContain('__workflow:keyed:run-A:snapshot')
+  })
+
   it('cancels an active durable sleep without waiting for its timer', async () => {
     const workflow = createWorkflow<null>({ id: 'cancel' })
       .then(createSleepStep<null>('wait', 60_000))

@@ -14,6 +14,7 @@
  * code it is reviewing is not a review.
  */
 
+import { mainStorage } from "../persist/mainStorage";
 import type { HarnessId } from "../domain/harness";
 import type { RiskClass } from "./types";
 import { resolveCaps, enforcedReadOnly, unverifiedClaims } from "./agentCapabilities";
@@ -411,7 +412,7 @@ const STORAGE_KEY = "vh.teams.v1";
 
 export function loadSavedTeams(): CliAgentTeam[] {
   try {
-    const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
+    const raw = mainStorage().getItem(STORAGE_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw) as unknown;
     if (!Array.isArray(arr)) return [];
@@ -423,7 +424,7 @@ export function loadSavedTeams(): CliAgentTeam[] {
 
 export function saveTeams(teams: CliAgentTeam[]): void {
   try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(teams));
+    mainStorage().setItem(STORAGE_KEY, JSON.stringify(teams));
   } catch {
     /* see loadSavedTeams */
   }

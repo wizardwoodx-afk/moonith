@@ -162,6 +162,22 @@ describe('the Distinct Color studies', () => {
   })
 })
 
+describe('readable secondary text', () => {
+  it('keeps muted and faint text at AA contrast on product surfaces in every theme', () => {
+    const surfaces = ['--c-canvas', '--c-panel', '--c-panel-2', '--c-surface', '--c-surface-2', '--c-surface-3', '--c-accent-soft']
+    for (const theme of THEMES) {
+      for (const foreground of ['--c-muted', '--c-faint']) {
+        for (const surface of surfaces) {
+          expect(
+            colorContrast(theme.tokens[foreground], theme.tokens[surface]),
+            `${theme.id} ${foreground} on ${surface}`
+          ).toBeGreaterThanOrEqual(4.5)
+        }
+      }
+    }
+  })
+})
+
 describe('Solo and Teams color collections', () => {
   it('mix every house and supplied Atelier theme into exactly two curated sets', () => {
     expect(ATELIER_THEME_IDS).toHaveLength(12)

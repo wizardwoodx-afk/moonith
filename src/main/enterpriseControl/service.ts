@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
@@ -25,6 +25,8 @@ import {
   type EnterpriseRevisionInfo,
   type EnterpriseRole
 } from '../../shared/enterpriseControl'
+import { atomicWriteFile } from '../atomic'
+import { signAuditPayload } from '../audit/chain'
 import {
   authorizeEnterprise,
   createDefaultEnterpriseState,
@@ -35,15 +37,18 @@ import {
 interface EnterpriseRevisionRecord extends EnterpriseRevisionInfo {
   previousDigest: string | null
   state: EnterpriseControlState
+  signature?: string
 }
 
 interface EnterpriseDiskState {
   current: EnterpriseControlState
   revisions: EnterpriseRevisionRecord[]
+  head?: { revision: number; digest: string; signature: string }
 }
 
 interface EnterpriseServiceOptions {
   file: string
+  loadKey: () => Promise<Buffer>
   now?: () => number
   audit?: (event: {
     action: string
@@ -69,8 +74,16 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value)
 }
 
-function revisionDigest(record: Omit<EnterpriseRevisionRecord, 'digest'>): string {
+function revisionDigest(record: Omit<EnterpriseRevisionRecord, 'digest' | 'signature'>): string {
   return createHash('sha256').update(stableJson(record)).digest('hex')
+}
+
+function revisionSignature(record: Omit<EnterpriseRevisionRecord, 'signature'>, key: Buffer): string {
+  return signAuditPayload({ domain: 'selfimpulse-enterprise-revision-v1', record }, key)
+}
+
+function headSignature(head: { revision: number; digest: string }, key: Buffer): string {
+  return signAuditPayload({ domain: 'selfimpulse-enterprise-head-v1', ...head }, key)
 }
 
 function text(value: unknown, label: string, maximum = 160): string {
@@ -131,21 +144,27 @@ export class EnterpriseControlService {
   private mutations: Promise<unknown> = Promise.resolve()
   private readonly decisions: EnterpriseDecision[] = []
   private readonly now: () => number
+  private keyMaterial: Buffer | null = null
 
   constructor(private readonly options: EnterpriseServiceOptions) {
     this.now = options.now ?? Date.now
+  }
+
+  private key(): Buffer {
+    if (!this.keyMaterial) throw new Error('Enterprise revision signing is not initialized.')
+    return this.keyMaterial
   }
 
   private async init(): Promise<void> {
     if (this.disk) return
     if (!this.initialization) {
       this.initialization = (async () => {
+        this.keyMaterial = await this.options.loadKey()
         await fs.mkdir(dirname(this.options.file), { recursive: true })
+        let parsed: EnterpriseDiskState | null = null
         try {
           const raw = await fs.readFile(this.options.file, 'utf8')
-          const parsed = JSON.parse(raw) as EnterpriseDiskState
-          this.validateDisk(parsed)
-          this.disk = parsed
+          parsed = JSON.parse(raw) as EnterpriseDiskState
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
             throw new Error(
@@ -154,12 +173,25 @@ export class EnterpriseControlService {
               }`
             )
           }
-          const current = createDefaultEnterpriseState(this.now())
-          const revision = this.makeRevision(current, null, 'system', 'Initialize native Enterprise Control Plane')
-          this.disk = { current, revisions: [revision] }
-          await this.persist()
         }
+        if (parsed) {
+          const legacy = this.validateDisk(parsed)
+          this.disk = parsed
+          if (legacy) {
+            for (const revision of parsed.revisions) {
+              const { signature: _signature, ...unsigned } = revision
+              revision.signature = revisionSignature(unsigned, this.key())
+            }
+            await this.persist()
+          }
+          return
+        }
+        const current = createDefaultEnterpriseState(this.now())
+        const revision = this.makeRevision(current, null, 'system', 'Initialize native Enterprise Control Plane')
+        this.disk = { current, revisions: [revision] }
+        await this.persist()
       })().catch((error) => {
+        this.disk = null
         this.initialization = null
         throw error
       })
@@ -167,14 +199,22 @@ export class EnterpriseControlService {
     await this.initialization
   }
 
-  private validateDisk(value: EnterpriseDiskState): void {
+  /** Returns true only for a wholly legacy, unsigned file eligible for one-time migration. */
+  private validateDisk(value: EnterpriseDiskState): boolean {
     if (!value || !Array.isArray(value.revisions) || value.revisions.length === 0) {
       throw new Error('Missing immutable revision history.')
     }
+    const signed = value.revisions.filter((revision) => typeof revision.signature === 'string').length
+    if (signed !== 0 && signed !== value.revisions.length) {
+      throw new Error('Revision history mixes signed and unsigned records.')
+    }
     let previous: EnterpriseRevisionRecord | null = null
     for (const revision of value.revisions) {
-      const { digest, ...unsigned } = revision
+      const { digest, signature, ...unsigned } = revision
       if (revisionDigest(unsigned) !== digest) throw new Error(`Revision ${revision.revision} digest mismatch.`)
+      if (signed && revisionSignature({ ...unsigned, digest }, this.key()) !== signature) {
+        throw new Error(`Revision ${revision.revision} signature mismatch.`)
+      }
       if (previous && (revision.revision !== previous.revision + 1 || revision.previousDigest !== previous.digest)) {
         throw new Error(`Revision chain is broken at ${revision.revision}.`)
       }
@@ -189,6 +229,18 @@ export class EnterpriseControlService {
     if (stableJson(value.current) !== stableJson(previous?.state)) {
       throw new Error('Current state does not match the latest immutable revision.')
     }
+    if (signed) {
+      const head = value.head
+      if (!head || head.revision !== previous?.revision || head.digest !== previous.digest) {
+        throw new Error('The signed revision head is missing or names a different chain.')
+      }
+      if (headSignature({ revision: head.revision, digest: head.digest }, this.key()) !== head.signature) {
+        throw new Error('The signed revision head is invalid.')
+      }
+    } else if (value.head) {
+      throw new Error('A legacy unsigned chain cannot carry a signed head.')
+    }
+    return signed === 0
   }
 
   private makeRevision(
@@ -205,19 +257,17 @@ export class EnterpriseControlService {
       previousDigest,
       state: clone(state)
     }
-    return { ...unsigned, digest: revisionDigest(unsigned) }
+    const digest = revisionDigest(unsigned)
+    return { ...unsigned, digest, signature: revisionSignature({ ...unsigned, digest }, this.key()) }
   }
 
   private async persist(): Promise<void> {
     if (!this.disk) throw new Error('Control plane is not initialized.')
-    const temporary = `${this.options.file}.${process.pid}.${randomUUID()}.tmp`
-    await fs.writeFile(temporary, `${JSON.stringify(this.disk, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
-    try {
-      await fs.rename(temporary, this.options.file)
-    } catch (error) {
-      await fs.rm(temporary, { force: true }).catch(() => undefined)
-      throw error
-    }
+    const latest = this.disk.revisions[this.disk.revisions.length - 1]
+    if (!latest) throw new Error('Control plane has no revision to persist.')
+    const head = { revision: latest.revision, digest: latest.digest }
+    this.disk.head = { ...head, signature: headSignature(head, this.key()) }
+    await atomicWriteFile(this.options.file, `${JSON.stringify(this.disk, null, 2)}\n`, { mode: 0o600 })
   }
 
   private async audit(event: Parameters<NonNullable<EnterpriseServiceOptions['audit']>>[0]): Promise<void> {
@@ -231,12 +281,13 @@ export class EnterpriseControlService {
     const disk = this.disk as EnterpriseDiskState
     return {
       state: clone(disk.current),
-      revisions: disk.revisions.map(({ state: _state, previousDigest: _previous, ...info }) => ({ ...info })).reverse(),
+      revisions: disk.revisions.map(({ state: _state, previousDigest: _previous, signature: _signature, ...info }) => ({ ...info })).reverse(),
       recentDecisions: clone(this.decisions),
       security: {
         execution: 'native-in-process',
         defaultPolicy: 'deny',
         denyOverrides: true,
+        revisionIntegrity: 'HMAC-SHA-256 revisions and signed head; legacy unsigned files are migrated once after digest validation.',
         isolation:
           'Native policy and lifecycle enforcement inside SelfImpulse. It does not claim hosted SSO, OS-sandboxed workloads, or hard multi-tenant isolation.'
       }
@@ -541,7 +592,7 @@ export class EnterpriseControlService {
     await this.init()
     const revision = (this.disk as EnterpriseDiskState).revisions.find((candidate) => candidate.revision === revisionNumber)
     if (!revision) throw new Error(`Revision ${revisionNumber} does not exist.`)
-    const { state, previousDigest: _previous, ...info } = revision
+    const { state, previousDigest: _previous, signature: _signature, ...info } = revision
     return { info: { ...info }, state: clone(state) }
   }
 }

@@ -14,9 +14,10 @@
  *
  * Ported from the earlier desktop shell.
  */
-import { execFile, type ExecException } from 'node:child_process'
+import type { ExecException } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { runNpx } from '../npx'
 import { isSafeRef, scrubEnv } from './security'
 import type { BackendStore } from './store'
 
@@ -202,26 +203,9 @@ function latestVersionString(value: { version?: string } | string | undefined): 
  * skill reference can never turn into a command.
  */
 function run(cli: string, args: string[], { timeout = 300000, cwd }: RunOptions = {}): Promise<RunResult> {
-  return new Promise((resolve) => {
-    execFile(
-      'npx',
-      ['-y', cli, ...args],
-      {
-        encoding: 'utf8',
-        timeout,
-        cwd,
-        maxBuffer: 8 * 1024 * 1024,
-        windowsHide: true,
-        shell: process.platform === 'win32',
-        // The CLI knows its own registry; overriding it with the API path breaks
-        // its routes, so only the site is pinned. Credentials never leak to it.
-        env: scrubEnv({ SKILL_REGISTRY_SITE })
-      },
-      (err, stdout, stderr) => {
-        resolve({ code: err ? err.code ?? 1 : 0, stdout: stdout || '', stderr: stderr || '', error: err })
-      }
-    )
-  })
+  // The CLI knows its own registry; overriding it with the API path breaks its
+  // routes, so only the site is pinned. Credentials never leak to it.
+  return runNpx(cli, args, { timeout, cwd, env: scrubEnv({ SKILL_REGISTRY_SITE }) })
 }
 
 async function getJson(url: string): Promise<unknown> {

@@ -59,6 +59,8 @@ export interface EngineInput {
   signal: AbortSignal
   onText: (delta: string) => void
   onTool: (callId: string, name: string, args: Record<string, unknown>) => Promise<ToolOutcome>
+  /** New user steering drained between model iterations, never during a tool call. */
+  drainUserMessages?: () => ModelMessage[]
   emit: (event: string, payload: unknown) => void
 }
 
@@ -235,7 +237,7 @@ export async function runEngineTurn(input: EngineInput): Promise<TurnResult> {
     }
 
     budget.consume()
-    const messages: ModelMessage[] = []
+    const messages: ModelMessage[] = input.drainUserMessages?.() ?? []
     let iterationsSinceSkill = state.iterationsSinceSkill + 1
     let iterationsSinceMemory = state.iterationsSinceMemory + 1
 
@@ -342,6 +344,12 @@ export async function runEngineTurn(input: EngineInput): Promise<TurnResult> {
 
   const executeCall = async (turnId: string, call: ToolCall): Promise<CompletedToolCall> => {
     ports.emit('agent:tool', { turnId, tool: call.name, args: call.args, callId: call.id })
+    if (!input.tools.some((tool) => tool.name === call.name)) {
+      return {
+        call,
+        result: { ok: false, error: `Tool "${call.name}" is not granted to this turn; execution was refused.` }
+      }
+    }
     try {
       const outcome = await executeStep(
         createStep<Record<string, unknown>, ToolOutcome>({

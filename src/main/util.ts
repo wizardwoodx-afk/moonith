@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
-import { dirname } from 'node:path'
+import { atomicWriteFile } from './atomic'
 
 export function newId(prefix = ''): string {
   const id = randomUUID()
@@ -17,10 +17,7 @@ export async function readJson<T>(file: string, fallback: T): Promise<T> {
 }
 
 export async function atomicWriteJson(file: string, value: unknown): Promise<void> {
-  await fs.mkdir(dirname(file), { recursive: true })
-  const tmp = `${file}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`
-  await fs.writeFile(tmp, JSON.stringify(value, null, 2), 'utf8')
-  await fs.rename(tmp, file)
+  await atomicWriteFile(file, JSON.stringify(value, null, 2))
 }
 
 export function nowIso(): string {

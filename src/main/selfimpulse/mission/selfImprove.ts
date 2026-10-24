@@ -1,3 +1,4 @@
+import { mainStorage } from "../persist/mainStorage";
 /**
  * VH 11.11.1 SELF-EVOLVING — strategy self-improvement as a genuine online experiment.
  *
@@ -95,21 +96,20 @@ export function initialState(now: number): ImprovementState {
 import { enforceWrite } from "./ledger";
 
 export function loadImprovement(): ImprovementState {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) {
-      const p = JSON.parse(raw) as ImprovementState;
-      if (p && Array.isArray(p.versions) && p.versions.length > 0) return p;
-    }
-  } catch { /* storage unavailable */ }
-  return initialState(Date.now());
+  const raw = mainStorage().getItem(LS_KEY);
+  if (!raw) return initialState(Date.now());
+  const parsed = JSON.parse(raw) as unknown;
+  if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as ImprovementState).versions) || (parsed as ImprovementState).versions.length === 0) {
+    throw new Error("Persisted strategy state is invalid; refusing to replace it with baseline defaults.");
+  }
+  return parsed as ImprovementState;
 }
 
 export function saveImprovement(s: ImprovementState, writer: "human" | "agent" | "experiment" = "experiment"): void {
   // 11.12.3 — governed write: the strategy archive is RECOURSE; only the
   // measured experiment or a human may persist it.
   enforceWrite("RECOURSE", writer);
-  try { localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch { /* ignore */ }
+  mainStorage().setItem(LS_KEY, JSON.stringify(s));
 }
 
 export function adoptedVersion(s: ImprovementState): StrategyVersion | null {

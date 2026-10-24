@@ -1,3 +1,4 @@
+import { mainStorage } from "../persist/mainStorage";
 /**
  * VH 11.11 SELF-EVOLVING — learning receipts.
  *
@@ -115,16 +116,13 @@ export async function verifyLearningReceipt(r: LearningReceipt): Promise<{ ok: b
 }
 
 export function loadLearningReceipts(): LearningReceipt[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) {
-      const p = JSON.parse(raw) as LearningReceipt[];
-      if (Array.isArray(p)) return p;
-    }
-  } catch { /* storage unavailable */ }
-  return [];
+  const raw = mainStorage().getItem(LS_KEY);
+  if (!raw) return [];
+  const parsed = JSON.parse(raw) as unknown;
+  if (!Array.isArray(parsed)) throw new Error("Persisted learning receipts are not an array; refusing to discard them.");
+  return parsed as LearningReceipt[];
 }
 
 export function saveLearningReceipts(list: LearningReceipt[]): void {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(list.slice(-LEARNING_RECEIPT_CAP))); } catch { /* ignore */ }
+  mainStorage().setItem(LS_KEY, JSON.stringify(list.slice(-LEARNING_RECEIPT_CAP)));
 }

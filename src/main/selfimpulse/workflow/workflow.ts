@@ -127,6 +127,8 @@ export class WorkflowRun<Input = unknown, Output = unknown> {
   private resumeTarget?: { path: string; data: unknown }
   private input?: Input
   private hasInput = false
+  private active = false
+  private cancelRequested = false
 
   constructor(
     private readonly config: WorkflowConfig<Input, Output>,
@@ -189,53 +191,71 @@ export class WorkflowRun<Input = unknown, Output = unknown> {
     input: Input,
     options: { signal?: AbortSignal } = {}
   ): Promise<WorkflowSnapshot<Output>> {
-    if (this.current.status !== 'pending') {
+    if (this.active || this.current.status !== 'pending') {
       throw new WorkflowStateError(`Cannot start a workflow run in "${this.current.status}" state.`)
     }
     const parsed = parse<Input>(this.config.inputSchema, input, `Input for workflow "${this.config.id}"`)
-    this.input = parsed
-    this.hasInput = true
-    if (this.options.durable) {
-      await this.options.durable.set(this.inputKey, { value: parsed })
-      await this.saveSnapshot()
+    this.active = true
+    try {
+      this.input = parsed
+      this.hasInput = true
+      if (this.options.durable) {
+        await this.options.durable.set(this.inputKey, { value: parsed })
+        await this.saveSnapshot()
+      }
+      return await this.execute(parsed, false, options.signal)
+    } finally {
+      this.active = false
     }
-    return this.execute(parsed, false, options.signal)
   }
 
   async resume(stepId: string, resumeData: unknown): Promise<WorkflowSnapshot<Output>> {
-    if (this.current.status === 'running') {
+    if (this.active || this.current.status === 'running') {
       throw new WorkflowStateError('The workflow is already running.')
     }
-    await this.loadPersisted()
-    const suspended = this.current.suspended
-    if (this.current.status !== 'suspended' || !suspended) {
-      throw new WorkflowStateError('The workflow run is not suspended.')
+    this.active = true
+    try {
+      await this.loadPersisted()
+      const suspended = this.current.suspended
+      if (this.current.status !== 'suspended' || !suspended) {
+        throw new WorkflowStateError('The workflow run is not suspended.')
+      }
+      if (suspended.stepId !== stepId) {
+        throw new WorkflowStateError(`Workflow is suspended at "${suspended.stepId}", not "${stepId}".`)
+      }
+      const input = await this.storedInput()
+      this.resumeTarget = { path: suspended.path, data: resumeData }
+      if (this.options.durable) {
+        await this.options.durable.set(this.resumeKey, { path: suspended.path, data: resumeData })
+      }
+      return await this.execute(input, true)
+    } finally {
+      this.active = false
     }
-    if (suspended.stepId !== stepId) {
-      throw new WorkflowStateError(`Workflow is suspended at "${suspended.stepId}", not "${stepId}".`)
-    }
-    const input = await this.storedInput()
-    this.resumeTarget = { path: suspended.path, data: resumeData }
-    if (this.options.durable) {
-      await this.options.durable.set(this.resumeKey, { path: suspended.path, data: resumeData })
-    }
-    return this.execute(input, true)
   }
 
   async recover(options: { signal?: AbortSignal } = {}): Promise<WorkflowSnapshot<Output>> {
-    if (this.current.status === 'running') return this.snapshot()
-    const loaded = await this.loadPersisted()
-    const status = loaded.status
-    if (status === 'pending') {
-      throw new WorkflowStateError('No persisted workflow run exists to recover.')
+    if (this.active || this.current.status === 'running') return this.snapshot()
+    this.active = true
+    try {
+      const loaded = await this.loadPersisted()
+      const status = loaded.status
+      if (status === 'pending') {
+        throw new WorkflowStateError('No persisted workflow run exists to recover.')
+      }
+      if (status !== 'running') return this.snapshot()
+      const resume = this.options.durable?.get<{ path: string; data: unknown }>(this.resumeKey)
+        ?? this.options.durable?.get<{ path: string; data: unknown }>(this.legacyResumeKey)
+      if (resume) this.resumeTarget = resume
+      return await this.execute(await this.storedInput(), true, options.signal)
+    } finally {
+      this.active = false
     }
-    if (status !== 'running') return this.snapshot()
-    const resume = this.options.durable?.get<{ path: string; data: unknown }>(this.resumeKey)
-    if (resume) this.resumeTarget = resume
-    return this.execute(await this.storedInput(), true, options.signal)
   }
 
   cancel(): void {
+    if (!this.active || isTerminal(this.current.status)) return
+    this.cancelRequested = true
     this.controller.abort(new DOMException('The workflow was cancelled.', 'AbortError'))
   }
 
@@ -245,6 +265,9 @@ export class WorkflowRun<Input = unknown, Output = unknown> {
     externalSignal?: AbortSignal
   ): Promise<WorkflowSnapshot<Output>> {
     this.controller = new AbortController()
+    if (this.cancelRequested) {
+      this.controller.abort(new DOMException('The workflow was cancelled.', 'AbortError'))
+    }
     const forwardAbort = () => this.controller.abort(externalSignal?.reason)
     if (externalSignal?.aborted) forwardAbort()
     else externalSignal?.addEventListener('abort', forwardAbort, { once: true })
@@ -260,6 +283,9 @@ export class WorkflowRun<Input = unknown, Output = unknown> {
       let value: unknown = input
       for (let index = 0; index < this.operations.length; index += 1) {
         value = await this.executeOperation(this.operations[index], value, index)
+      }
+      if (this.controller.signal.aborted) {
+        throw this.controller.signal.reason ?? new DOMException('The workflow was cancelled.', 'AbortError')
       }
       const result = parse<Output>(
         this.config.outputSchema,
@@ -296,6 +322,7 @@ export class WorkflowRun<Input = unknown, Output = unknown> {
     } finally {
       externalSignal?.removeEventListener('abort', forwardAbort)
       this.resumeTarget = undefined
+      this.cancelRequested = false
     }
     return this.snapshot()
   }
@@ -459,19 +486,32 @@ export class WorkflowRun<Input = unknown, Output = unknown> {
   }
 
   private get inputKey(): string {
-    return `__workflow:${this.config.id}:input`
+    return `__workflow:${this.config.id}:${this.options.runId}:input`
   }
 
   private get snapshotKey(): string {
-    return `__workflow:${this.config.id}:snapshot`
+    return `__workflow:${this.config.id}:${this.options.runId}:snapshot`
   }
 
   private get resumeKey(): string {
+    return `__workflow:${this.config.id}:${this.options.runId}:resume`
+  }
+
+  private get legacyInputKey(): string {
+    return `__workflow:${this.config.id}:input`
+  }
+
+  private get legacySnapshotKey(): string {
+    return `__workflow:${this.config.id}:snapshot`
+  }
+
+  private get legacyResumeKey(): string {
     return `__workflow:${this.config.id}:resume`
   }
 
   private async storedInput(): Promise<Input> {
     const envelope = this.options.durable?.get<{ value: Input }>(this.inputKey)
+      ?? this.options.durable?.get<{ value: Input }>(this.legacyInputKey)
     if (envelope && 'value' in envelope) return envelope.value
     if (this.hasInput) return this.input as Input
     throw new WorkflowStateError('The persisted workflow input is missing.')
@@ -479,6 +519,7 @@ export class WorkflowRun<Input = unknown, Output = unknown> {
 
   private async loadPersisted(): Promise<WorkflowSnapshot<Output>> {
     const stored = this.options.durable?.get<WorkflowSnapshot<Output>>(this.snapshotKey)
+      ?? this.options.durable?.get<WorkflowSnapshot<Output>>(this.legacySnapshotKey)
     if (stored) this.current = clone(stored)
     return this.current
   }

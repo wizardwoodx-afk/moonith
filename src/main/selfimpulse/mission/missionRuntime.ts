@@ -161,7 +161,7 @@ export class MissionRuntime implements DurableRunHandle {
   private repairs: RepairAttempt[] = [];
   private failures: FailureSignal[] = [];
   /* 16.10.1 — the durable wire (F2): snapshot + once-guard live in ./durable.
-   * defaultDurableKV wraps localStorage (getItem/setItem) when the host has it
+   * defaultDurableKV wraps the shared Storage boundary (native files in Electron)
    * and degrades to an ephemeral Map when it does not — execution never dies
    * because durability is unavailable. */
   private readonly durableKV = defaultDurableKV();
@@ -1567,7 +1567,7 @@ export class MissionRuntime implements DurableRunHandle {
    *     | { ok: false; reason: string; detail: string }
    *
    * `runId` defaults to this mission's own `run:<missionId>`. `store`
-   * defaults to the runtime's durable KV (localStorage in the app, an
+   * defaults to the runtime's durable KV (the shared native/browser store, an
    * injected Map under test). "no-journal" means a fresh start and says so;
    * "malformed"/"unknown-version"/"state-missing" mean a journal EXISTS and
    * will not load, and the caller must not restart from scratch over it.

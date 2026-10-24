@@ -30,6 +30,7 @@ import {
 } from "./authorityWeb";
 import type { Mandate, OwnerKeyPairWeb } from "./authorityWeb";
 import { encryptedOwnerStorage, type KeySecurity, type SealedOwnerStorage } from "./ownerKeyStore";
+import { mainStorage } from "../persist/mainStorage";
 
 export const AUTHORITY_OWNER_FALLBACK = "local-owner";
 export const AUTHORITY_SCHEME = "ecdsa-p256";
@@ -41,12 +42,22 @@ export const MAX_DEPTH = 1;
 
 export interface OwnerStorage { get(): string | null; set(v: string): void }
 
-const browserRawStorage: OwnerStorage | null = (() => {
+function nativeStorage(): Storage | null {
   try {
-    const ls = globalThis.localStorage;
-    if (!ls) return null;
-    return { get: () => ls.getItem("engine.ownerKeys.v1"), set: (v) => ls.setItem("engine.ownerKeys.v1", v) };
-  } catch { return null; }
+    return globalThis.localStorage ??
+      (typeof process !== "undefined" && process.versions?.electron ? mainStorage() : null);
+  } catch {
+    return null;
+  }
+}
+
+const nativeRawStorage: OwnerStorage | null = (() => {
+  const storage = nativeStorage();
+  if (!storage) return null;
+  return {
+    get: () => storage.getItem("engine.ownerKeys.v1"),
+    set: (value) => storage.setItem("engine.ownerKeys.v1", value),
+  };
 })();
 
 export interface OwnerIdentity {
@@ -111,8 +122,8 @@ let defaultStorageCache: { key: string; promise: Promise<{ storage: OwnerStorage
  * NEVER written plaintext by this path.
  */
 async function resolveDefaultStorage(passphrase?: string): Promise<{ storage: OwnerStorage | null; security: KeySecurity }> {
-  if (browserRawStorage && passphrase) {
-    const enc = await encryptedOwnerStorage(browserRawStorage, passphrase);
+  if (nativeRawStorage && passphrase) {
+    const enc = await encryptedOwnerStorage(nativeRawStorage, passphrase);
     return { storage: enc, security: "encrypted" };
   }
   return { storage: null, security: "session" };
@@ -260,7 +271,7 @@ const KEY = "engine.authority.v1";
 
 function loadLedger(): MissionAuthorityRecord[] {
   try {
-    const raw = globalThis.localStorage?.getItem(KEY);
+    const raw = nativeStorage()?.getItem(KEY);
     return raw ? (JSON.parse(raw) as MissionAuthorityRecord[]) : [];
   } catch {
     return [];
@@ -287,7 +298,7 @@ export async function recordMissionAuthority(
   try {
     const ledger = loadLedger();
     ledger.push(rec);
-    globalThis.localStorage?.setItem(KEY, JSON.stringify(ledger.slice(-200)));
+    nativeStorage()?.setItem(KEY, JSON.stringify(ledger.slice(-200)));
   } catch { /* storage-less runtimes keep the in-memory return value */ }
   return rec;
 }

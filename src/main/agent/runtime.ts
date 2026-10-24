@@ -53,6 +53,7 @@ interface RunState {
   controller: AbortController
   stopped: boolean
   pendingSteer: boolean
+  pendingSteerMessages: ChatMessage[]
 }
 
 /** Existing task-role RBAC and native enterprise policy are both mandatory. */
@@ -146,10 +147,9 @@ class AgentRuntime {
       createdAt: nowIso(),
       attachments: attachments.length ? attachments : undefined
     }
-    task.messages.push(userMessage)
-
+    const incoming: ChatMessage[] = []
     if (attachments.length) {
-      task.messages.push({
+      incoming.push({
         id: newId('msg'),
         role: 'user',
         content: attachmentManifest(attachments),
@@ -157,9 +157,12 @@ class AgentRuntime {
         hidden: true
       })
     }
+    incoming.push(userMessage)
+    task.messages.push(...incoming)
 
     if (active) {
       active.pendingSteer = true
+      active.pendingSteerMessages.push(...incoming)
     } else {
       task.status = 'running'
       task.error = undefined
@@ -224,7 +227,8 @@ class AgentRuntime {
       taskId,
       controller: new AbortController(),
       stopped: false,
-      pendingSteer: false
+      pendingSteer: false,
+      pendingSteerMessages: []
     }
     this.runs.set(taskId, state)
     void this.loop(taskId, state)
@@ -304,6 +308,12 @@ class AgentRuntime {
         systemPrompt: system,
         history,
         userMessage: userMessage?.content ?? '',
+        drainUserMessages: () => {
+          const pending = run.pendingSteerMessages.splice(0)
+          if (!pending.length) return []
+          run.pendingSteer = false
+          return toEngineHistory(pending)
+        },
         context,
         memoryStore: backend.store.memories,
         skillsDir: backendSkillsDir(),
@@ -384,6 +394,7 @@ class AgentRuntime {
       }
       const failure = turnFailureMessage(result)
       if (failure) throw new Error(failure)
+      if (run.pendingSteer) return
       await this.finish(task, 'done')
       governanceService.audit(
         task,
@@ -410,7 +421,17 @@ class AgentRuntime {
       toast('error', task.error)
     } finally {
       this.runs.delete(taskId)
-      if (!run.stopped && task.status === 'running') {
+      if (!run.stopped && run.pendingSteer) {
+        run.pendingSteer = false
+        task.status = 'running'
+        task.error = undefined
+        task.completedAt = undefined
+        await store.saveTask(task).catch(() => undefined)
+        this.publish(task)
+        if (!this.runs.has(taskId)) this.launch(taskId)
+        return
+      }
+      if (!this.runs.has(taskId) && !run.stopped && task.status === 'running') {
         task.status = 'done'
         task.completedAt = nowIso()
         await store.saveTask(task).catch(() => undefined)

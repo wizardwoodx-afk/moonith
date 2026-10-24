@@ -55,8 +55,10 @@ export async function executeStep<Input, Output>(
         throw new WorkflowSuspendedError(step.id, path, validated)
       }
     })
+    if (signal.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError')
     const parsed = parseSchema<Output>(step.outputSchema, output, `Output for workflow step "${step.id}"`)
     await options.validateOutput?.(parsed)
+    if (signal.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError')
     return parsed
   }
 
@@ -65,6 +67,7 @@ export async function executeStep<Input, Output>(
     const output = options.durable
       ? await options.durable.run(path, invoke, { ...retry, signal })
       : await executeLocally(invoke, retry, signal)
+    if (signal.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError')
     options.onEvent?.({ type: 'step_completed', stepId: step.id, path, replayed })
     return output
   } catch (error) {
