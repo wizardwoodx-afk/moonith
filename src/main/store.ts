@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import type {
+  BrowserSettings,
   ChannelInput,
   ChannelRecord,
   ConnectorsInput,
@@ -27,6 +28,7 @@ import {
 import { getPaths, ensureTaskWorkspace, taskWorkspace } from './paths'
 import { atomicWriteJson, newId, nowIso, readJson } from './util'
 import { sameProviderEndpoint } from './backend/provider'
+import { DEFAULT_BROWSER_SETTINGS, normalizeBrowserSettings } from '@shared/browser'
 
 interface StoredProvider {
   id: string
@@ -70,6 +72,7 @@ interface StoredSettings {
   allowShell: boolean
   onboardingComplete: boolean
   governance: GovernanceSettings
+  browser: BrowserSettings
 }
 
 const DEFAULT_SETTINGS: StoredSettings = {
@@ -81,7 +84,8 @@ const DEFAULT_SETTINGS: StoredSettings = {
   customInstructions: '',
   allowShell: false,
   onboardingComplete: false,
-  governance: DEFAULT_GOVERNANCE_SETTINGS
+  governance: DEFAULT_GOVERNANCE_SETTINGS,
+  browser: DEFAULT_BROWSER_SETTINGS
 }
 
 function requireSecretEncryption(): void {
@@ -169,6 +173,7 @@ class Store {
     const rawSettings = await readStoredSettings()
     this.settings = { ...DEFAULT_SETTINGS, ...rawSettings }
     this.settings.governance = normalizeGovernanceSettings(rawSettings.governance)
+    this.settings.browser = normalizeBrowserSettings(rawSettings.browser)
     this.settings.providers = Array.isArray(rawSettings.providers) ? rawSettings.providers : []
     this.settings.mcpServers = Array.isArray(rawSettings.mcpServers)
       ? rawSettings.mcpServers.map(sanitizeMcpServer)
@@ -269,7 +274,8 @@ class Store {
       customInstructions: settings.customInstructions,
       allowShell: settings.allowShell,
       onboardingComplete: settings.onboardingComplete,
-      governance: normalizeGovernanceSettings(settings.governance)
+      governance: normalizeGovernanceSettings(settings.governance),
+      browser: { ...settings.browser }
     }
   }
 
@@ -411,6 +417,18 @@ class Store {
     if (patch.onboardingComplete !== undefined) settings.onboardingComplete = patch.onboardingComplete
     if (patch.governance !== undefined) {
       settings.governance = normalizeGovernanceSettings(patch.governance, settings.governance)
+    }
+    if (patch.browser !== undefined) {
+      if (patch.browser.engine !== undefined && !['stagehand', 'chromium'].includes(patch.browser.engine)) {
+        throw new Error('Unknown browser engine.')
+      }
+      if (patch.browser.headless !== undefined && typeof patch.browser.headless !== 'boolean') {
+        throw new Error('Browser headless preference must be a boolean.')
+      }
+      settings.browser = {
+        engine: patch.browser.engine ?? settings.browser.engine,
+        headless: patch.browser.headless ?? settings.browser.headless
+      }
     }
 
     if (

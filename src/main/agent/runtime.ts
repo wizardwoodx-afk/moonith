@@ -32,6 +32,7 @@ import { skillService } from '../services/skills'
 import { subAgentService } from '../services/subagents'
 import { usageService } from '../services/usage'
 import { governanceService, type GovernanceActor } from '../services/governance'
+import { redactSensitiveText } from '../selfimpulse/governance/dlp'
 import { runEngineTurn, toEngineHistory, turnFailureMessage, type ToolOutcome } from './engine'
 import { getBackend } from '../backend'
 import { backendSkillsDir } from '../backend/paths'
@@ -1532,10 +1533,16 @@ Inherited enterprise role: ${governanceService.role(task)}. Your tools are the i
 
 function approvalDetails(tool: AgentTool, args: Record<string, unknown>): string {
   if (tool.name === 'run_command' && typeof args.command === 'string') {
-    return truncate(args.command, 4000)
+    return truncate(redactSensitiveText(args.command, ['secret', 'api-key']).text, 4000)
+  }
+  if (tool.name === 'browser_type') {
+    return truncate(JSON.stringify({
+      ...args,
+      text: typeof args.text === 'string' ? `[hidden · ${args.text.length} characters]` : args.text
+    }, null, 2), 4000)
   }
   try {
-    return truncate(JSON.stringify(args, null, 2), 4000)
+    return truncate(redactSensitiveText(JSON.stringify(args, null, 2), ['secret', 'api-key']).text, 4000)
   } catch {
     return ''
   }

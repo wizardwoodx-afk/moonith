@@ -298,7 +298,9 @@ if (!gotLock) {
     isQuitting = true
     scheduler.shutdown()
     approvals.cancelAll()
-    browserService.disposeAll()
+    void browserService.disposeAll().catch((error) => {
+      console.error('[shutdown] Browser sessions could not be cleaned up:', error)
+    })
     tableService.dispose()
     channelService.dispose()
     void mcpManager.closeAll()

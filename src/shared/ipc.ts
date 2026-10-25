@@ -38,6 +38,7 @@ export const IPC = {
   mcpReaPreset: 'mcp:rea-preset',
 
   browserShow: 'browser:show',
+  browserStatus: 'browser:status',
 
   librarySnapshot: 'library:snapshot',
   libraryCollectionCreate: 'library:collection-create',

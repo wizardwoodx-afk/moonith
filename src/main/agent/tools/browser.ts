@@ -4,6 +4,7 @@ import type { BrowserState } from '@shared/types'
 import type { ToolContext } from './types'
 import { defineTool, toolResultError } from './types'
 import { browserService } from '../../services/browser'
+import { truncate } from '../../util'
 
 function scope(ctx: ToolContext): string {
   return ctx.browserScope ?? ctx.task.id
@@ -26,17 +27,22 @@ async function snapshot(ctx: ToolContext): Promise<BrowserState> {
 }
 
 function stateSummary(state: BrowserState): string {
-  return [`URL: ${state.url || '(none)'}`, `Title: ${state.title || '(untitled)'}`, `Last action: ${state.lastAction ?? ''}`].join(
-    '\n'
-  )
+  return [
+    `URL: ${state.url || '(none)'}`,
+    `Title: ${state.title || '(untitled)'}`,
+    `Engine: ${state.engine === 'stagehand' ? 'Stagehand AI' : 'Built-in Chromium'} · ${state.mode ?? 'headless'}`,
+    `Last action: ${state.lastAction ?? ''}`,
+    `Blocked requests: ${state.blockedRequests ?? 0}`,
+    ...(state.notice ? [`Notice: ${state.notice}`] : [])
+  ].join('\n')
 }
 
 export const browserOpenTool = defineTool({
   name: 'browser_open',
   title: 'Open browser',
   description:
-    'Open a URL in the task browser. The browser is a real Chromium window the user can watch; only http/https URLs are allowed.',
-  schema: z.object({ url: z.string().url() }),
+    'Open a URL in the native task browser. Stagehand AI is the default engine, with headless operation and user takeover; only verified public http/https destinations are allowed.',
+  schema: z.object({ url: z.string().trim().url().max(8192) }),
   sideEffect: 'network',
   risk: 'low',
   approval: 'never',
@@ -56,7 +62,7 @@ export const browserClickTool = defineTool({
   name: 'browser_click',
   title: 'Click in browser',
   description: 'Click the first element matching a CSS selector in the task browser.',
-  schema: z.object({ selector: z.string().min(1) }),
+  schema: z.object({ selector: z.string().trim().min(1).max(2000) }),
   sideEffect: 'network',
   risk: 'medium',
   execute: async (args, ctx) => {
@@ -77,8 +83,8 @@ export const browserTypeTool = defineTool({
   description:
     'Type text into an input, textarea, or contenteditable element in the task browser. Optionally submit the surrounding form.',
   schema: z.object({
-    selector: z.string().min(1),
-    text: z.string(),
+    selector: z.string().trim().min(1).max(2000),
+    text: z.string().max(100_000),
     submit: z.boolean().optional()
   }),
   sideEffect: 'network',
@@ -99,7 +105,7 @@ export const browserSelectTool = defineTool({
   name: 'browser_select',
   title: 'Select option',
   description: 'Choose an option by value in a <select> element in the task browser.',
-  schema: z.object({ selector: z.string().min(1), value: z.string() }),
+  schema: z.object({ selector: z.string().trim().min(1).max(2000), value: z.string().max(5000) }),
   sideEffect: 'network',
   risk: 'medium',
   execute: async (args, ctx) => {
@@ -118,7 +124,7 @@ export const browserPressTool = defineTool({
   name: 'browser_press',
   title: 'Press key',
   description: 'Send a key press to the focused element in the task browser (e.g. Enter, Tab, Escape, ArrowDown).',
-  schema: z.object({ key: z.string().min(1) }),
+  schema: z.object({ key: z.string().trim().min(1).max(64) }),
   sideEffect: 'network',
   risk: 'medium',
   execute: async (args, ctx) => {
@@ -159,7 +165,7 @@ export const browserExtractTool = defineTool({
   title: 'Read page text',
   description:
     'Extract readable text (or inner text of a CSS selector) from the current page in the task browser.',
-  schema: z.object({ selector: z.string().optional() }),
+  schema: z.object({ selector: z.string().trim().min(1).max(2000).optional() }),
   sideEffect: 'read',
   approval: 'never',
   execute: async (args, ctx) => {
@@ -215,7 +221,7 @@ export const browserWaitTool = defineTool({
   title: 'Wait in browser',
   description: 'Wait for a CSS selector to appear, or wait a fixed number of milliseconds.',
   schema: z.object({
-    selector: z.string().optional(),
+    selector: z.string().trim().min(1).max(2000).optional(),
     ms: z.number().int().min(100).max(30000).optional()
   }),
   sideEffect: 'read',
@@ -239,13 +245,88 @@ export const browserShowTool = defineTool({
   sideEffect: 'none',
   approval: 'never',
   execute: async (_args, ctx) => {
-    browserService.show(scope(ctx))
-    return { content: 'Browser window shown.' }
+    try {
+      const state = await browserService.show(scope(ctx))
+      ctx.setBrowser(ownedState(ctx, state))
+      return { content: `Browser window shown.\n${stateSummary(state)}` }
+    } catch (error) {
+      return toolResultError(error)
+    }
   }
+})
+
+export const browserObserveTool = defineTool({
+  name: 'browser_observe',
+  title: 'Observe browser actions',
+  description:
+    'Use Stagehand AI to find relevant actionable elements on the current page and return real selectors. This is read-only; use browser_act only after reviewing the intended effect.',
+  schema: z.object({ instruction: z.string().trim().min(1).max(2000).optional() }),
+  sideEffect: 'read',
+  approval: 'never',
+  execute: async (args, ctx) => {
+    try {
+      const actions = await browserService.observe(scope(ctx), args.instruction)
+      ctx.setBrowser(ownedState(ctx, await browserService.state(scope(ctx))))
+      return { content: truncate(JSON.stringify({ actions }, null, 2), 40_000) }
+    } catch (error) {
+      return toolResultError(error)
+    }
+  },
+  summarize: (args) => args.instruction ? `Observe: ${args.instruction}` : 'Observe page actions'
+})
+
+export const browserActTool = defineTool({
+  name: 'browser_act',
+  title: 'Perform AI browser action',
+  description:
+    'Use Stagehand AI to perform one natural-language browser action. This can change remote state, submit forms, or make purchases; the user must approve every call. Never use it to bypass a denied action or CAPTCHA.',
+  schema: z.object({ instruction: z.string().trim().min(1).max(2000) }),
+  sideEffect: 'network',
+  risk: 'high',
+  approval: 'always',
+  allowAlways: false,
+  execute: async (args, ctx) => {
+    try {
+      const result = await browserService.act(scope(ctx), args.instruction)
+      const state = await snapshot(ctx)
+      return {
+        content: `${result.actionDescription || result.message}\nActions performed: ${result.actions}\n${stateSummary(state)}`
+      }
+    } catch (error) {
+      return toolResultError(error)
+    }
+  },
+  summarize: (args) => `AI action: ${args.instruction}`
+})
+
+export const browserExtractStructuredTool = defineTool({
+  name: 'browser_extract_structured',
+  title: 'Extract structured browser data',
+  description:
+    'Use Stagehand AI and the task provider to extract schema-validated JSON from the current page. Optionally supply a JSON Schema with type "object"; page content is subject to the existing DLP policy.',
+  schema: z.object({
+    instruction: z.string().trim().min(1).max(4000),
+    schema: z.record(z.string(), z.unknown()).optional()
+  }),
+  sideEffect: 'read',
+  approval: 'never',
+  execute: async (args, ctx) => {
+    try {
+      const data = await browserService.extractStructured(scope(ctx), args.instruction, args.schema)
+      ctx.setBrowser(ownedState(ctx, await browserService.state(scope(ctx))))
+      return { content: truncate(JSON.stringify(data, null, 2), 60_000) }
+    } catch (error) {
+      return toolResultError(error)
+    }
+  },
+  summarize: (args) => `Extract JSON: ${args.instruction}`
 })
 
 export const browserTools = [
   browserOpenTool,
+  browserObserveTool,
+  browserActTool,
+  browserExtractStructuredTool,
   browserClickTool,
   browserTypeTool,
   browserSelectTool,

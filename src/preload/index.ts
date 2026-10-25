@@ -133,6 +133,7 @@ const api: KnightApi = {
   listSubAgents: () => ipcRenderer.invoke(IPC.subAgentsList),
 
   showBrowser: (taskId: string, scope?: string) => ipcRenderer.invoke(IPC.browserShow, taskId, scope),
+  getBrowserStatus: () => ipcRenderer.invoke(IPC.browserStatus),
 
   librarySnapshot: () => ipcRenderer.invoke(IPC.librarySnapshot),
   libraryCreateCollection: (name: string) => ipcRenderer.invoke(IPC.libraryCollectionCreate, name),

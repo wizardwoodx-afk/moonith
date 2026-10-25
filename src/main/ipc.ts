@@ -55,7 +55,7 @@ import { connectorsManager } from './services/connectors'
 import { channelService } from './services/channels'
 import { subAgentService } from './services/subagents'
 import { toggleMessageReaction } from './services/reactions'
-import { applyTitleBarTheme } from './window'
+import { applyTitleBarTheme, getMainWindow } from './window'
 import { getBackend } from './backend'
 import { registerBackendIpc, setBackendEventTarget } from './backend/ipc'
 import { registerAuditIpc } from './audit'
@@ -71,6 +71,13 @@ import type { MarketspaceCreateInput } from '@shared/marketspace'
 
 function publishTask(task: Task): void {
   sendTaskEvent({ type: 'task', task })
+}
+
+function requireMainWindowSender(event: Electron.IpcMainInvokeEvent): void {
+  const main = getMainWindow()
+  if (!main || main.isDestroyed() || event.sender !== main.webContents) {
+    throw new Error('This browser operation is available only to the SelfImpulse window.')
+  }
 }
 
 async function restartMcp(): Promise<void> {
@@ -371,10 +378,19 @@ export function registerIpc(): void {
     return mcpManager.getStatuses()
   })
 
-  ipcMain.handle(IPC.browserShow, (_event, taskId: string, scope?: string) => {
+  ipcMain.handle(IPC.browserShow, async (event, taskId: string, scope?: string) => {
+    requireMainWindowSender(event)
     const requestedScope = typeof scope === 'string' && scope ? scope : taskId
-    if (taskIdForBrowserScope(requestedScope) !== taskId) throw new Error('Invalid task browser scope.')
-    browserService.show(requestedScope)
+    if (typeof taskId !== 'string' || taskIdForBrowserScope(requestedScope) !== taskId) {
+      throw new Error('Invalid task browser scope.')
+    }
+    if (!store.getTask(taskId)) throw new Error('The task owning this browser session no longer exists.')
+    await browserService.show(requestedScope)
+  })
+
+  ipcMain.handle(IPC.browserStatus, (event) => {
+    requireMainWindowSender(event)
+    return browserService.status()
   })
 
   ipcMain.handle(IPC.librarySnapshot, () => getLibraryService().snapshot())

@@ -127,7 +127,8 @@ describe('company view', () => {
       customInstructions: '',
       allowShell: false,
       onboardingComplete: true,
-      governance: structuredClone(DEFAULT_GOVERNANCE_SETTINGS)
+      governance: structuredClone(DEFAULT_GOVERNANCE_SETTINGS),
+      browser: { engine: 'stagehand', headless: true }
     }
     expect(engineSummary(null).ready).toBe(false)
     expect(engineSummary(base).ready).toBe(false)

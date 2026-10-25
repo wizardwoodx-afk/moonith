@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ApprovalReview, Artifact, BrowserState, Task } from '@shared/types'
+import { redactSensitiveText } from '../../selfimpulse/governance/dlp'
 
 export interface ToolContext {
   task: Task
@@ -91,6 +92,11 @@ export function defineTool<S extends z.ZodTypeAny>(input: DefineToolInput<S>): A
 }
 
 export function toolResultError(error: unknown): ToolResult {
-  const message = error instanceof Error ? error.message : String(error)
+  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : 'The tool operation failed.'
+  const redacted = redactSensitiveText(raw, ['secret', 'api-key']).text
+  const message = redacted
+    .replace(/\u0000/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .slice(0, 6000)
   return { content: `Error: ${message}`, isError: true }
 }

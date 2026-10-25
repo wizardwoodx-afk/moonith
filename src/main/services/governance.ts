@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { Task } from '@shared/types'
+import type { ChatMessage, Task } from '@shared/types'
 import type { AgentRole, DlpFindingSummary, GovernanceSettings } from '@shared/governance'
 import type { RuntimeAuditOutcome } from '@shared/audit'
 import type { ModelMessage } from '../backend/core/types'
@@ -68,10 +68,23 @@ export class GovernanceService {
     actor: GovernanceActor,
     messages: ModelMessage[]
   ): ModelMessage[] {
+    return this.protectModelValue(task, actor, messages)
+  }
+
+  /** Stagehand uses the same DLP decision and audit path as the Captain. */
+  protectBrowserMessages(
+    task: Task,
+    actor: GovernanceActor,
+    messages: ChatMessage[]
+  ): ChatMessage[] {
+    return this.protectModelValue(task, actor, messages)
+  }
+
+  private protectModelValue<T>(task: Task, actor: GovernanceActor, value: T): T {
     const dlp = this.settings().dlp
-    if (dlp.mode === 'off') return messages
-    const protectedInput = protectData(messages, dlp)
-    if (!protectedInput.total) return messages
+    if (dlp.mode === 'off') return value
+    const protectedInput = protectData(value, dlp)
+    if (!protectedInput.total) return value
     const outcome = dlp.mode === 'block' ? 'blocked' : 'redacted'
     this.audit(
       task,

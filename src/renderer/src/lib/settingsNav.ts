@@ -16,6 +16,7 @@ export const SETTINGS_PANES = [
   'skills',
   'learning',
   'sub-agents',
+  'browser',
   'mcp',
   'connectors',
   'channels',
@@ -251,6 +252,14 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     group: 'Agents',
     summary: 'Supervised Crew runs and parallel teams.',
     keywords: ['crew', 'mesh', 'subagent', 'delegate', 'workers', 'parallel', 'agents', 'runs', 'live'],
+    status: 'live'
+  },
+  {
+    id: 'browser',
+    label: 'AI Browser',
+    group: 'Agents',
+    summary: 'Stagehand AI and built-in Chromium with isolated, headless task sessions.',
+    keywords: ['browser', 'headless', 'stagehand', 'chrome', 'chromium', 'observe', 'act', 'extract', 'automation'],
     status: 'live'
   },
   {

@@ -5,6 +5,7 @@ import type {
   ProviderToolCall,
   ProviderToolSpec
 } from '../types'
+import { STRUCTURED_OUTPUT_TOOL } from '../types'
 import type { ChatMessage, TokenUsage } from '@shared/types'
 import { safeJsonParse } from '../../util'
 
@@ -15,9 +16,22 @@ function toOpenAIMessages(system: string, messages: ChatMessage[]): OpenAIMessag
   for (const message of messages) {
     if (message.role === 'system') continue
     if (message.role === 'user') {
-      if (message.content.trim()) out.push({ role: 'user', content: message.content })
+      if (message.images?.length) {
+        const content: OpenAI.Chat.Completions.ChatCompletionContentPart[] = []
+        if (message.content.trim()) content.push({ type: 'text', text: message.content })
+        for (const image of message.images) {
+          content.push({
+            type: 'image_url',
+            image_url: { url: `data:${image.mimeType};base64,${image.data}` }
+          })
+        }
+        out.push({ role: 'user', content })
+      } else if (message.content.trim()) {
+        out.push({ role: 'user', content: message.content })
+      }
       continue
     }
+    if (message.images?.length) throw new Error('Only user messages can contain images.')
     if (message.role === 'assistant') {
       const toolCalls = message.toolCalls?.length
         ? message.toolCalls.map((call) => ({
@@ -65,13 +79,33 @@ export async function streamOpenAI(request: CompletionRequest): Promise<Completi
     apiKey: request.apiKey,
     baseURL: request.baseUrl || undefined
   })
+  const tools = request.structuredOutput
+    ? [
+        ...request.tools,
+        {
+          name: STRUCTURED_OUTPUT_TOOL,
+          description: request.structuredOutput.description ?? 'Return the requested structured result.',
+          parameters: request.structuredOutput.schema
+        }
+      ]
+    : request.tools
 
   const stream = await client.chat.completions.create(
     {
       model: request.model,
+      temperature: request.temperature,
+      stop: request.stopSequences,
       messages: toOpenAIMessages(request.system, request.messages),
-      tools: request.tools.length ? toOpenAITools(request.tools) : undefined,
-      tool_choice: request.tools.length ? 'auto' : undefined,
+      tools: tools.length ? toOpenAITools(tools) : undefined,
+      tool_choice: request.structuredOutput
+        ? { type: 'function', function: { name: STRUCTURED_OUTPUT_TOOL } }
+        : request.toolChoice === 'none'
+          ? 'none'
+          : request.toolChoice === 'required'
+            ? 'required'
+            : tools.length
+              ? 'auto'
+              : undefined,
       stream: true,
       stream_options: request.kind === 'openai' ? { include_usage: true } : undefined
     },

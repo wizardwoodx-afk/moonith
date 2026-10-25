@@ -98,7 +98,8 @@ policy, and centrally managed deployment.
 
 **Shipped foundation:** Captain, supervised Crew Mesh specialists, bounded
 parallel teams, Agent Teams/Table, shared goals/proposals, tools, memory,
-skills, MCP, connectors, and channels.
+skills, MCP, connectors, channels, and native Stagehand AI browsing with
+actor-scoped profiles, explicit action approvals, and deterministic fallback.
 
 **Where it goes:** reusable team/workflow templates, explicit capability
 discovery, cross-run handoffs, and stronger outcome verification. More agents
@@ -163,6 +164,8 @@ Status language is intentional:
   revisions, RBAC, DLP, approvals, and signed audit.
 - Typed workflows and durable execution beneath actual agent operations.
 - RSIRALS measured runtime-policy learning.
+- Native headless Stagehand observe/act/structured extraction through the
+  existing provider, DLP, usage, task, approval, and artifact architecture.
 - Local artifacts, memory, skills, schedules, MCP/connectors/channels, and a
   premium configurable desktop workspace.
 

@@ -1,0 +1,19 @@
+{
+  "project": "Stagehand",
+  "upstream": "https://github.com/browserbase/stagehand",
+  "reviewedRevision": "8023f34161d650c196dc343d2c232fb5e129a826",
+  "package": "@browserbasehq/stagehand",
+  "packageVersion": "4.3.0",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2024 Browserbase Inc.",
+  "licenseFile": "LICENSES/stagehand-MIT.txt",
+  "integration": "The pinned npm SDK runs in the Electron main process through Stagehand.create and localBrowser.launch. SelfImpulse supplies its existing provider transport, DLP, usage accounting, task scopes, approvals, artifacts, and UI. Browserbase cloud, a second agent loop, MCP, a localhost application bridge, and an external CLI are not used.",
+  "localImplementation": [
+    "Provider ClientLLM adaptation and multimodal/structured-output conversion",
+    "Per-Captain/Crew profile and lifecycle ownership",
+    "Loopback-only CDP transport and fail-closed request verification",
+    "Chrome discovery and private endpoint parsing",
+    "Sanitized operational errors and native task activity presentation"
+  ],
+  "upstreamSourceCopied": false
+}

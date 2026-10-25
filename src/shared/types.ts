@@ -286,6 +286,7 @@ export interface PublicSettings {
   allowShell: boolean
   onboardingComplete: boolean
   governance: GovernanceSettings
+  browser: BrowserSettings
   /** The transplanted the earlier shell backend: provider registry, tiers, memory, gateway. */
   backend?: BackendSettingsPublic
 }
@@ -301,6 +302,7 @@ export interface SettingsPatch {
   allowShell?: boolean
   onboardingComplete?: boolean
   governance?: GovernanceSettings
+  browser?: Partial<BrowserSettings>
 }
 
 export interface TestProviderResult {
@@ -324,10 +326,17 @@ export interface ToolCallInfo {
   arguments: unknown
 }
 
+export interface MessageImage {
+  data: string
+  mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system' | 'tool'
   content: string
+  /** Ephemeral multimodal input used by native capabilities such as the AI browser. */
+  images?: MessageImage[]
   createdAt: string
   toolCalls?: ToolCallInfo[]
   toolCallId?: string
@@ -387,6 +396,26 @@ export interface Artifact {
   createdAt: string
 }
 
+export type BrowserEngine = 'stagehand' | 'chromium'
+export type BrowserMode = 'headless' | 'visible'
+
+export interface BrowserSettings {
+  /** Stagehand is the default AI browser; Chromium is the deterministic built-in fallback. */
+  engine: BrowserEngine
+  headless: boolean
+}
+
+export interface BrowserRuntimeStatus {
+  engine: BrowserEngine
+  headless: boolean
+  chromeAvailable: boolean
+  stagehandReady: boolean
+  activeSessions: number
+  stagehandVersion: string
+  /** Sanitized local setup/recovery guidance; never a credential or environment dump. */
+  notice?: string
+}
+
 export interface BrowserState {
   url: string
   title: string
@@ -398,6 +427,14 @@ export interface BrowserState {
   screenshotRelPath?: string
   lastAction?: string
   updatedAt: string
+  engine?: BrowserEngine
+  mode?: BrowserMode
+  aiAvailable?: boolean
+  actionCount?: number
+  blockedRequests?: number
+  /** A short, non-secret operational notice such as a built-in-engine fallback. */
+  notice?: string
+  startedAt?: string
 }
 
 export interface TokenUsage {
@@ -909,6 +946,7 @@ export interface KnightApi {
   listSubAgents: () => Promise<SubAgentRun[]>
 
   showBrowser: (taskId: string, scope?: string) => Promise<void>
+  getBrowserStatus: () => Promise<BrowserRuntimeStatus>
 
   librarySnapshot: () => Promise<LibrarySnapshot>
   libraryCreateCollection: (name: string) => Promise<LibraryCollection>

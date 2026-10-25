@@ -32,7 +32,7 @@ describe('settings navigation', () => {
     expect(groups.Personal).toContain('colors')
     expect(groups.Personal).toContain('moon')
     expect(groups.Personal).not.toContain('agent')
-    expect(groups.Agents).toEqual(['agent', 'agent-team', 'skills', 'learning', 'sub-agents'])
+    expect(groups.Agents).toEqual(['agent', 'agent-team', 'skills', 'learning', 'sub-agents', 'browser'])
     expect(groups.Integrations).toEqual([
       'mcp',
       'connectors',

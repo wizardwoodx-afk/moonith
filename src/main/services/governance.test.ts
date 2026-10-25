@@ -89,6 +89,23 @@ describe('GovernanceService', () => {
     expect(JSON.stringify(mocks.record.mock.calls[0][0])).not.toContain('person@example.com')
   })
 
+  it('applies the same DLP path to Stagehand browser messages without altering image bytes', () => {
+    mocks.settings.dlp = { mode: 'redact', categories: ['email'] }
+    const service = new GovernanceService()
+    const messages = service.protectBrowserMessages(task, actor, [{
+      id: 'browser-1',
+      role: 'user',
+      content: 'Page owner: person@example.com',
+      images: [{ data: 'aGVsbG8=', mimeType: 'image/png' }],
+      createdAt: new Date(0).toISOString()
+    }])
+    expect(messages[0].content).toBe('Page owner: [redacted:email]')
+    expect(messages[0].images).toEqual([{ data: 'aGVsbG8=', mimeType: 'image/png' }])
+    expect(mocks.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'dlp.model', outcome: 'redacted', taskId: task.id })
+    )
+  })
+
   it('fails closed before returning a provider payload in block mode', () => {
     mocks.settings.dlp = { mode: 'block', categories: ['email'] }
     const service = new GovernanceService()

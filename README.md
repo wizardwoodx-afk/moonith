@@ -42,6 +42,7 @@ capabilities, not roadmap items.
 | **Captain** | A desktop agent that plans, calls real tools, streams responses, verifies stop conditions, and produces task artifacts. |
 | **Crew Mesh** | Supervised specialists, single or multi-job delegation, bounded parallel teams, independent failures, durable lineage, usage, and live activity. New runs have private workspaces and scoped browser sessions. |
 | **Native coworker privacy** | Per-Captain/Crew Chromium storage, private Crew write roots with explicit artifact handoff, task-deletion cleanup, and localhost/private-network/metadata navigation protections. |
+| **Native AI Browser** | Headless Stagehand 4.3 sessions in the app, using the task's existing provider/DLP/usage path; AI observe, individually approved act, schema-validated extraction, deterministic controls, isolated Captain/Crew profiles, live activity cards, visible takeover, and an honest built-in Chromium fallback. |
 | **Library** | Local collections and hierarchical Markdown pages, revision-checked autosave, conflict recovery, full human review for Captain drafts, and idempotent approved saves. |
 | **Native Marketspace** | Reviewed/local `DESIGN.md` systems, static sandboxed previews, explicit install/apply actions, and Captain-native search/read/install/apply tools—without a second design runtime. |
 | **Agent Teams & Table** | Peer Captain collaboration with shared goals, proposals, and an explicit shared ledger. |
@@ -156,15 +157,17 @@ These are **planned**, not represented as shipped.
 - **Agent Teams & Table** — deliberate peer-agent collaboration.
 - **Schedules** — recurring work while SelfImpulse is running.
 - **Settings** — models, tiers, memory, skills, Crew Mesh, MCP, connectors,
-  channels, appearance, enterprise controls, RSIRALS evidence, and audit.
+  channels, AI Browser, appearance, enterprise controls, RSIRALS evidence, and audit.
 
 ## Run from source
 
 ### Prerequisites
 
-- Node.js **22 or newer**
+- Node.js **22.18 or newer**
 - A supported platform for the installed Electron version
 - At least one model provider/endpoint configured by you
+- Google Chrome or Chromium for Stagehand AI browsing (the deterministic
+  built-in Chromium fallback does not need a separate Chrome installation)
 
 ```bash
 npm ci
@@ -175,6 +178,12 @@ Open **Settings → Models** to configure a provider and model. SelfImpulse is
 local-first, not necessarily offline: prompts and tool arguments can leave the
 machine when you configure a cloud provider or network tool. Local RBAC, DLP,
 approval, and audit boundaries apply before their respective actions.
+
+Open **Settings → AI Browser** to check Chrome discovery, choose Stagehand or
+built-in Chromium, and set the new-session headless preference. Stagehand does
+not include a Chrome binary; set `CHROME_PATH` if your executable is outside the
+standard install locations. See [Native AI Browser](./docs/native-browser.md)
+for takeover behavior, approvals, containment, and residual security limits.
 
 ### Verify and build
 
@@ -194,11 +203,12 @@ npm run dist:win
 `npm run dist:win` writes installer artifacts to `release/`. A GitHub **Source
 code (zip)** asset is a source snapshot, not an installable application.
 
-The latest native Coworker/Library milestone passed both TypeScript projects,
-production builds, and **302 tests across 50 runnable files** in the Linux
-verification sandbox. Its three Electron-binary-dependent suites were excluded
-there; `npm test` remains the canonical full-suite command on a development
-machine.
+The current native AI Browser source line passed both TypeScript projects,
+production builds, and **361 tests across 65 runnable files** in the Linux
+verification sandbox. Three Electron-binary-dependent suites could not start
+there and are not counted as passing; `npm test` remains the canonical full-suite
+command on a development machine. No local Chrome executable was available, so
+live Stagehand/Chrome/provider behavior is not claimed by that result.
 See [build and release](./docs/build-and-release.md) for packaging details.
 
 ## Security and scope
@@ -209,8 +219,9 @@ enterprise deployment feature today:
 - Native enterprise control is **in-process and local**, not hosted SSO, SCIM,
   or hard multi-tenant isolation.
 - Coworker workspaces use actor/path containment, not containers or VMs;
-  scoped Chromium sessions and DNS/private-network checks do not make every
-  public page or network destination trustworthy.
+  scoped Stagehand/Chromium sessions and DNS/private-network checks do not make
+  every public page or network destination trustworthy. Browser takeover can
+  reset unsaved page state; profiles are not an encrypted credential vault.
 - Library pages are local atomic JSON records, not an encrypted-at-rest
   document vault; provider and network-tool egress still depends on your
   configuration and the existing DLP boundary.
@@ -234,6 +245,7 @@ Start with the [documentation index](./docs/README.md).
 - [Runtime RBAC, DLP, and signed audit](./docs/enterprise-controls.md)
 - [Impulse Runtime and Crew Mesh](./docs/impulse-runtime-crew-mesh.md)
 - [Native Coworker, privacy boundary, and Library](./docs/native-coworker-library.md)
+- [Native AI Browser, Stagehand integration, and containment](./docs/native-browser.md)
 - [Native Marketspace, design-system research, and security remediation](./docs/native-marketspace.md)
 - [Typed workflows and durable execution](./docs/agent-workflow-durability-themes.md)
 - [Task workspace](./docs/task-workspace.md)

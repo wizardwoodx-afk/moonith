@@ -16,6 +16,7 @@ they do not replace it.
 | [Enterprise controls](./enterprise-controls.md) | Executor/Researcher/Viewer/Custom RBAC, tool/provider DLP, manual approvals, hash-chained signed audit, search, verification, export, and security boundaries. |
 | [Impulse Runtime and Crew Mesh](./impulse-runtime-crew-mesh.md) | Product-native steering, output safety, specialist delegation, bounded teams, durable run lineage, live activity, and OpenClaw/VoltAgent provenance. |
 | [Native Coworker, privacy boundary, and Library](./native-coworker-library.md) | Scoped Chromium sessions, private Crew workspaces, navigation protections, local Markdown collections/pages, reviewed agent drafts, and restrained motion. |
+| [Native AI Browser](./native-browser.md) | In-app Stagehand, existing-provider AI observe/act/extract, deterministic Chromium fallback, individual action approvals, fail-closed request protection, live activity, takeover, and residual limits. |
 | [Native Marketspace and security remediation](./native-marketspace.md) | Open CoDesign/OpenDesign research pins, native `DESIGN.md` systems, static previews, Captain tools, and concrete security fixes with residual-risk boundaries. |
 | [Typed workflows, durable execution, and themes](./agent-workflow-durability-themes.md) | Mastra-derived workflow semantics, Restate-derived local durability, real agent/runtime wiring, theme catalog, tests, and limitations. |
 | [Task workspace](./task-workspace.md) | The Now/Crew/Tools/Files operations surface, transcript and artifacts, usage, and task-level work inspection. |

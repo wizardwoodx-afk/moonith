@@ -8,9 +8,7 @@ import {
   FileSpreadsheet,
   FileText,
   FolderOpen,
-  Globe,
   ImageOff,
-  MonitorUp,
   Presentation,
   Sparkles
 } from 'lucide-react'
@@ -26,6 +24,7 @@ import {
   shortDate
 } from '../lib/utils'
 import { Button, IconButton, Modal } from './ui'
+import { BrowserSessionCard } from './BrowserSessionCard'
 
 const KIND_ICON: Record<ArtifactKind, typeof File> = {
   document: FileText,
@@ -121,61 +120,7 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
           </div>
         ) : null}
 
-        {task.browser ? (
-          <div>
-            <div className="flex items-center gap-1.5 px-1 pb-2 text-[10px] font-semibold tracking-[0.13em] text-faint uppercase">
-              <Globe size={11} />
-              Browser
-              <span className="ml-auto flex items-center gap-1 text-[9.5px] normal-case tracking-normal text-faint">
-                <span className="h-1 w-1 rounded-full bg-positive" /> {task.browser.ownerLabel ?? 'Task'} session
-              </span>
-            </div>
-            <div className="overflow-hidden rounded-xl border border-line bg-surface">
-              {task.browser.screenshotRelPath ? (
-                <button
-                  onClick={() =>
-                    setPreview({
-                      id: 'browser-shot',
-                      name: 'Browser screenshot',
-                      relPath: task.browser!.screenshotRelPath!,
-                      kind: 'image',
-                      size: 0,
-                      createdAt: task.browser!.updatedAt
-                    })
-                  }
-                  className="block w-full"
-                >
-                  <img
-                    src={fileUrl(task.id, task.browser.screenshotRelPath)}
-                    alt="Task browser"
-                    className="max-h-48 w-full object-cover object-top transition-opacity hover:opacity-90"
-                  />
-                </button>
-              ) : (
-                <div className="flex h-28 items-center justify-center text-faint">
-                  <Globe size={22} />
-                </div>
-              )}
-              <div className="p-2.5">
-                <p className="truncate text-[12px] font-medium">{task.browser.title || 'Browser'}</p>
-                <p className="mt-0.5 truncate text-[10.5px] text-faint">{task.browser.url}</p>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="mt-2 w-full"
-                  onClick={() =>
-                    window.knight.showBrowser(task.id, task.browser?.scope).catch((error) => {
-                      toast.error(errorMessage(error))
-                    })
-                  }
-                >
-                  <MonitorUp size={13} />
-                  Open browser window
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        {task.browser ? <BrowserSessionCard task={task} /> : null}
     </div>
   )
 }

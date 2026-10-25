@@ -16,6 +16,7 @@ import {
   CircleUserRound,
   Clipboard,
   Cpu,
+  Globe2,
   Eye,
   EyeOff,
   FileText,
@@ -90,6 +91,7 @@ import { DesktopPane, GatewayPane, TiersPane, WorkFilesPane } from './settings/B
 import { AuditPane } from './settings/AuditPane'
 import { EnterprisePane } from './settings/EnterprisePane'
 import { LearningPane } from './settings/LearningPane'
+import { BrowserPane } from './settings/BrowserPane'
 
 const NAV_ICONS: Record<
   SettingsPaneId,
@@ -111,6 +113,7 @@ const NAV_ICONS: Record<
   'agent-team': Users,
   skills: Sparkles,
   'sub-agents': Bot,
+  browser: Globe2,
   mcp: Plug,
   connectors: Boxes,
   channels: Radio,
@@ -327,6 +330,7 @@ export function SettingsView() {
                   {tab === 'skills' ? <SkillsPane /> : null}
                   {tab === 'learning' ? <LearningPane /> : null}
                   {tab === 'sub-agents' ? <SubAgentsPane /> : null}
+                  {tab === 'browser' ? <BrowserPane settings={settings} /> : null}
                   {tab === 'appearance' ? <AppearancePane /> : null}
                   {tab === 'colors' ? <ColorsPane /> : null}
                   {tab === 'moon' ? <MoonPane /> : null}

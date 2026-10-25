@@ -246,9 +246,28 @@ code is included in SelfImpulse.
   included. The upstream license notices are retained for attribution and
   future redistribution; they do not change the SelfImpulse license.
 
+## Stagehand — native AI browser engine
+
+- **Upstream:** Browserbase Inc., `browserbase/stagehand`; local SDK behavior
+  was reviewed at revision `8023f34161d650c196dc343d2c232fb5e129a826`.
+- **Runtime dependency:** `@browserbasehq/stagehand` **4.3.0**, pinned exactly.
+- **Licence:** MIT — Copyright (c) 2024 Browserbase Inc. The complete copyright
+  and permission text ships at `LICENSES/stagehand-MIT.txt`; the npm package's
+  own licence is also retained in production dependencies.
+- **Used for:** local Chrome launch, deterministic page operations, and the
+  `observe` / `act` / structured `extract` browser primitives. The integration
+  uses `Stagehand.create` with a SelfImpulse provider callback. Browserbase
+  hosting is optional and is not configured by SelfImpulse.
+- **Local implementation:** `src/main/browser/` and the existing browser tool,
+  approval, DLP, usage, task, artifact, and settings paths provide actor-scoped
+  profiles, loopback-only CDP control, request verification, sanitized errors,
+  and product-native presentation. No upstream agent loop, MCP/server bridge,
+  external CLI, or Browserbase cloud session is introduced. Integration scope
+  is recorded in `src/main/browser/PROVENANCE.json`.
+
 ## npm dependencies
 
-The dependencies declared in `package.json` — Electron, React, the Anthropic
+The dependencies declared in `package.json` — Electron, React, Stagehand, the Anthropic
 and OpenAI SDKs, the Model Context Protocol SDK and the others — remain
 under their own licences.
 
