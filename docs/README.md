@@ -15,6 +15,7 @@ they do not replace it.
 | [Native Enterprise Control Plane and RSIRALS](./native-enterprise-rsirals.md) | Native namespaces, principals, Roles, bindings, Restrictions, lifecycle, revisions, action-time enforcement, and the measured RSIRALS learning loop. |
 | [Enterprise controls](./enterprise-controls.md) | Executor/Researcher/Viewer/Custom RBAC, tool/provider DLP, manual approvals, hash-chained signed audit, search, verification, export, and security boundaries. |
 | [Impulse Runtime and Crew Mesh](./impulse-runtime-crew-mesh.md) | Product-native steering, output safety, specialist delegation, bounded teams, durable run lineage, live activity, and OpenClaw/VoltAgent provenance. |
+| [Native Coworker, privacy boundary, and Library](./native-coworker-library.md) | Scoped Chromium sessions, private Crew workspaces, navigation protections, local Markdown collections/pages, reviewed agent drafts, and restrained motion. |
 | [Typed workflows, durable execution, and themes](./agent-workflow-durability-themes.md) | Mastra-derived workflow semantics, Restate-derived local durability, real agent/runtime wiring, theme catalog, tests, and limitations. |
 | [Task workspace](./task-workspace.md) | The Now/Crew/Tools/Files operations surface, transcript and artifacts, usage, and task-level work inspection. |
 

@@ -1,10 +1,17 @@
 import { z } from 'zod'
-import type { Artifact, BrowserState, Task } from '@shared/types'
+import type { ApprovalReview, Artifact, BrowserState, Task } from '@shared/types'
 
 export interface ToolContext {
   task: Task
   workspace: string
+  /** Write/execute roots. Crew contexts receive only their private workspace and granted folders. */
   roots: string[]
+  /** Optional broader read-only roots, including the Captain's shared task workspace. */
+  readRoots?: string[]
+  /** Distinct Chromium storage/session key for Captain or one Crew run. */
+  browserScope?: string
+  browserLabel?: string
+  actor?: 'captain' | 'crew'
   allowShell: boolean
   /** Stable identities supplied by the agent runtime for durable delegation. */
   durableRunId?: string
@@ -13,6 +20,10 @@ export interface ToolContext {
   setBrowser: (state: BrowserState) => void
   setPlan: (steps: string[]) => void
   toast: (level: 'info' | 'success' | 'error', message: string) => void
+}
+
+export function readRootsFor(ctx: ToolContext): string[] {
+  return ctx.readRoots ?? ctx.roots
 }
 
 export type ToolRisk = 'low' | 'medium' | 'high'
@@ -32,6 +43,10 @@ export interface AgentTool {
   sideEffect: ToolSideEffect
   risk: ToolRisk
   approval: 'never' | 'policy' | 'always'
+  /** Optional rich, human-reviewable draft carried by the existing approval broker. */
+  approvalReview?: (args: any) => ApprovalReview | undefined
+  /** Drafts that change on every call can disable the per-task always-allow shortcut. */
+  allowAlways?: boolean
   execute: (args: any, ctx: ToolContext) => Promise<ToolResult>
   summarize?: (args: any) => string
 }
@@ -44,6 +59,8 @@ interface DefineToolInput<S extends z.ZodTypeAny> {
   sideEffect?: ToolSideEffect
   risk?: ToolRisk
   approval?: 'never' | 'policy' | 'always'
+  approvalReview?: (args: z.infer<S>) => ApprovalReview | undefined
+  allowAlways?: boolean
   execute: (args: z.infer<S>, ctx: ToolContext) => Promise<ToolResult>
   summarize?: (args: z.infer<S>) => string
 }
@@ -66,6 +83,8 @@ export function defineTool<S extends z.ZodTypeAny>(input: DefineToolInput<S>): A
     sideEffect,
     risk: input.risk ?? defaultRisk(sideEffect),
     approval: input.approval ?? (sideEffect === 'read' || sideEffect === 'none' ? 'never' : 'policy'),
+    approvalReview: input.approvalReview as AgentTool['approvalReview'],
+    allowAlways: input.allowAlways,
     execute: input.execute as AgentTool['execute'],
     summarize: input.summarize as AgentTool['summarize']
   }

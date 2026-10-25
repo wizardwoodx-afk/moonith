@@ -1,7 +1,8 @@
 export const SURFACES = [
   { id: 'chat', label: 'Chat' },
   { id: 'company', label: 'Company' },
-  { id: 'table', label: 'Table' }
+  { id: 'table', label: 'Table' },
+  { id: 'library', label: 'Library' }
 ] as const
 
 export type Surface = (typeof SURFACES)[number]['id']

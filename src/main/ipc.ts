@@ -41,6 +41,7 @@ import { approvals } from './approvals'
 import { sendTaskEvent } from './emitter'
 import { store } from './store'
 import { taskWorkspace } from './paths'
+import { removeCoworkerTask, taskIdForBrowserScope } from './selfimpulse/coworker/workspaces'
 import { resolveSafePath } from './security'
 import { browserService } from './services/browser'
 import { mcpManager } from './services/mcp'
@@ -63,6 +64,8 @@ import { registerRsiralsIpc } from './selfimpulse/mission/rsiralsIpc'
 import { requireLocalEnterprise } from './enterpriseControl/runtime'
 import { runtimeAudit } from './audit/runtime'
 import type { BackendSettingsPublic } from '@shared/types'
+import type { LibraryPageInput, LibraryPagePatch } from '@shared/library'
+import { getLibraryService } from './selfimpulse/library'
 
 function publishTask(task: Task): void {
   sendTaskEvent({ type: 'task', task })
@@ -183,7 +186,8 @@ export function registerIpc(): void {
 
   ipcMain.handle(IPC.taskDelete, async (_event, id: string) => {
     await agentRuntime.stop(id)
-    browserService.dispose(id)
+    await browserService.disposeTask(id)
+    await removeCoworkerTask(id)
     approvals.cancelTask(id)
     await store.deleteTask(id)
   })
@@ -365,8 +369,64 @@ export function registerIpc(): void {
     return mcpManager.getStatuses()
   })
 
-  ipcMain.handle(IPC.browserShow, (_event, taskId: string) => {
-    browserService.show(taskId)
+  ipcMain.handle(IPC.browserShow, (_event, taskId: string, scope?: string) => {
+    const requestedScope = typeof scope === 'string' && scope ? scope : taskId
+    if (taskIdForBrowserScope(requestedScope) !== taskId) throw new Error('Invalid task browser scope.')
+    browserService.show(requestedScope)
+  })
+
+  ipcMain.handle(IPC.librarySnapshot, () => getLibraryService().snapshot())
+  ipcMain.handle(IPC.libraryCollectionCreate, async (_event, name: string) => {
+    await requireLocalEnterprise('tool.use', 'tool', 'library')
+    const collection = await getLibraryService().createCollection(name)
+    void runtimeAudit.record({
+      actor: 'system',
+      actorId: 'human:local',
+      action: 'library.collection_created',
+      outcome: 'ok',
+      target: collection.id
+    })
+    return collection
+  })
+  ipcMain.handle(IPC.libraryPageCreate, async (_event, input: LibraryPageInput) => {
+    await requireLocalEnterprise('tool.use', 'tool', 'library')
+    const page = await getLibraryService().createPage(input)
+    void runtimeAudit.record({
+      actor: 'system',
+      actorId: 'human:local',
+      action: 'library.page_created',
+      outcome: 'ok',
+      target: page.id,
+      metadata: { revision: page.revision, collectionId: page.collectionId }
+    })
+    return page
+  })
+  ipcMain.handle(IPC.libraryPageUpdate, async (_event, id: string, patch: LibraryPagePatch) => {
+    await requireLocalEnterprise('tool.use', 'tool', 'library')
+    const page = await getLibraryService().updatePage(id, patch)
+    void runtimeAudit.record({
+      actor: 'system',
+      actorId: 'human:local',
+      action: 'library.page_updated',
+      outcome: 'ok',
+      target: page.id,
+      metadata: { revision: page.revision }
+    })
+    return page
+  })
+  ipcMain.handle(IPC.libraryPageDelete, async (_event, id: string) => {
+    await requireLocalEnterprise('tool.use', 'tool', 'library')
+    const deleted = await getLibraryService().deletePage(id)
+    if (deleted) {
+      void runtimeAudit.record({
+        actor: 'system',
+        actorId: 'human:local',
+        action: 'library.page_deleted',
+        outcome: 'ok',
+        target: id
+      })
+    }
+    return deleted
   })
 
   ipcMain.handle(IPC.skillsList, () => skillService.list())

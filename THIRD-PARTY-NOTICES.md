@@ -192,6 +192,38 @@ code is included in SelfImpulse.
   upload treatment, and time scrubber are SelfImpulse-owned interaction
   implementations. No Bencho block source is included.
 
+## Native Coworker and Library references
+
+- **OpenBot:** CopilotKit, `CopilotKit/OpenBot` at commit
+  `46642d6c91daa663bccff673595f4e12a419a496`. MIT; Copyright (c) 2026
+  CopilotKit. The destination-classification concepts in
+  `src/main/selfimpulse/coworker/navigation.ts` were selectively adapted from
+  `server/src/computer/target.ts`; policy/audit placement was reviewed in
+  `gateway.ts` and `policy-network.ts`. The full permission text ships beside
+  the module in `LICENSE.openbot.txt`. No OpenBot gateway, Intelligence,
+  Docker, PostgreSQL, localhost service, or external browser runtime is
+  included.
+- **OpenDots:** Atai Barkai, `CopilotKit/OpenDots` at commit
+  `8091324942b86789ed0da7facbee855145d933b0`. MIT; Copyright (c) Atai Barkai.
+  Optimistic page revisions, hierarchy checks, and exact-draft review receipts
+  in `src/main/selfimpulse/library/service.ts` were selectively adapted from
+  `src/server/pages.ts` and `src/shared/page-review.ts`; the review interaction
+  was reviewed in `src/client/PageReviewCard.tsx`. The full permission text
+  ships beside the module in `LICENSE.opendots.txt`. Collections, Library
+  pages, local JSON persistence, native approvals, and the editor are
+  SelfImpulse-owned adaptations. SQLite, Intelligence, hosted workspaces, and
+  service dependencies are excluded.
+- **Motion Primitives:** ibelick, `ibelick/motion-primitives` at commit
+  `120f64f6ca60348e251f929e9c81f11ccbe45eda`. MIT; Copyright (c) 2024
+  ibelick. `LiveNumber.tsx` adapts the animated-number technique to the
+  existing Framer Motion runtime and reduced-motion behavior. The full
+  permission text ships at `src/renderer/src/motion/LICENSE.motion-primitives.txt`.
+- **Animata:** Animata, `codse/animata` at commit
+  `e7478b835a3b5c4153e71f60666634e91bb38813`. MIT; Copyright (c) Animata. `SaveStatus.tsx`
+  adapts the status-transition technique, driven by real save/conflict state
+  rather than demo timers. The full permission text ships at
+  `src/renderer/src/motion/LICENSE.animata.txt`.
+
 ## npm dependencies
 
 The dependencies declared in `package.json` — Electron, React, the Anthropic

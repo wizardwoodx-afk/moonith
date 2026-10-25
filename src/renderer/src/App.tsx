@@ -14,6 +14,7 @@ import { SettingsView } from './views/SettingsView'
 import { TaskView } from './views/TaskView'
 import { SchedulesView } from './views/SchedulesView'
 import { CaptainSurface } from './features/captain/CaptainSurface'
+import { LibraryView } from './features/library/LibraryView'
 import { CompanySurface } from './features/company/CompanySurface'
 import { TableSurface } from './features/table/TableSurface'
 import { HelpButton } from './shell/HelpButton'
@@ -146,6 +147,9 @@ export function App() {
       } else if (event.key === '3') {
         event.preventDefault()
         openSurface('table')
+      } else if (event.key === '4') {
+        event.preventDefault()
+        openSurface('library')
       } else if (event.key.toLowerCase() === 'n') {
         event.preventDefault()
         startNewTask()
@@ -218,6 +222,9 @@ export function App() {
               {!settingsActive && view.kind === 'schedules' ? <SchedulesView /> : null}
               {!settingsActive && view.kind === 'surface' && activeSurface === 'chat' ? (
                 <CaptainSurface />
+              ) : null}
+              {!settingsActive && view.kind === 'surface' && activeSurface === 'library' ? (
+                <LibraryView />
               ) : null}
               {!settingsActive && view.kind === 'surface' && activeSurface === 'company' ? (
                 <CompanySurface />

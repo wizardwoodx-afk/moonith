@@ -1,6 +1,6 @@
 import { sendApprovalRequest } from './emitter'
 import { newId, nowIso } from './util'
-import type { ApprovalRequest } from '@shared/types'
+import type { ApprovalRequest, ApprovalReview } from '@shared/types'
 
 interface Pending {
   request: ApprovalRequest
@@ -21,6 +21,7 @@ class ApprovalBroker {
       details?: string
       risk: 'low' | 'medium' | 'high'
       allowAlways?: boolean
+      review?: ApprovalReview
     }
   ): Promise<boolean> {
     const request: ApprovalRequest = {
@@ -32,6 +33,7 @@ class ApprovalBroker {
       details: input.details,
       risk: input.risk,
       allowAlways: input.allowAlways ?? true,
+      review: input.review,
       createdAt: nowIso()
     }
 
@@ -51,7 +53,7 @@ class ApprovalBroker {
     if (!item) return
     clearTimeout(item.timer)
     this.pending.delete(id)
-    if (approved && always) {
+    if (approved && always && item.request.allowAlways) {
       const set = this.always.get(item.request.taskId) ?? new Set<string>()
       set.add(item.request.tool)
       this.always.set(item.request.taskId, set)

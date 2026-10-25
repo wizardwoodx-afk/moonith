@@ -25,6 +25,13 @@ import type {
   EnterpriseRevisionInfo
 } from './enterpriseControl'
 import type { RsiralsSnapshot } from './rsirals'
+import type {
+  LibraryCollection,
+  LibraryPage,
+  LibraryPageInput,
+  LibraryPagePatch,
+  LibrarySnapshot
+} from './library'
 
 export type {
   AuditExportResult,
@@ -249,6 +256,8 @@ export interface SubAgentRun {
   endedAt?: string
   /** Crew Mesh metadata is optional for runs persisted before the upgrade. */
   runtime?: 'crew-mesh'
+  /** Present only for runs created with the native isolated coworker boundary. */
+  isolation?: { workspace: 'private'; browser: 'per-run' }
   purpose?: string
   agentPath?: string[]
   depth?: number
@@ -375,6 +384,11 @@ export interface Artifact {
 export interface BrowserState {
   url: string
   title: string
+  open?: boolean
+  loading?: boolean
+  /** Opaque Captain/Crew session scope; never a shared browser profile. */
+  scope?: string
+  ownerLabel?: string
   screenshotRelPath?: string
   lastAction?: string
   updatedAt: string
@@ -478,6 +492,13 @@ export interface UpdateTaskInput {
   title?: string
 }
 
+export interface ApprovalReview {
+  kind: 'library-page'
+  title: string
+  content: string
+  destination: string
+}
+
 export interface ApprovalRequest {
   id: string
   taskId: string
@@ -487,6 +508,7 @@ export interface ApprovalRequest {
   details?: string
   risk: 'low' | 'medium' | 'high'
   allowAlways: boolean
+  review?: ApprovalReview
   createdAt: string
 }
 
@@ -873,7 +895,14 @@ export interface KnightApi {
 
   listSubAgents: () => Promise<SubAgentRun[]>
 
-  showBrowser: (taskId: string) => Promise<void>
+  showBrowser: (taskId: string, scope?: string) => Promise<void>
+
+  librarySnapshot: () => Promise<LibrarySnapshot>
+  libraryCreateCollection: (name: string) => Promise<LibraryCollection>
+  libraryCreatePage: (input: LibraryPageInput) => Promise<LibraryPage>
+  libraryUpdatePage: (id: string, patch: LibraryPagePatch) => Promise<LibraryPage>
+  libraryDeletePage: (id: string) => Promise<boolean>
+  onLibraryChanged: (cb: () => void) => () => void
 
   tableGetState: () => Promise<TableState>
   tableHost: (input: TableHostInput) => Promise<TableState>

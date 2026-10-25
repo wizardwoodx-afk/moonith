@@ -46,6 +46,11 @@ import {
   type CrewJob
 } from '../selfimpulse/crewMesh/index'
 import { authorizeNativeTaskTool } from '../enterpriseControl/runtime'
+import {
+  browserScope as coworkerBrowserScope,
+  ensureCoworkerWorkspace,
+  handoffCoworkerArtifact
+} from '../selfimpulse/coworker/workspaces'
 
 let durableStore: DurableStore | undefined
 
@@ -614,6 +619,7 @@ class AgentRuntime {
       provider: provider.settings.providerId ?? 'knight',
       model: provider.settings.model ?? '',
       purpose,
+      isolation: { workspace: 'private', browser: 'per-run' },
       agentPath: delegation?.agentPath ?? ['Captain', name],
       depth: delegation?.depth ?? 1,
       batchId: delegation?.batchId,
@@ -646,17 +652,42 @@ class AgentRuntime {
       )
     const allowedNames = new Set(allowed.map((tool) => tool.name))
     const toolMap = new Map(crewCandidates.map((tool) => [tool.name, tool]))
-    const workspace = ensureTaskWorkspace(task.id)
+    const sharedWorkspace = ensureTaskWorkspace(task.id)
+    const workspace = ensureCoworkerWorkspace(task.id, run.id)
+    const writeRoots = [...new Set([workspace, ...task.folders])]
+    const readRoots = [...new Set([workspace, sharedWorkspace, ...task.folders])]
     const system = `You are ${name}, a Crew specialist inside SelfImpulse. The Captain delegated one focused job to you.
 Specialist purpose: ${purpose ?? 'Focused delegated work'}.
 Do the job with the tools you have, verify what you can, then reply with a compact report: findings, file paths, and anything the Captain must know.
 You never address the user directly, never ask questions, and never claim work you did not do.
-Workspace: ${workspace}
+Private workspace (your writes): ${workspace}
+Shared task workspace (read-only): ${sharedWorkspace}
 Granted folders:
-${context.roots.map((root) => `- ${root}`).join('\n')}
-${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace.' : 'This job is read-only: do not modify files or run shell commands.'}
+${task.folders.map((root) => `- ${root}`).join('\n') || '- None'}
+${task.permissionMode === 'skip' ? 'Write access is allowed only inside your private workspace and explicitly granted folders.' : 'This job is read-only: do not modify files or run shell commands.'}
 Inherited enterprise role: ${governanceService.role(task)}. Your tools are the intersection of that role and the Crew restrictions above; delegation cannot widen them.`
-    const subContext: ToolContext = { ...context, setPlan: () => undefined }
+    const subContext: ToolContext = {
+      ...context,
+      workspace,
+      roots: writeRoots,
+      readRoots,
+      browserScope: coworkerBrowserScope(task.id, run.id),
+      browserLabel: `Crew · ${name}`,
+      actor: 'crew',
+      setPlan: () => undefined,
+      addArtifact: async (absPath, previewAbsPath) => {
+        // Explicitly granted folders may be edited directly, but only a file
+        // from the private workspace is eligible for shared artifact handoff.
+        // Do not turn a successful external write into a post-write error or
+        // copy user files into the task without an explicit handoff.
+        const promoted = await handoffCoworkerArtifact(absPath, workspace, sharedWorkspace, run.id)
+        if (!promoted) return null
+        const promotedPreview = previewAbsPath
+          ? ((await handoffCoworkerArtifact(previewAbsPath, workspace, sharedWorkspace, run.id)) ?? undefined)
+          : undefined
+        return this.registerArtifact(task, promoted, promotedPreview)
+      }
+    }
     const backend = getBackend()
 
     try {
@@ -789,7 +820,7 @@ Inherited enterprise role: ${governanceService.role(task)}. Your tools are the i
               undefined,
               { callId, argsHash: governanceService.payloadHash(parsedArgs) }
             )
-            const outcome = await tool.execute(parsedArgs, subContext)
+            const outcome = await tool.execute(parsedArgs, { ...subContext, callId })
             content = truncate(outcome.content, 30000)
             isError = Boolean(outcome.isError)
           } catch (error) {
@@ -1036,10 +1067,15 @@ Inherited enterprise role: ${governanceService.role(task)}. Your tools are the i
     durableRunId: string
   ): ToolContext {
     const workspace = ensureTaskWorkspace(task.id)
+    const roots = [...new Set([workspace, ...task.folders])]
     return {
       task,
       workspace,
-      roots: [...new Set([workspace, ...task.folders])],
+      roots,
+      readRoots: roots,
+      browserScope: coworkerBrowserScope(task.id),
+      browserLabel: 'Captain',
+      actor: 'captain',
       allowShell: settings.allowShell,
       durableRunId,
       addArtifact: (absPath, previewAbsPath) =>
@@ -1178,9 +1214,10 @@ Inherited enterprise role: ${governanceService.role(task)}. Your tools are the i
 
     // 'always' tools (shell, recursive delete) ask in every mode, including skip.
     // Only an explicit per-task "always allow" for this tool bypasses the prompt.
+    const alwaysAllowed = tool.allowAlways !== false && approvals.isAlwaysAllowed(task.id, tool.name)
     const needsApproval =
       tool.approval !== 'never' &&
-      !approvals.isAlwaysAllowed(task.id, tool.name) &&
+      !alwaysAllowed &&
       (tool.approval === 'always' ||
         task.permissionMode === 'manual' ||
         (task.permissionMode !== 'skip' && tool.risk === 'high'))
@@ -1206,7 +1243,8 @@ Inherited enterprise role: ${governanceService.role(task)}. Your tools are the i
           summary: step.detail || tool.title,
           details: approvalDetails(tool, effectiveRawArgs),
           risk: tool.risk,
-          allowAlways: true
+          allowAlways: tool.allowAlways !== false,
+          review: tool.approvalReview?.(effectiveRawArgs)
         })
       }
       const approved = durable

@@ -1,11 +1,26 @@
 import { z } from 'zod'
+import { relative } from 'node:path'
 import type { BrowserState } from '@shared/types'
 import type { ToolContext } from './types'
 import { defineTool, toolResultError } from './types'
 import { browserService } from '../../services/browser'
 
+function scope(ctx: ToolContext): string {
+  return ctx.browserScope ?? ctx.task.id
+}
+
+function ownedState(ctx: ToolContext, state: BrowserState): BrowserState {
+  return { ...state, scope: scope(ctx), ownerLabel: ctx.browserLabel ?? 'Captain' }
+}
+
 async function snapshot(ctx: ToolContext): Promise<BrowserState> {
-  const state = await browserService.screenshot(ctx.task.id, ctx.workspace)
+  const captured = await browserService.screenshot(scope(ctx), ctx.workspace)
+  const artifact = await ctx.addArtifact(captured.screenshotPath)
+  const { screenshotPath, ...browserState } = captured
+  const state = ownedState(ctx, {
+    ...browserState,
+    screenshotRelPath: artifact?.relPath ?? relative(ctx.workspace, screenshotPath)
+  })
   ctx.setBrowser(state)
   return state
 }
@@ -27,7 +42,7 @@ export const browserOpenTool = defineTool({
   approval: 'never',
   execute: async (args, ctx) => {
     try {
-      await browserService.open(ctx.task.id, args.url)
+      await browserService.open(scope(ctx), args.url)
       const state = await snapshot(ctx)
       return { content: `Opened page.\n${stateSummary(state)}\nScreenshot: ${state.screenshotRelPath ?? '(none)'}` }
     } catch (error) {
@@ -46,7 +61,7 @@ export const browserClickTool = defineTool({
   risk: 'medium',
   execute: async (args, ctx) => {
     try {
-      await browserService.click(ctx.task.id, args.selector)
+      await browserService.click(scope(ctx), args.selector)
       const state = await snapshot(ctx)
       return { content: `Clicked ${args.selector}.\n${stateSummary(state)}` }
     } catch (error) {
@@ -70,7 +85,7 @@ export const browserTypeTool = defineTool({
   risk: 'medium',
   execute: async (args, ctx) => {
     try {
-      await browserService.type(ctx.task.id, args.selector, args.text, args.submit)
+      await browserService.type(scope(ctx), args.selector, args.text, args.submit)
       const state = await snapshot(ctx)
       return { content: `Typed into ${args.selector}.\n${stateSummary(state)}` }
     } catch (error) {
@@ -89,7 +104,7 @@ export const browserSelectTool = defineTool({
   risk: 'medium',
   execute: async (args, ctx) => {
     try {
-      await browserService.select(ctx.task.id, args.selector, args.value)
+      await browserService.select(scope(ctx), args.selector, args.value)
       const state = await snapshot(ctx)
       return { content: `Selected ${args.value} in ${args.selector}.\n${stateSummary(state)}` }
     } catch (error) {
@@ -108,7 +123,7 @@ export const browserPressTool = defineTool({
   risk: 'medium',
   execute: async (args, ctx) => {
     try {
-      await browserService.press(ctx.task.id, args.key)
+      await browserService.press(scope(ctx), args.key)
       const state = await snapshot(ctx)
       return { content: `Pressed ${args.key}.\n${stateSummary(state)}` }
     } catch (error) {
@@ -130,7 +145,7 @@ export const browserScrollTool = defineTool({
   risk: 'low',
   execute: async (args, ctx) => {
     try {
-      await browserService.scroll(ctx.task.id, args.direction ?? 'down', args.amount ?? 700)
+      await browserService.scroll(scope(ctx), args.direction ?? 'down', args.amount ?? 700)
       const state = await snapshot(ctx)
       return { content: `Scrolled.\n${stateSummary(state)}` }
     } catch (error) {
@@ -149,8 +164,8 @@ export const browserExtractTool = defineTool({
   approval: 'never',
   execute: async (args, ctx) => {
     try {
-      const result = await browserService.extract(ctx.task.id, args.selector)
-      ctx.setBrowser(result.state)
+      const result = await browserService.extract(scope(ctx), args.selector)
+      ctx.setBrowser(ownedState(ctx, result.state))
       return { content: result.text }
     } catch (error) {
       return toolResultError(error)
@@ -186,7 +201,7 @@ export const browserBackTool = defineTool({
   approval: 'never',
   execute: async (_args, ctx) => {
     try {
-      await browserService.back(ctx.task.id)
+      await browserService.back(scope(ctx))
       const state = await snapshot(ctx)
       return { content: `Navigated back.\n${stateSummary(state)}` }
     } catch (error) {
@@ -207,7 +222,7 @@ export const browserWaitTool = defineTool({
   approval: 'never',
   execute: async (args, ctx) => {
     try {
-      await browserService.wait(ctx.task.id, args.selector, args.ms ?? 10000)
+      await browserService.wait(scope(ctx), args.selector, args.ms ?? 10000)
       const state = await snapshot(ctx)
       return { content: `Wait complete.\n${stateSummary(state)}` }
     } catch (error) {
@@ -224,7 +239,7 @@ export const browserShowTool = defineTool({
   sideEffect: 'none',
   approval: 'never',
   execute: async (_args, ctx) => {
-    browserService.show(ctx.task.id)
+    browserService.show(scope(ctx))
     return { content: 'Browser window shown.' }
   }
 })

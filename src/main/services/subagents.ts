@@ -46,6 +46,7 @@ class SubAgentService {
     provider: string
     model: string
     purpose?: string
+    isolation?: SubAgentRun['isolation']
     agentPath?: string[]
     depth?: number
     batchId?: string
@@ -62,6 +63,7 @@ class SubAgentService {
       existing.error = undefined
       existing.endedAt = undefined
       existing.runtime = 'crew-mesh'
+      existing.isolation = input.isolation ?? existing.isolation
       existing.purpose = input.purpose
       existing.agentPath = input.agentPath ?? ['Captain', input.name]
       existing.depth = input.depth ?? 1
@@ -90,6 +92,7 @@ class SubAgentService {
       model: input.model,
       startedAt: nowIso(),
       runtime: 'crew-mesh',
+      isolation: input.isolation,
       purpose: input.purpose,
       agentPath: input.agentPath ?? ['Captain', input.name],
       depth: input.depth ?? 1,

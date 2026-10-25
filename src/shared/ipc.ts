@@ -39,6 +39,12 @@ export const IPC = {
 
   browserShow: 'browser:show',
 
+  librarySnapshot: 'library:snapshot',
+  libraryCollectionCreate: 'library:collection-create',
+  libraryPageCreate: 'library:page-create',
+  libraryPageUpdate: 'library:page-update',
+  libraryPageDelete: 'library:page-delete',
+
   skillsList: 'skills:list',
   skillsSearch: 'skills:search',
   skillsInstall: 'skills:install',
@@ -116,6 +122,7 @@ export const IPC = {
   selfImpulseThreadSelect: 'selfimpulse:thread-select',
 
   eventTask: 'event:task',
+  eventLibrary: 'event:library',
   eventApproval: 'event:approval',
   eventBackend: 'event:backend',
   eventSelfImpulse: 'event:selfimpulse'

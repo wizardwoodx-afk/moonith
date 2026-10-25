@@ -3,6 +3,7 @@ import {
   Building2,
   CalendarClock,
   Handshake,
+  LibraryBig,
   MessageSquare,
   Plus,
   Search,
@@ -19,6 +20,7 @@ import { SURFACES, modeForSurface, type Surface } from './surfaces'
 
 const ICONS: Record<Surface, typeof MessageSquare> = {
   chat: MessageSquare,
+  library: LibraryBig,
   company: Building2,
   table: Handshake
 }

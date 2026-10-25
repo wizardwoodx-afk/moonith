@@ -8,6 +8,7 @@ import {
   type EnterpriseControlMutation
 } from '@shared/enterpriseControl'
 import { RSIRALS_IPC } from '@shared/rsirals'
+import type { LibraryPageInput, LibraryPagePatch } from '@shared/library'
 import type {
   ApprovalRequest,
   ApprovalDecision,
@@ -122,7 +123,19 @@ const api: KnightApi = {
 
   listSubAgents: () => ipcRenderer.invoke(IPC.subAgentsList),
 
-  showBrowser: (taskId: string) => ipcRenderer.invoke(IPC.browserShow, taskId),
+  showBrowser: (taskId: string, scope?: string) => ipcRenderer.invoke(IPC.browserShow, taskId, scope),
+
+  librarySnapshot: () => ipcRenderer.invoke(IPC.librarySnapshot),
+  libraryCreateCollection: (name: string) => ipcRenderer.invoke(IPC.libraryCollectionCreate, name),
+  libraryCreatePage: (input: LibraryPageInput) => ipcRenderer.invoke(IPC.libraryPageCreate, input),
+  libraryUpdatePage: (id: string, patch: LibraryPagePatch) =>
+    ipcRenderer.invoke(IPC.libraryPageUpdate, id, patch),
+  libraryDeletePage: (id: string) => ipcRenderer.invoke(IPC.libraryPageDelete, id),
+  onLibraryChanged: (cb: () => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IPC.eventLibrary, listener)
+    return () => ipcRenderer.removeListener(IPC.eventLibrary, listener)
+  },
 
   tableGetState: () => ipcRenderer.invoke(IPC.tableGetState),
   tableHost: (input: TableHostInput) => ipcRenderer.invoke(IPC.tableHost, input),

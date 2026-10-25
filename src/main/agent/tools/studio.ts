@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { ToolContext } from './types'
-import { defineTool, toolResultError } from './types'
+import { defineTool, readRootsFor, toolResultError } from './types'
 import { resolveSafePath } from '../../security'
 import { truncate } from '../../util'
 
@@ -307,7 +307,7 @@ export const studioRunTool = defineTool({
     const app = STUDIO_APPS[args.app]
     if (!app) return { content: `Unknown engine "${args.app}".\n\n${describeApps()}`, isError: true }
     try {
-      const input = args.input ? await resolveSafePath(ctx.roots, args.input, { mode: 'read' }) : null
+      const input = args.input ? await resolveSafePath(readRootsFor(ctx), args.input, { mode: 'read' }) : null
       const output = args.output ? await resolveSafePath(ctx.roots, args.output, { mode: 'write' }) : null
       if (!input && !output) {
         return { content: 'Give at least an input document or an output path.', isError: true }

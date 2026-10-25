@@ -7,8 +7,10 @@ export interface AppPaths {
   root: string
   tasks: string
   workspaces: string
+  coworkers: string
   settingsFile: string
   schedulesFile: string
+  libraryFile: string
   logs: string
   skills: string
   subAgentsFile: string
@@ -26,8 +28,10 @@ export function getPaths(): AppPaths {
     root,
     tasks: join(root, 'tasks'),
     workspaces: join(root, 'workspaces'),
+    coworkers: join(root, 'coworkers'),
     settingsFile: join(root, 'settings.json'),
     schedulesFile: join(root, 'schedules.json'),
+    libraryFile: join(root, 'library.json'),
     logs: join(root, 'logs'),
     skills: join(root, 'skills'),
     subAgentsFile: join(root, 'subagents.json'),
@@ -39,6 +43,7 @@ export function getPaths(): AppPaths {
     paths.root,
     paths.tasks,
     paths.workspaces,
+    paths.coworkers,
     paths.logs,
     paths.skills,
     paths.durable

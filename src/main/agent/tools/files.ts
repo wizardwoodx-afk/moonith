@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs'
 import { extname, join, relative, resolve } from 'node:path'
 import { z } from 'zod'
 import type { ToolContext } from './types'
-import { defineTool, toolResultError } from './types'
+import { defineTool, readRootsFor, toolResultError } from './types'
 import { isWithin, resolveSafePath } from '../../security'
 import { truncate } from '../../util'
 
@@ -52,7 +52,7 @@ export const listFilesTool = defineTool({
   sideEffect: 'read',
   execute: async (args, ctx) => {
     try {
-      const target = await resolveSafePath(ctx.roots, args.path ?? ctx.workspace, { mode: 'read' })
+      const target = await resolveSafePath(readRootsFor(ctx), args.path ?? ctx.workspace, { mode: 'read' })
       const stat = await fs.stat(target)
       if (!stat.isDirectory()) return { content: 'Not a directory. Use read_file instead.', isError: true }
       const results: string[] = []
@@ -80,7 +80,7 @@ export const readFileTool = defineTool({
   sideEffect: 'read',
   execute: async (args, ctx) => {
     try {
-      const target = await resolveSafePath(ctx.roots, args.path, { mode: 'read' })
+      const target = await resolveSafePath(readRootsFor(ctx), args.path, { mode: 'read' })
       const buffer = await fs.readFile(target)
       if (buffer.includes(0)) return { content: 'Binary file. Use a specialized tool or the preview panel.', isError: true }
       if (buffer.length > 512_000) {
@@ -140,7 +140,9 @@ export const editFileTool = defineTool({
   sideEffect: 'write',
   execute: async (args, ctx) => {
     try {
-      const target = await resolveSafePath(ctx.roots, args.path, { mode: 'read' })
+      const target = await resolveSafePath(readRootsFor(ctx), args.path, { mode: 'read' })
+      // Reading a shared Captain file does not grant a Crew writer access to it.
+      await resolveSafePath(ctx.roots, args.path, { mode: 'write' })
       const original = await fs.readFile(target, 'utf8')
       const count = original.split(args.old_text).length - 1
       if (count === 0) return { content: 'Old text was not found in the file.', isError: true }
@@ -195,7 +197,7 @@ export const movePathTool = defineTool({
   risk: 'high',
   execute: async (args, ctx) => {
     try {
-      const from = await resolveSafePath(ctx.roots, args.from, { mode: 'read' })
+      const from = await resolveSafePath(ctx.roots, args.from, { mode: 'write' })
       const to = await resolveSafePath(ctx.roots, args.to, { mode: 'write' })
       const rejection = moveRejection(from, to)
       if (rejection) return { content: rejection, isError: true }
@@ -220,7 +222,7 @@ export const deletePathTool = defineTool({
   approval: 'always',
   execute: async (args, ctx) => {
     try {
-      const target = await resolveSafePath(ctx.roots, args.path, { mode: 'read' })
+      const target = await resolveSafePath(ctx.roots, args.path, { mode: 'write' })
       if (target === ctx.workspace || target === ctx.workspace.replace(/[\\/]$/, '')) {
         return { content: 'Refusing to delete the task workspace root.', isError: true }
       }
@@ -247,7 +249,7 @@ export const searchFilesTool = defineTool({
   sideEffect: 'read',
   execute: async (args, ctx) => {
     try {
-      const base = await resolveSafePath(ctx.roots, args.path ?? ctx.workspace, { mode: 'read' })
+      const base = await resolveSafePath(readRootsFor(ctx), args.path ?? ctx.workspace, { mode: 'read' })
       const fg = (await import('fast-glob')).default
       const pattern = args.glob ?? '**/*'
       if (pattern.startsWith('/') || pattern.includes('..')) {

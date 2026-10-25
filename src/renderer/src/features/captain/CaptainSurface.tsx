@@ -34,8 +34,9 @@ export function CaptainSurface() {
   }, [settings])
 
   useEffect(() => {
-    const reset = (): void => {
-      setDraft('')
+    const reset = (event: Event): void => {
+      const prefill = (event as CustomEvent<{ draft?: string }>).detail?.draft ?? ''
+      setDraft(prefill)
       setAttachments([])
       window.setTimeout(() => window.dispatchEvent(new Event('knight:focus-composer')), 30)
     }

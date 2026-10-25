@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { AlertCircle, Bot, Check, ChevronDown, Minus, Settings2 } from 'lucide-react'
+import { AlertCircle, Bot, Check, ChevronDown, Minus, Settings2, ShieldCheck } from 'lucide-react'
 import type { SubAgentRun } from '@shared/types'
 import { useApp } from '../../store'
 import {
@@ -133,6 +133,11 @@ export function CrewRunCard({
                 <span className="rounded-md border border-line bg-canvas/70 px-1.5 py-0.5 font-mono text-[8.5px] text-faint">
                   {agentPath}
                 </span>
+                {run.isolation ? (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-positive/20 bg-positive/5 px-1.5 py-0.5 text-[8.5px] text-positive">
+                    <ShieldCheck size={9} /> Private workspace · scoped browser
+                  </span>
+                ) : null}
                 {(run.batchSize ?? 1) > 1 ? (
                   <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[8.5px] font-medium text-accent-ink">
                     Team of {run.batchSize}

@@ -205,7 +205,7 @@ function TaskHeader({
                 className="menu-item"
                 onClick={() => {
                   close()
-                  void window.knight.showBrowser(task.id).catch((error) => {
+                  void window.knight.showBrowser(task.id, task.browser?.scope).catch((error) => {
                     toast.error(errorMessage(error))
                   })
                 }}

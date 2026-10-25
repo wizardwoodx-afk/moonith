@@ -8,13 +8,14 @@ import { documentTools } from './documents'
 import { browserTools } from './browser'
 import { memoryTools } from './memory'
 import { studioTools } from './studio'
+import { libraryTools } from './library'
 
 export function getBuiltinTools(mode: TaskMode): AgentTool[] {
   if (mode === 'chat') {
     const readOnlyFiles = fileTools.filter((tool) =>
       ['list_files', 'read_file', 'search_files'].includes(tool.name)
     )
-    return [...readOnlyFiles, ...webTools, ...browserTools, ...planTools, ...memoryTools]
+    return [...readOnlyFiles, ...webTools, ...browserTools, ...planTools, ...memoryTools, ...libraryTools]
   }
   return [
     ...fileTools,
@@ -24,7 +25,8 @@ export function getBuiltinTools(mode: TaskMode): AgentTool[] {
     ...documentTools,
     ...studioTools,
     ...browserTools,
-    ...memoryTools
+    ...memoryTools,
+    ...libraryTools
   ]
 }
 

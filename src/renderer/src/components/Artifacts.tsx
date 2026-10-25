@@ -127,7 +127,7 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
               <Globe size={11} />
               Browser
               <span className="ml-auto flex items-center gap-1 text-[9.5px] normal-case tracking-normal text-faint">
-                <span className="h-1 w-1 rounded-full bg-positive" /> session
+                <span className="h-1 w-1 rounded-full bg-positive" /> {task.browser.ownerLabel ?? 'Task'} session
               </span>
             </div>
             <div className="overflow-hidden rounded-xl border border-line bg-surface">
@@ -164,7 +164,7 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
                   variant="secondary"
                   className="mt-2 w-full"
                   onClick={() =>
-                    window.knight.showBrowser(task.id).catch((error) => {
+                    window.knight.showBrowser(task.id, task.browser?.scope).catch((error) => {
                       toast.error(errorMessage(error))
                     })
                   }

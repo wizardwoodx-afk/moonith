@@ -40,7 +40,9 @@ capabilities, not roadmap items.
 | Area | Current capability |
 | --- | --- |
 | **Captain** | A desktop agent that plans, calls real tools, streams responses, verifies stop conditions, and produces task artifacts. |
-| **Crew Mesh** | Supervised specialists, single or multi-job delegation, bounded parallel teams, independent failures, durable lineage, usage, and live activity. |
+| **Crew Mesh** | Supervised specialists, single or multi-job delegation, bounded parallel teams, independent failures, durable lineage, usage, and live activity. New runs have private workspaces and scoped browser sessions. |
+| **Native coworker privacy** | Per-Captain/Crew Chromium storage, private Crew write roots with explicit artifact handoff, task-deletion cleanup, and localhost/private-network/metadata navigation protections. |
+| **Library** | Local collections and hierarchical Markdown pages, revision-checked autosave, conflict recovery, full human review for Captain drafts, and idempotent approved saves. |
 | **Agent Teams & Table** | Peer Captain collaboration with shared goals, proposals, and an explicit shared ledger. |
 | **Enterprise Control Plane** | Native namespaces, human/agent principals, Roles, AccessBindings, deny-overriding Restrictions, lifecycle state, optimistic concurrency, and immutable revisions. |
 | **Runtime RBAC & DLP** | Executor/Researcher/Viewer/Custom roles, action-time checks, tool allow/deny rules, secret and sensitive-data detection, redaction, and blocking before configured egress boundaries. |
@@ -145,6 +147,8 @@ These are **planned**, not represented as shipped.
 - **Home & Tasks** — compose work, attach sources, follow the transcript, and
   inspect artifacts.
 - **Now / Crew / Tools / Files** — live operational views of the current task.
+- **Library** — local Markdown collections and pages, with revision-safe editing
+  and explicit human approval for agent-created drafts.
 - **Agent Teams & Table** — deliberate peer-agent collaboration.
 - **Schedules** — recurring work while SelfImpulse is running.
 - **Settings** — models, tiers, memory, skills, Crew Mesh, MCP, connectors,
@@ -186,10 +190,11 @@ npm run dist:win
 `npm run dist:win` writes installer artifacts to `release/`. A GitHub **Source
 code (zip)** asset is a source snapshot, not an installable application.
 
-The latest integration milestone passed both TypeScript projects, production
-builds, and **268 tests across 46 runnable files** in the Linux verification
-sandbox. Its three Electron-binary-dependent suites were excluded there;
-`npm test` remains the canonical full-suite command on a development machine.
+The latest native Coworker/Library milestone passed both TypeScript projects,
+production builds, and **302 tests across 50 runnable files** in the Linux
+verification sandbox. Its three Electron-binary-dependent suites were excluded
+there; `npm test` remains the canonical full-suite command on a development
+machine.
 See [build and release](./docs/build-and-release.md) for packaging details.
 
 ## Security and scope
@@ -199,6 +204,12 @@ enterprise deployment feature today:
 
 - Native enterprise control is **in-process and local**, not hosted SSO, SCIM,
   or hard multi-tenant isolation.
+- Coworker workspaces use actor/path containment, not containers or VMs;
+  scoped Chromium sessions and DNS/private-network checks do not make every
+  public page or network destination trustworthy.
+- Library pages are local atomic JSON records, not an encrypted-at-rest
+  document vault; provider and network-tool egress still depends on your
+  configuration and the existing DLP boundary.
 - Local signed audit is tamper-evident, not remote immutable/WORM storage.
 - DLP is pattern/field-based defense in depth, not a guarantee that every
   secret or confidential business fact will be recognized.
@@ -218,6 +229,7 @@ Start with the [documentation index](./docs/README.md).
 - [Native Enterprise Control Plane and RSIRALS](./docs/native-enterprise-rsirals.md)
 - [Runtime RBAC, DLP, and signed audit](./docs/enterprise-controls.md)
 - [Impulse Runtime and Crew Mesh](./docs/impulse-runtime-crew-mesh.md)
+- [Native Coworker, privacy boundary, and Library](./docs/native-coworker-library.md)
 - [Typed workflows and durable execution](./docs/agent-workflow-durability-themes.md)
 - [Task workspace](./docs/task-workspace.md)
 - [Build and release](./docs/build-and-release.md)
