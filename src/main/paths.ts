@@ -14,6 +14,7 @@ export interface AppPaths {
   subAgentsFile: string
   memoriesFile: string
   usageFile: string
+  durable: string
 }
 
 let cached: AppPaths | null = null
@@ -31,9 +32,17 @@ export function getPaths(): AppPaths {
     skills: join(root, 'skills'),
     subAgentsFile: join(root, 'subagents.json'),
     memoriesFile: join(root, 'memories.json'),
-    usageFile: join(root, 'usage.json')
+    usageFile: join(root, 'usage.json'),
+    durable: join(root, 'durable')
   }
-  for (const dir of [paths.root, paths.tasks, paths.workspaces, paths.logs, paths.skills]) {
+  for (const dir of [
+    paths.root,
+    paths.tasks,
+    paths.workspaces,
+    paths.logs,
+    paths.skills,
+    paths.durable
+  ]) {
     mkdirSync(dir, { recursive: true })
   }
   cached = paths

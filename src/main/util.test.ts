@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -48,6 +48,37 @@ describe('atomicWriteJson', () => {
     await atomicWriteJson(file, { version: 1 })
     await atomicWriteJson(file, { version: 2 })
     expect(await readJson(file, null)).toEqual({ version: 2 })
+  })
+
+  it('uses distinct temporary files for concurrent writers', async () => {
+    const file = join(dir, 'concurrent.json')
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(123456789)
+    try {
+      await Promise.all(
+        Array.from({ length: 16 }, (_, writer) => atomicWriteJson(file, { writer }))
+      )
+    } finally {
+      clock.mockRestore()
+    }
+    const saved = await readJson<{ writer: number } | null>(file, null)
+    expect(saved?.writer).toBeGreaterThanOrEqual(0)
+    expect(saved?.writer).toBeLessThan(16)
+    const entries = await fs.readdir(dir)
+    expect(
+      entries.filter((name) => name.startsWith('concurrent.json.') && name.endsWith('.tmp'))
+    ).toEqual([])
+  })
+
+  it('survives 64 concurrent writers on one file without throwing', async () => {
+    const file = join(dir, 'hammer.json')
+    const results = await Promise.allSettled(
+      Array.from({ length: 64 }, (_, writer) => atomicWriteJson(file, { writer }))
+    )
+    expect(results.filter((r) => r.status === 'rejected')).toEqual([])
+    const saved = await readJson<{ writer: number } | null>(file, null)
+    expect(saved?.writer).toBeGreaterThanOrEqual(0)
+    const leftovers = (await fs.readdir(dir)).filter((n) => n.endsWith('.tmp'))
+    expect(leftovers).toEqual([])
   })
 })
 
