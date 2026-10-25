@@ -162,8 +162,8 @@ export function NowPanel({
         <div className="mb-2 flex items-center gap-2 px-1">
           <Bot size={12} className="text-accent" />
           <div>
-            <h3 className="text-[10px] font-semibold tracking-[0.11em] text-muted uppercase">Crew activity</h3>
-            <p className="mt-0.5 text-[9px] text-faint">Actual delegated runs for this task</p>
+            <h3 className="text-[10px] font-semibold tracking-[0.11em] text-muted uppercase">Crew Mesh</h3>
+            <p className="mt-0.5 text-[9px] text-faint">Actual supervised runs for this task</p>
           </div>
           {runs.length ? <button onClick={() => onNavigate('crew')} className="ml-auto text-[9.5px] text-faint hover:text-ink">View all</button> : null}
         </div>

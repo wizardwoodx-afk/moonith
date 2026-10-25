@@ -1119,8 +1119,8 @@ export function SubAgentsPane() {
   return (
     <div className="space-y-9">
       <SettingsSection
-        title="Crew activity"
-        description="Focused jobs the Captain delegates, live as they work."
+        title="Crew Mesh activity"
+        description="Supervised specialists the Captain delegates, with parallel teams and live forwarded activity."
         action={
           <Button size="sm" variant="ghost" onClick={() => void window.knight.listSubAgents().then(setRuns)}>
             <RefreshCw size={12} /> Refresh
@@ -1169,13 +1169,23 @@ export function SubAgentsPane() {
                           <span className={cn('h-1.5 w-1.5 rounded-full', STATUS_TONE[run.status])} />
                           {run.status === 'running' ? 'Working' : run.status}
                         </span>
+                        {(run.batchSize ?? 1) > 1 ? (
+                          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[9.5px] font-medium text-accent-ink">
+                            Team of {run.batchSize}
+                          </span>
+                        ) : null}
                         <span className="text-[10px] text-faint">
                           {formatElapsed(run)} · {run.provider} · {run.model}
                         </span>
                       </div>
                       <p className="mt-1 text-[11px] text-muted">
                         For “{run.taskTitle}” · {run.steps.length} step{run.steps.length === 1 ? '' : 's'}
+                        {run.usage && run.usage.total > 0 ? ` · ${run.usage.total.toLocaleString()} tokens` : ''}
                       </p>
+                      <p className="mt-1 font-mono text-[9.5px] text-faint">
+                        {(run.agentPath ?? ['Captain', run.name]).join(' / ')}
+                      </p>
+                      {run.purpose ? <p className="mt-1.5 text-[11px] font-medium text-ink/75">{run.purpose}</p> : null}
                       <p className="mt-1.5 line-clamp-2 text-[11.5px] leading-relaxed text-ink/70">
                         {run.instruction}
                       </p>
@@ -1219,6 +1229,21 @@ export function SubAgentsPane() {
                           </p>
                         )}
                       </div>
+                      {run.events?.length ? (
+                        <div className="mt-3 rounded-lg border border-line/70 bg-surface/45 px-3 py-2.5">
+                          <p className="mb-1.5 text-[9.5px] font-semibold tracking-[0.1em] text-faint uppercase">
+                            Forwarded activity
+                          </p>
+                          <ol className="space-y-1">
+                            {[...run.events].slice(-6).reverse().map((event) => (
+                              <li key={event.id} className="flex items-center gap-2 text-[10.5px] text-muted">
+                                <span className="h-1 w-1 shrink-0 rounded-full bg-accent/70" />
+                                <span>{event.label}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      ) : null}
                       {run.error ? (
                         <p className="mt-3 text-[11px] leading-relaxed text-danger">{run.error}</p>
                       ) : null}

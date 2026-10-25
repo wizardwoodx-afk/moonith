@@ -55,6 +55,8 @@ export function CrewRunCard({
   const reduced = useReducedMotion()
   const current = currentCrewStep(run)
   const progress = crewStepProgress(run)
+  const agentPath = run.agentPath?.length ? run.agentPath.join(' / ') : `Captain / ${run.name}`
+  const recentEvents = [...(run.events ?? [])].slice(-3).reverse()
   const headline =
     run.status === 'running'
       ? (current?.title ?? 'Preparing the run')
@@ -101,7 +103,7 @@ export function CrewRunCard({
           </span>
           {!compact ? (
             <span className="mt-1 block truncate font-mono text-[8.5px] text-faint">
-              {run.provider} · {run.model || 'default model'}
+              {run.runtime === 'crew-mesh' ? 'Crew Mesh' : 'Crew'} · {run.provider} · {run.model || 'default model'}
             </span>
           ) : null}
         </span>
@@ -127,6 +129,22 @@ export function CrewRunCard({
             className="overflow-hidden"
           >
             <div className="px-3 pt-2.5 pb-3">
+              <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                <span className="rounded-md border border-line bg-canvas/70 px-1.5 py-0.5 font-mono text-[8.5px] text-faint">
+                  {agentPath}
+                </span>
+                {(run.batchSize ?? 1) > 1 ? (
+                  <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[8.5px] font-medium text-accent-ink">
+                    Team of {run.batchSize}
+                  </span>
+                ) : null}
+                {run.usage && run.usage.total > 0 ? (
+                  <span className="rounded-md border border-line px-1.5 py-0.5 font-mono text-[8.5px] text-faint">
+                    {run.usage.total.toLocaleString()} tokens
+                  </span>
+                ) : null}
+              </div>
+              {run.purpose ? <p className="mb-1.5 text-[10px] font-medium text-ink/75">{run.purpose}</p> : null}
               <p className="text-[10.5px] leading-[1.6] whitespace-pre-wrap text-muted">{run.instruction}</p>
 
               {run.steps.length ? (
@@ -159,6 +177,20 @@ export function CrewRunCard({
                 </p>
               ) : null}
 
+              {recentEvents.length ? (
+                <div className="mt-3 border-t border-line/70 pt-2">
+                  <p className="text-[8.5px] font-semibold tracking-[0.1em] text-faint uppercase">Forwarded activity</p>
+                  <ol className="mt-1.5 space-y-1">
+                    {recentEvents.map((event) => (
+                      <li key={event.id} className="flex items-center gap-1.5 text-[9px] text-faint">
+                        <span className="h-1 w-1 shrink-0 rounded-full bg-accent/60" />
+                        <span className="truncate">{event.label}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ) : null}
+
               {run.summary ? (
                 <div className="scroll-thin mt-3 max-h-56 overflow-y-auto rounded-lg bg-canvas/70 px-2.5 py-2">
                   <p className="text-[9px] font-semibold tracking-[0.1em] text-faint uppercase">Crew report</p>
@@ -188,7 +220,7 @@ export function CrewPanel({ taskId }: { taskId: string }) {
       <div className="shrink-0 px-3 pt-3 pb-2">
         <div className="flex items-center gap-2">
           <div>
-            <p className="text-[11.5px] font-medium text-ink">Delegated work</p>
+            <p className="text-[11.5px] font-medium text-ink">Crew Mesh</p>
             <p className="mt-0.5 text-[9.5px] text-faint">{live} running · {runs.length} recorded</p>
           </div>
           <button

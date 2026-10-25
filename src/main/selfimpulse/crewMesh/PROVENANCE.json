@@ -1,0 +1,41 @@
+{
+  "integration": "Crew Mesh supervised sub-agent spawning and event forwarding",
+  "updated": "2026-10-25",
+  "upstream": {
+    "project": "VoltAgent",
+    "repository": "https://github.com/VoltAgent/voltagent",
+    "revision": "72a46c76b4507e1f98b41d5050a92bd30587eb70",
+    "sourcePackage": "packages/core (@voltagent/core 2.11.0)",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2025 VoltAgent Inc."
+  },
+  "sourceFilesAdapted": [
+    {
+      "upstream": "packages/core/src/agent/subagent/index.ts",
+      "local": "delegation.ts",
+      "changes": "Adapted supervisor multi-target handoffs, per-target error isolation, shared batch identity, result-order preservation, agent-path metadata, and concise supervisor guidelines to SelfImpulse's existing runSubAgent boundary and Captain prompt. Added a bound of three concurrent workers and four jobs per call instead of importing the upstream Agent, provider, registry, telemetry, or AI SDK stack."
+    },
+    {
+      "upstream": "packages/core/src/agent/subagent/stream-metadata-enricher.ts",
+      "local": "events.ts",
+      "changes": "Adapted forwarded-event filtering and sub-agent metadata enrichment to the existing persisted SubAgentRun IPC events. No ReadableStream or AI SDK event types are required."
+    }
+  ],
+  "mergedFeatures": [
+    "one supervisor call can spawn a named team of up to four specialists",
+    "bounded parallel execution with independent per-agent outcomes",
+    "deterministic job lineage for durable replay",
+    "purpose, agent-path, batch, usage, and lifecycle metadata in existing Crew runs",
+    "real tool and lifecycle event forwarding through the existing subagent IPC channel"
+  ],
+  "excluded": [
+    "the full @voltagent/core npm package and its provider/OpenTelemetry dependencies",
+    "upstream Agent registry, memory, guardrails, MCP, server, and observability platform",
+    "nested delegation that could bypass SelfImpulse's Crew no-prompt boundary",
+    "a second provider loop, tool runtime, persistence layer, or dashboard"
+  ],
+  "authority": "SelfImpulse AgentRuntime, governance, DLP, approvals, durable journal, provider adapter, and SubAgentService remain authoritative.",
+  "licenseFiles": [
+    "LICENSE.voltagent.txt"
+  ]
+}

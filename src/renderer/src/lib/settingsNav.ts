@@ -247,10 +247,10 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   },
   {
     id: 'sub-agents',
-    label: 'Sub-agents',
+    label: 'Crew Mesh',
     group: 'Agents',
-    summary: 'Crew runs, live.',
-    keywords: ['crew', 'subagent', 'delegate', 'workers', 'parallel', 'agents', 'runs', 'live'],
+    summary: 'Supervised Crew runs and parallel teams.',
+    keywords: ['crew', 'mesh', 'subagent', 'delegate', 'workers', 'parallel', 'agents', 'runs', 'live'],
     status: 'live'
   },
   {

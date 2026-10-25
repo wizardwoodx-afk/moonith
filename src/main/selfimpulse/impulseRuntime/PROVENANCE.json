@@ -1,0 +1,45 @@
+{
+  "integration": "Impulse Runtime steering and live-output safety",
+  "updated": "2026-10-25",
+  "upstream": {
+    "project": "OpenClaw",
+    "repository": "https://github.com/openclaw/openclaw",
+    "revision": "c668bc0565187494726a7d065841ff7c551357f5",
+    "sourcePackage": "packages/agent-core (private workspace source; not an npm dependency)",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2026 OpenClaw Foundation"
+  },
+  "sourceFilesAdapted": [
+    {
+      "upstream": "packages/agent-core/src/pending-message-queue.ts",
+      "local": "inputQueue.ts",
+      "changes": "Made the queue generic, removed host-specific operator messages, retained admission fencing, in-flight commit/restore, cancellation, and one-at-a-time/all modes. SelfImpulse remains the persisted transcript owner."
+    },
+    {
+      "upstream": "packages/agent-core/src/repetition-guard.ts",
+      "local": "outputGuard.ts",
+      "changes": "Renamed the guard to product-native terminology and connected it to the existing provider delta boundary. Detection thresholds and bounded-tail algorithms are retained."
+    }
+  ],
+  "mergedFeatures": [
+    "transactional steering batches with explicit commit and restore",
+    "provider-continuation admission fences",
+    "bounded live repetitive-output detection"
+  ],
+  "excluded": [
+    "OpenClaw Gateway, channels, plugins, CLI, and external processes",
+    "upstream provider registry and message dialects",
+    "upstream session storage, compaction, skills, and tool policy",
+    "the full private agent-core workspace and its dependency graph"
+  ],
+  "additionalAttribution": {
+    "project": "Hermes Agent",
+    "copyright": "Copyright (c) 2025 Nous Research",
+    "license": "MIT",
+    "reason": "The adapted OpenClaw repetition guard credits Hermes Agent for the bounded streaming checks, repeated-text detection, and sampled exact-period expansion."
+  },
+  "licenseFiles": [
+    "LICENSE.openclaw.txt",
+    "LICENSE.hermes.txt"
+  ]
+}

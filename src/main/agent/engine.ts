@@ -24,6 +24,10 @@ import type { BackendStore } from '../backend/store'
 import { Annotation, END, START, StateGraph } from '../selfimpulse/roi/runtime/index.js'
 import type { DurableContext } from '../selfimpulse/durable/index'
 import { createStep, executeStep } from '../selfimpulse/workflow/index'
+import {
+  OutputRepetitionGuard,
+  REPETITIVE_OUTPUT_MESSAGE
+} from '../selfimpulse/impulseRuntime/index'
 import type { AgentTool } from './tools/types'
 import type { ChatMessage } from '@shared/types'
 
@@ -61,6 +65,9 @@ export interface EngineInput {
   onTool: (callId: string, name: string, args: Record<string, unknown>) => Promise<ToolOutcome>
   /** New user steering drained between model iterations, never during a tool call. */
   drainUserMessages?: () => ModelMessage[]
+  /** Settle the current drained batch after model success or host/provider failure. */
+  commitUserMessages?: () => void
+  restoreUserMessages?: () => void
   emit: (event: string, payload: unknown) => void
 }
 
@@ -212,6 +219,7 @@ export function turnFailureMessage(result: TurnResult): string | null {
 export async function runEngineTurn(input: EngineInput): Promise<TurnResult> {
   const config: ImpulseConfig = { ...DEFAULT_MOONWRIGHT_CONFIG, ...input.config }
   const specs = toolsToWireSpecs(input.tools)
+  let outputGuard = new OutputRepetitionGuard()
   const ports = makePorts({
     provider: input.provider,
     runtime: { definitions: () => specs },
@@ -223,10 +231,25 @@ export async function runEngineTurn(input: EngineInput): Promise<TurnResult> {
     // The graph's tool node owns call ids and executes input.onTool directly.
     // This port remains only for makePorts' provider/memory/skills assembly.
     runTool: async () => '',
-    onText: input.onText
+    onText: (delta) => {
+      if (outputGuard.feed(delta)) {
+        const error = new Error(REPETITIVE_OUTPUT_MESSAGE)
+        error.name = 'RepetitiveOutputError'
+        input.emit('agent:repetition_guard', { message: REPETITIVE_OUTPUT_MESSAGE })
+        throw error
+      }
+      input.onText(delta)
+    }
   })
   const tools = ports.listTools()
   const budget = new IterationBudget(config.maxIterations)
+  let steeringOpen = false
+  const settleSteering = (outcome: 'commit' | 'restore'): void => {
+    if (!steeringOpen) return
+    steeringOpen = false
+    if (outcome === 'commit') input.commitUserMessages?.()
+    else input.restoreUserMessages?.()
+  }
 
   const prepare = async (state: CaptainTurnState) => {
     if (input.signal.aborted) return { stopReason: 'interrupted' as const }
@@ -238,6 +261,7 @@ export async function runEngineTurn(input: EngineInput): Promise<TurnResult> {
 
     budget.consume()
     const messages: ModelMessage[] = input.drainUserMessages?.() ?? []
+    steeringOpen = messages.length > 0
     let iterationsSinceSkill = state.iterationsSinceSkill + 1
     let iterationsSinceMemory = state.iterationsSinceMemory + 1
 
@@ -287,6 +311,7 @@ export async function runEngineTurn(input: EngineInput): Promise<TurnResult> {
         createStep<ModelMessage[], ModelResponse>({
           id: stepId,
           execute: ({ input: messages }) => {
+            outputGuard = new OutputRepetitionGuard()
             const protectedMessages = input.protectModelMessages?.(messages) ?? messages
             return ports.callModel(protectedMessages, {
               tools,
@@ -320,6 +345,7 @@ export async function runEngineTurn(input: EngineInput): Promise<TurnResult> {
             })
         }
       )
+      settleSteering('commit')
       if (!response.text && !response.toolCalls.length) {
         ports.emit('agent:empty_response', { turnId: state.turnId })
       }
@@ -332,6 +358,7 @@ export async function runEngineTurn(input: EngineInput): Promise<TurnResult> {
         }
       }
     } catch (error) {
+      settleSteering('restore')
       ports.emit('agent:error', {
         turnId: state.turnId,
         error: error instanceof Error ? error.message : String(error)
@@ -522,14 +549,20 @@ export async function runEngineTurn(input: EngineInput): Promise<TurnResult> {
   messages.push({ role: 'user', content: input.userMessage })
   const turnId = `turn_${ports.now().toString(36)}`
 
-  const state = (await graph.invoke(
-    { turnId, messages },
-    {
-      signal: input.signal,
-      // Each model iteration can traverse prepare/model/tools or answer.
-      recursionLimit: Math.max(100, config.maxIterations * 4 + 20)
-    }
-  )) as CaptainTurnState
+  let state: CaptainTurnState
+  try {
+    state = (await graph.invoke(
+      { turnId, messages },
+      {
+        signal: input.signal,
+        // Each model iteration can traverse prepare/model/tools or answer.
+        recursionLimit: Math.max(100, config.maxIterations * 4 + 20)
+      }
+    )) as CaptainTurnState
+  } catch (error) {
+    settleSteering('restore')
+    throw error
+  }
 
   const stopReason = state.stopReason ?? 'error'
   // A held answer is a fallback for an exhausted/interrupted turn, not a

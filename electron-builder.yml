@@ -17,6 +17,8 @@ extraResources:
       - docs/third-party-notices.md
       - LICENSES/**/*
       - src/main/enterpriseControl/LICENSE.openclaw-enterprise.txt
+      - src/main/selfimpulse/impulseRuntime/LICENSE.*.txt
+      - src/main/selfimpulse/crewMesh/LICENSE.*.txt
       - src/main/selfimpulse/durable/LICENSE.txt
       - src/main/selfimpulse/roi/licenses/**/*
       - src/main/selfimpulse/roi/thirdparty/**/LICENSE

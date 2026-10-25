@@ -39,6 +39,12 @@ import { Provider, resolveConfig } from '../backend/provider'
 import { DurableStore } from '../selfimpulse/durable/index'
 import type { DurableContext, DurableEvent } from '../selfimpulse/durable/index'
 import { createStep, executeStep } from '../selfimpulse/workflow/index'
+import { TurnInputQueue } from '../selfimpulse/impulseRuntime/index'
+import {
+  runCrewHandoffs,
+  type CrewDelegation,
+  type CrewJob
+} from '../selfimpulse/crewMesh/index'
 import { authorizeNativeTaskTool } from '../enterpriseControl/runtime'
 
 let durableStore: DurableStore | undefined
@@ -52,8 +58,7 @@ interface RunState {
   taskId: string
   controller: AbortController
   stopped: boolean
-  pendingSteer: boolean
-  pendingSteerMessages: ChatMessage[]
+  steering: TurnInputQueue<ChatMessage>
 }
 
 /** Existing task-role RBAC and native enterprise policy are both mandatory. */
@@ -80,6 +85,46 @@ async function enterpriseToolDenial(
 
 const MAX_ROUNDS = 50
 const MAX_STEPS = 500
+const MAX_CREW_JOBS = 4
+
+const crewJobSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(60)
+      .describe('Short specialist name, for example "Docs Scout" or "Test Runner".'),
+    purpose: z
+      .string()
+      .trim()
+      .min(1)
+      .max(240)
+      .optional()
+      .describe('One short phrase describing why this specialist is useful.'),
+    instruction: z
+      .string()
+      .trim()
+      .min(1)
+      .max(8000)
+      .describe('A self-contained brief: what to inspect or do, and what to report back.')
+  })
+  .strict()
+
+const crewDelegationSchema = z.union([
+  crewJobSchema,
+  z
+    .object({
+      jobs: z
+        .array(crewJobSchema)
+        .min(1)
+        .max(MAX_CREW_JOBS)
+        .describe('Independent specialist jobs to run as one supervised Crew Mesh team.')
+    })
+    .strict()
+])
+
+type CrewDelegationInput = z.infer<typeof crewDelegationSchema>
 
 function mergePlan(existing: PlanItem[], steps: string[]): PlanItem[] {
   const byText = new Map(existing.map((item) => [item.text, item]))
@@ -161,8 +206,7 @@ class AgentRuntime {
     task.messages.push(...incoming)
 
     if (active) {
-      active.pendingSteer = true
-      active.pendingSteerMessages.push(...incoming)
+      for (const message of incoming) active.steering.enqueue(message)
     } else {
       task.status = 'running'
       task.error = undefined
@@ -227,8 +271,7 @@ class AgentRuntime {
       taskId,
       controller: new AbortController(),
       stopped: false,
-      pendingSteer: false,
-      pendingSteerMessages: []
+      steering: new TurnInputQueue<ChatMessage>('all')
     }
     this.runs.set(taskId, state)
     void this.loop(taskId, state)
@@ -294,6 +337,11 @@ class AgentRuntime {
 
       const toolContext = this.createToolContext(task, settings, durableRunId)
       const context = [skills, memory].filter(Boolean).join('\n\n')
+      // Messages already represented by this initial history/userMessage pair
+      // must not be injected a second time at the first prepare checkpoint.
+      const representedSteering = run.steering.drain()
+      for (const message of representedSteering) run.steering.commit(message)
+      let drainedSteering: ChatMessage[] = []
 
       const result = await runEngineTurn({
         provider,
@@ -309,10 +357,16 @@ class AgentRuntime {
         history,
         userMessage: userMessage?.content ?? '',
         drainUserMessages: () => {
-          const pending = run.pendingSteerMessages.splice(0)
-          if (!pending.length) return []
-          run.pendingSteer = false
-          return toEngineHistory(pending)
+          drainedSteering = run.steering.drain()
+          return toEngineHistory(drainedSteering)
+        },
+        commitUserMessages: () => {
+          for (const message of drainedSteering) run.steering.commit(message)
+          drainedSteering = []
+        },
+        restoreUserMessages: () => {
+          run.steering.restore()
+          drainedSteering = []
         },
         context,
         memoryStore: backend.store.memories,
@@ -394,7 +448,7 @@ class AgentRuntime {
       }
       const failure = turnFailureMessage(result)
       if (failure) throw new Error(failure)
-      if (run.pendingSteer) return
+      if (run.steering.hasItems()) return
       await this.finish(task, 'done')
       governanceService.audit(
         task,
@@ -421,8 +475,7 @@ class AgentRuntime {
       toast('error', task.error)
     } finally {
       this.runs.delete(taskId)
-      if (!run.stopped && run.pendingSteer) {
-        run.pendingSteer = false
+      if (!run.stopped && run.steering.hasItems()) {
         task.status = 'running'
         task.error = undefined
         task.completedAt = undefined
@@ -462,47 +515,55 @@ class AgentRuntime {
     const base = [...getBuiltinTools(task.mode), ...mcpTools, ...connectorsTools]
     const delegate: AgentTool = {
       name: 'delegate_to_crew',
-      title: 'Delegate to a Crew sub-agent',
+      title: 'Delegate to Crew Mesh',
       description:
-        'Hand a focused, self-contained job to a named Crew sub-agent. The sub-agent works with ' +
-        `${task.permissionMode === 'skip' ? 'read and write tools' : 'read-only tools'} in this task's workspace, ` +
-        'reports findings back to you, and never speaks to the user. Use it for independent research, ' +
-        'codebase inspection, or checking one specific question in parallel. Do not use it to ask the user anything.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          name: {
-            type: 'string',
-            description: 'Short role name for the sub-agent, for example "Docs Scout" or "Test Runner".'
-          },
-          instruction: {
-            type: 'string',
-            description:
-              'The complete job in one self-contained brief: what to inspect, what to do, and what to report back.'
-          }
-        },
-        required: ['name', 'instruction'],
-        additionalProperties: false
-      },
-      schema: z.object({
-        name: z.string().trim().min(1).max(60),
-        instruction: z.string().trim().min(1).max(8000)
-      }),
+        'Hand one focused job, or a jobs array with up to four independent jobs, to named Crew specialists. ' +
+        `Specialists work with ${task.permissionMode === 'skip' ? 'read and write tools' : 'read-only tools'} ` +
+        'in this task workspace, run with bounded parallelism, and report back to you without speaking to the user. ' +
+        'Give every job a self-contained instruction and an optional short purpose. Do not use Crew to ask the user anything.',
+      inputSchema: z.toJSONSchema(crewDelegationSchema, {
+        unrepresentable: 'any'
+      }) as Record<string, unknown>,
+      schema: crewDelegationSchema,
       sideEffect: 'network',
       risk: 'low',
       approval: 'never',
-      execute: async (args: { name: string; instruction: string }, context) =>
-        this.runSubAgent(
-          task,
-          run,
-          provider,
-          args.name,
-          args.instruction,
-          [...base, readSkill],
-          context
-        ),
-      summarize: (args: { name: string; instruction: string }) =>
-        `${args.name} · ${truncate(args.instruction, 160)}`
+      execute: async (args: CrewDelegationInput, context) => {
+        const jobs: CrewJob[] = 'jobs' in args ? args.jobs : [args]
+        const batchId = context.callId ?? newId('crew-batch')
+        if (jobs.length > 1) {
+          context.toast(
+            'info',
+            `Crew Mesh is supervising ${jobs.length} specialists with up to 3 active at once.`
+          )
+        }
+        const results = await runCrewHandoffs(
+          jobs,
+          (job, delegation) =>
+            this.runSubAgent(
+              task,
+              run,
+              provider,
+              job,
+              [...base, readSkill],
+              context,
+              delegation
+            ),
+          { batchId, signal: run.controller.signal, maxConcurrency: 3 }
+        )
+        if (jobs.length === 1) return results[0]
+        return {
+          content: results.map((result) => result.content).join('\n\n---\n\n'),
+          // Partial team success remains usable; every individual report keeps its own error state.
+          isError: results.every((result) => result.isError)
+        }
+      },
+      summarize: (args: CrewDelegationInput) => {
+        const jobs: CrewJob[] = 'jobs' in args ? args.jobs : [args]
+        return jobs.length === 1
+          ? `${jobs[0].name} · ${truncate(jobs[0].instruction, 160)}`
+          : `Crew Mesh · ${jobs.map((job) => job.name).join(', ')}`
+      }
     }
     const readSkill: AgentTool = {
       name: 'read_skill',
@@ -534,21 +595,30 @@ class AgentRuntime {
     task: Task,
     parent: RunState,
     provider: Provider,
-    name: string,
-    instruction: string,
+    job: CrewJob,
     tools: AgentTool[],
-    context: ToolContext
+    context: ToolContext,
+    delegation?: CrewDelegation
   ): Promise<{ content: string; isError?: boolean }> {
+    const { name, instruction, purpose } = job
     const run = await subAgentService.begin({
       id: context.callId
-        ? `${context.durableRunId ?? `captain:${task.id}`}:crew:${context.callId}`
+        ? `${context.durableRunId ?? `captain:${task.id}`}:crew:${context.callId}${
+            delegation && delegation.batchSize > 1 ? `:job-${delegation.jobIndex + 1}` : ''
+          }`
         : undefined,
       taskId: task.id,
       taskTitle: task.title,
       name,
       instruction,
       provider: provider.settings.providerId ?? 'knight',
-      model: provider.settings.model ?? ''
+      model: provider.settings.model ?? '',
+      purpose,
+      agentPath: delegation?.agentPath ?? ['Captain', name],
+      depth: delegation?.depth ?? 1,
+      batchId: delegation?.batchId,
+      batchSize: delegation?.batchSize ?? 1,
+      jobIndex: delegation?.jobIndex ?? 0
     })
     const actor: GovernanceActor = {
       actor: 'crew',
@@ -577,7 +647,8 @@ class AgentRuntime {
     const allowedNames = new Set(allowed.map((tool) => tool.name))
     const toolMap = new Map(crewCandidates.map((tool) => [tool.name, tool]))
     const workspace = ensureTaskWorkspace(task.id)
-    const system = `You are ${name}, a Crew sub-agent inside SelfImpulse. The Captain delegated one focused job to you.
+    const system = `You are ${name}, a Crew specialist inside SelfImpulse. The Captain delegated one focused job to you.
+Specialist purpose: ${purpose ?? 'Focused delegated work'}.
 Do the job with the tools you have, verify what you can, then reply with a compact report: findings, file paths, and anything the Captain must know.
 You never address the user directly, never ask questions, and never claim work you did not do.
 Workspace: ${workspace}
@@ -638,7 +709,10 @@ Inherited enterprise role: ${governanceService.role(task)}. Your tools are the i
               toolName,
               'Unknown tool'
             )
-            await subAgentService.saveRun(run)
+            await subAgentService.saveRun(run, {
+              type: 'tool_finished',
+              label: `${toolName} refused`
+            })
             return { content: `Unknown tool "${toolName}".`, isError: true }
           }
           const decision = governanceService.authorize(task, actor, tool)
@@ -664,7 +738,10 @@ Inherited enterprise role: ${governanceService.role(task)}. Your tools are the i
               detail: denial,
               at: nowIso()
             })
-            await subAgentService.saveRun(run)
+            await subAgentService.saveRun(run, {
+              type: 'tool_finished',
+              label: `${tool.title} denied by policy`
+            })
             return { content: `Policy denied ${tool.name}: ${denial}`, isError: true }
           }
           const record: SubAgentStep = {
@@ -678,7 +755,10 @@ Inherited enterprise role: ${governanceService.role(task)}. Your tools are the i
             at: nowIso()
           }
           run.steps.push(record)
-          await subAgentService.saveRun(run)
+          await subAgentService.saveRun(run, {
+            type: 'tool_started',
+            label: tool.title
+          })
           let content = ''
           let isError = false
           try {
@@ -727,11 +807,19 @@ Inherited enterprise role: ${governanceService.role(task)}. Your tools are the i
           )
           record.status = isError ? 'error' : 'ok'
           record.detail = isError ? truncate(content, 400) : record.detail
-          await subAgentService.saveRun(run)
+          await subAgentService.saveRun(run, {
+            type: 'tool_finished',
+            label: `${tool.title} ${isError ? 'failed' : 'finished'}`
+          })
           return { content, isError }
         },
         emit: (event, payload) => this.recordEngineAudit(task, actor, event, payload)
       })
+      run.usage = {
+        prompt: result.usage.prompt,
+        completion: result.usage.completion,
+        total: result.usage.total
+      }
 
       if (!durable.hasCompleted('telemetry:usage')) {
         await durable.run('telemetry:usage', async () => {
@@ -869,6 +957,16 @@ Inherited enterprise role: ${governanceService.role(task)}. Your tools are the i
           turnId,
           wrote: data.wrote
         })
+        break
+      case 'agent:repetition_guard':
+        governanceService.audit(
+          task,
+          actor,
+          'turn.repetition_guard',
+          'error',
+          undefined,
+          String(data.message ?? 'Repetitive model output was stopped.')
+        )
         break
       case 'agent:crew_parallel':
         governanceService.audit(task, actor, 'crew.parallel', 'info', undefined, undefined, {

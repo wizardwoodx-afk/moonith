@@ -17,6 +17,43 @@ nothing in the SelfImpulse licence transfers any rights in these projects.
   attribution. The port map — which upstream file each module corresponds
   to — is recorded in the core's module documentation.
 
+## OpenClaw — Impulse Runtime steering and output safety
+
+- **Upstream:** OpenClaw Foundation — `github.com/openclaw/openclaw`, pinned at
+  revision `c668bc0565187494726a7d065841ff7c551357f5`.
+- **Licence:** MIT — Copyright (c) 2026 OpenClaw Foundation. The complete
+  copyright and permission text ships at
+  `src/main/selfimpulse/impulseRuntime/LICENSE.openclaw.txt`.
+- **Used for:** targeted source adaptations from `packages/agent-core/` for
+  transactional steering queues, provider-continuation admission fencing, and
+  bounded live repetitive-output detection in SelfImpulse's existing engine.
+- **Local implementation:** `src/main/selfimpulse/impulseRuntime/` is merged
+  beneath the SelfImpulse provider, transcript, tool, approval, and persistence
+  boundaries. The private upstream workspace is not installed, and no Gateway,
+  CLI, provider registry, session store, or external process is included.
+- **Additional repetition-guard attribution:** the adapted upstream guard
+  credits Hermes Agent and Nous Research for its detection algorithms. MIT
+  Copyright (c) 2025 Nous Research; the complete permission text ships at
+  `src/main/selfimpulse/impulseRuntime/LICENSE.hermes.txt`. Exact source and
+  adaptation scope are recorded in that directory's `PROVENANCE.json`.
+
+## VoltAgent — Crew Mesh supervised delegation
+
+- **Upstream:** VoltAgent Inc. — `github.com/VoltAgent/voltagent`, pinned at
+  revision `72a46c76b4507e1f98b41d5050a92bd30587eb70` (`@voltagent/core` 2.11.0).
+- **Licence:** MIT — Copyright (c) 2025 VoltAgent Inc. The complete copyright
+  and permission text ships at
+  `src/main/selfimpulse/crewMesh/LICENSE.voltagent.txt`.
+- **Used for:** targeted supervisor/sub-agent source semantics: multi-target
+  handoffs, independent per-agent outcomes, ordered results, agent-path
+  metadata, and forwarded-event filtering.
+- **Local implementation:** `src/main/selfimpulse/crewMesh/` and the existing
+  `delegate_to_crew` / `runSubAgent` path form SelfImpulse's native **Crew
+  Mesh**. It adds bounded parallel teams, purposes, lineage, usage, and real
+  lifecycle/tool activity to the existing Crew UI. The full VoltAgent package,
+  AI SDK providers, OpenTelemetry, registry, servers, and second agent loop are
+  deliberately excluded. Exact scope is recorded in `PROVENANCE.json`.
+
 ## OpenClaw Enterprise — native IAM policy semantics
 
 - **Upstream:** OpenClaw Enterprise — `github.com/openclaw/openclaw-enterprise`,

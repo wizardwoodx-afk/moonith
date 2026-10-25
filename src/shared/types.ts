@@ -208,6 +208,22 @@ export interface MemoryInput {
 
 export type SubAgentStatus = 'running' | 'done' | 'error' | 'stopped'
 
+export type CrewRunEventType =
+  | 'spawned'
+  | 'tool_started'
+  | 'tool_finished'
+  | 'completed'
+  | 'stopped'
+  | 'error'
+
+export interface CrewRunEvent {
+  id: string
+  type: CrewRunEventType
+  label: string
+  at: string
+  agentPath: string[]
+}
+
 export interface SubAgentStep {
   id: string
   tool: string
@@ -231,6 +247,16 @@ export interface SubAgentRun {
   model: string
   startedAt: string
   endedAt?: string
+  /** Crew Mesh metadata is optional for runs persisted before the upgrade. */
+  runtime?: 'crew-mesh'
+  purpose?: string
+  agentPath?: string[]
+  depth?: number
+  batchId?: string
+  batchSize?: number
+  jobIndex?: number
+  usage?: { prompt: number; completion: number; total: number }
+  events?: CrewRunEvent[]
 }
 
 export interface PublicSettings {
