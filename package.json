@@ -2,7 +2,7 @@
   "name": "selfimpulse",
   "productName": "SelfImpulse",
   "version": "0.3.0",
-  "description": "SelfImpulse — a local-first agentic desktop workspace",
+  "description": "SelfImpulse — the governed, local-first enterprise agent workspace",
   "main": "./out/main/index.js",
   "author": "SelfImpulse",
   "license": "UNLICENSED",

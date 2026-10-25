@@ -2724,7 +2724,7 @@ function AboutTab() {
           <div>
             <h2 className="display text-[26px] leading-tight">SelfImpulse</h2>
             <p className="mt-1 max-w-[520px] text-[12px] leading-relaxed text-muted">
-              {APP_TAGLINE} One Captain, one engine, your files on this machine.
+              {APP_TAGLINE} One Captain, one governed runtime, explicit provider and tool boundaries.
             </p>
           </div>
         </div>
@@ -2752,18 +2752,18 @@ function AboutTab() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Open source">
+      <SettingsSection title="Third-party & licensing">
         <p className="text-[11.5px] leading-relaxed text-muted">
-          Skills follow the agentskills.io format. The registry and channel contracts follow two
-          MIT-licensed upstream projects. The connector, registry and marketplace services are
-          third-party and remain subject to their own terms.
+          SelfImpulse is proprietary, source-available software. Skills follow the agentskills.io
+          format. Selected registry and channel contracts derive from MIT-licensed upstream
+          projects. Third-party components and services retain their own licenses and terms.
         </p>
       </SettingsSection>
 
       <p className="px-1 text-[10.5px] leading-relaxed text-faint">
         SelfImpulse is an independent, local-first project. It is not affiliated with any model
-        provider. Model names referenced in your own configuration remain the trademarks of their
-        respective owners. Only analyze software you are authorized to inspect.
+        provider. Model names referenced in your configuration remain the trademarks of their
+        respective owners.
       </p>
     </div>
   )
