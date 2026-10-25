@@ -16,6 +16,7 @@ import {
   CircleUserRound,
   Clipboard,
   Cpu,
+  Globe2,
   Eye,
   EyeOff,
   FileText,
@@ -88,6 +89,9 @@ import {
 } from './settings/CapabilityPanes'
 import { DesktopPane, GatewayPane, TiersPane, WorkFilesPane } from './settings/BackendPanes'
 import { AuditPane } from './settings/AuditPane'
+import { EnterprisePane } from './settings/EnterprisePane'
+import { LearningPane } from './settings/LearningPane'
+import { BrowserPane } from './settings/BrowserPane'
 
 const NAV_ICONS: Record<
   SettingsPaneId,
@@ -109,12 +113,15 @@ const NAV_ICONS: Record<
   'agent-team': Users,
   skills: Sparkles,
   'sub-agents': Bot,
+  browser: Globe2,
   mcp: Plug,
   connectors: Boxes,
   channels: Radio,
   gateway: ServerCog,
   'work-files': Building2,
   desktop: Monitor,
+  enterprise: ShieldCheck,
+  learning: Brain,
   audit: ScrollText,
   about: Info
 }
@@ -321,7 +328,9 @@ export function SettingsView() {
                   {tab === 'agent' ? <AgentPane settings={settings} /> : null}
                   {tab === 'agent-team' ? <AgentTeamsPane /> : null}
                   {tab === 'skills' ? <SkillsPane /> : null}
+                  {tab === 'learning' ? <LearningPane /> : null}
                   {tab === 'sub-agents' ? <SubAgentsPane /> : null}
+                  {tab === 'browser' ? <BrowserPane settings={settings} /> : null}
                   {tab === 'appearance' ? <AppearancePane /> : null}
                   {tab === 'colors' ? <ColorsPane /> : null}
                   {tab === 'moon' ? <MoonPane /> : null}
@@ -335,6 +344,7 @@ export function SettingsView() {
                   {tab === 'gateway' ? <GatewayPane /> : null}
                   {tab === 'work-files' ? <WorkFilesPane /> : null}
                   {tab === 'desktop' ? <DesktopPane /> : null}
+                  {tab === 'enterprise' ? <EnterprisePane settings={settings} /> : null}
                   {tab === 'audit' ? <AuditPane /> : null}
                   {tab === 'about' ? <AboutTab /> : null}
                 </>
@@ -2718,7 +2728,7 @@ function AboutTab() {
           <div>
             <h2 className="display text-[26px] leading-tight">SelfImpulse</h2>
             <p className="mt-1 max-w-[520px] text-[12px] leading-relaxed text-muted">
-              {APP_TAGLINE} One Captain, one engine, your files on this machine.
+              {APP_TAGLINE} One Captain, one governed runtime, explicit provider and tool boundaries.
             </p>
           </div>
         </div>
@@ -2746,18 +2756,18 @@ function AboutTab() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Open source">
+      <SettingsSection title="Third-party & licensing">
         <p className="text-[11.5px] leading-relaxed text-muted">
-          Skills follow the agentskills.io format. The registry and channel contracts follow two
-          MIT-licensed upstream projects. The connector, registry and marketplace services are
-          third-party and remain subject to their own terms.
+          SelfImpulse is proprietary, source-available software. Skills follow the agentskills.io
+          format. Selected registry and channel contracts derive from MIT-licensed upstream
+          projects. Third-party components and services retain their own licenses and terms.
         </p>
       </SettingsSection>
 
       <p className="px-1 text-[10.5px] leading-relaxed text-faint">
         SelfImpulse is an independent, local-first project. It is not affiliated with any model
-        provider. Model names referenced in your own configuration remain the trademarks of their
-        respective owners. Only analyze software you are authorized to inspect.
+        provider. Model names referenced in your configuration remain the trademarks of their
+        respective owners.
       </p>
     </div>
   )

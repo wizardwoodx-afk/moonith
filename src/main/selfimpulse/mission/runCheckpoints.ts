@@ -17,9 +17,8 @@
  *     a chain that verifies. A tampered journal refuses in words.
  *  3. A RESTART IS NOT A LOSS. The whole journal — chains AND the state
  *     snapshots they point at — is written to the host's storage through
- *     the project's ONE storage adapter (`durable.ts`: localStorage when
- *     the host really has it, an injected Map in Node, an ephemeral Map
- *     where neither exists). A crash wipes the module-level maps below;
+ *     the project's ONE storage adapter (`durable.ts`: browser storage or the
+ *     native atomic file adapter in Electron, with explicit memory mode for probes). A crash wipes the module-level maps below;
  *     the journal on disk is what a restart reloads, so
  *     `loadRunJournal()` + `resumeRunFrom()` is a genuine resume rather
  *     than a fresh run wearing a resume's name.
@@ -85,7 +84,7 @@ const chainOf = new Map<string, RunCheckpoint[]>();
 const states = new Map<string, Map<string, string>>(); // runId → stateDigest → canonical state
 
 /** The host storage the journal is written to — the project's ONE adapter
- *  (localStorage / injected Map / ephemeral Map), overridable so a probe or
+ *  (browser storage / native files / injected Map), overridable so a probe or
  *  a future Tauri file seat can hand in its own.
  *
  *  Resolved LAZILY, not at module load: a probe (or a host) that installs a
@@ -452,7 +451,7 @@ export function restoreRunJournal(snapshot: string): { ok: true; runs: number } 
  * `continuations`, precisely so a runtime can decide its repair budget on the
  * first number without having to reinterpret the other two.
  *
- * `store` defaults to the module's store (localStorage where the host has
+ * `store` defaults to the module's store (shared native/browser storage where the host has
  * it, an injected Map in Node, an ephemeral Map where neither exists).
  *
  * Fail-closed semantics, in order:

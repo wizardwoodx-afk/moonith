@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 22 or newer.
+- Node.js 22.18 or newer (required by the pinned Stagehand SDK).
 - `npm install` once after cloning, and again after any dependency change.
 
 ## Commands

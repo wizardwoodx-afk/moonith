@@ -16,6 +16,7 @@ import type {
 } from '@shared/types'
 import { errorMessage } from './lib/utils'
 import type { SettingsPaneId } from './lib/settingsNav'
+import type { OutcomeTaskBindingInput } from '@shared/verifiedOutcomes'
 import type { Surface } from './shell/surfaces'
 
 export type SettingsTab = SettingsPaneId
@@ -33,6 +34,7 @@ export interface StartTaskRequest {
   attachments: AttachmentRef[]
   providerId?: string
   model?: string
+  outcome?: OutcomeTaskBindingInput | null
 }
 
 interface AppState {
@@ -54,16 +56,20 @@ interface AppState {
   openSchedules: () => void
   openSettings: (tab?: SettingsTab) => void
   refreshTasks: () => Promise<void>
+  refreshSettings: () => Promise<PublicSettings | null>
   refreshSubAgents: () => Promise<void>
   startTask: (request: StartTaskRequest) => Promise<void>
   sendToCurrent: (text: string, attachments: AttachmentRef[]) => Promise<void>
   stopCurrent: () => Promise<void>
   resumeCurrent: () => Promise<void>
+  reactToMessage: (messageId: string, emoji: string) => Promise<void>
   updateCurrent: (patch: {
     permissionMode?: PermissionMode
+    agentRole?: Task['agentRole']
     providerId?: string
     model?: string
     title?: string
+    outcome?: OutcomeTaskBindingInput | null
   }) => Promise<void>
   addFolderToCurrent: () => Promise<void>
   removeFolderFromCurrent: (folder: string) => Promise<void>
@@ -168,6 +174,17 @@ export const useApp = create<AppState>((set, get) => ({
     }
   },
 
+  refreshSettings: async () => {
+    try {
+      const settings = await window.knight.getSettings()
+      set({ settings })
+      return settings
+    } catch (error) {
+      toast.error(errorMessage(error))
+      return null
+    }
+  },
+
   refreshSubAgents: async () => {
     try {
       set({ subagents: await window.knight.listSubAgents() })
@@ -183,7 +200,8 @@ export const useApp = create<AppState>((set, get) => ({
       permissionMode: request.permissionMode,
       folders: request.folders,
       providerId: request.providerId,
-      model: request.model
+      model: request.model,
+      outcome: request.outcome
     }
     let task: Task | null = null
     try {
@@ -250,6 +268,16 @@ export const useApp = create<AppState>((set, get) => ({
     } catch (error) {
       toast.error(errorMessage(error))
     }
+  },
+
+  reactToMessage: async (messageId, emoji) => {
+    const task = get().currentTask
+    if (!task) return
+    const updated = await window.knight.reactToMessage({ taskId: task.id, messageId, emoji })
+    set((state) => ({
+      currentTask: state.currentTask?.id === updated.id ? updated : state.currentTask,
+      tasks: mergeSummary(state.tasks, updated)
+    }))
   },
 
   updateCurrent: async (patch) => {
@@ -371,11 +399,18 @@ export const useApp = create<AppState>((set, get) => ({
 
     if (event.type === 'subagent') {
       set((state) => {
+        const isNewRun = !state.subagents.some((run) => run.id === event.run.id)
         const rest = state.subagents.filter((run) => run.id !== event.run.id)
         return {
           subagents: [event.run, ...rest].sort((a, b) =>
             b.startedAt.localeCompare(a.startedAt)
-          )
+          ),
+          // Reveal newly delegated work once. Subsequent step events must not
+          // fight a user who intentionally closed the workspace panel.
+          panelOpen:
+            isNewRun && event.run.status === 'running' && state.currentTask?.id === event.run.taskId
+              ? true
+              : state.panelOpen
         }
       })
       return

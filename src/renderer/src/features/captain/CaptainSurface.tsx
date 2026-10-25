@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { AttachmentRef, PermissionMode } from '@shared/types'
+import type { OutcomeTaskBindingInput } from '@shared/verifiedOutcomes'
 import { useApp } from '../../store'
 import { errorMessage } from '../../lib/utils'
 import { resolveComposerModel, type ComposerModelState } from '../../lib/composerChoices'
@@ -19,6 +20,7 @@ export function CaptainSurface() {
     settings?.defaultPermissionMode ?? 'manual'
   )
   const [model, setModel] = useState<ComposerModelState>(() => resolveComposerModel(settings))
+  const [outcome, setOutcome] = useState<OutcomeTaskBindingInput | null>(null)
   const [sending, setSending] = useState(false)
   const hydrated = useRef(false)
 
@@ -34,8 +36,9 @@ export function CaptainSurface() {
   }, [settings])
 
   useEffect(() => {
-    const reset = (): void => {
-      setDraft('')
+    const reset = (event: Event): void => {
+      const prefill = (event as CustomEvent<{ draft?: string }>).detail?.draft ?? ''
+      setDraft(prefill)
       setAttachments([])
       window.setTimeout(() => window.dispatchEvent(new Event('knight:focus-composer')), 30)
     }
@@ -70,7 +73,8 @@ export function CaptainSurface() {
         folders: workspace ? [workspace] : [],
         attachments,
         providerId: model.providerId,
-        model: model.model
+        model: model.model,
+        outcome
       })
       setDraft('')
       setAttachments([])
@@ -89,7 +93,9 @@ export function CaptainSurface() {
       draft={draft}
       attachments={attachments}
       workspace={workspace}
+      outcome={outcome}
       busy={sending}
+      onOutcomeChange={setOutcome}
       onDraftChange={setDraft}
       onAttachmentsChange={setAttachments}
       onPermissionChange={setPermissionMode}

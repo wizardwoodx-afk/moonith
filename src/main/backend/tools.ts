@@ -3,6 +3,7 @@ import type { Dirent } from 'node:fs'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { scrubEnv } from './security'
+import { resolveSafePath } from '../security'
 
 /**
  * Tool runtime for the local agent.
@@ -274,6 +275,14 @@ export class ToolRuntime {
     return target
   }
 
+  private async secureResolve(rel: string | undefined, mode: 'read' | 'write'): Promise<string> {
+    const target = this.resolve(rel)
+    if (!this.sandbox) return target
+    // Lexical containment does not stop a symlinked workspace child. Reuse
+    // the canonical realpath boundary used by the primary agent tools.
+    return resolveSafePath([this.workspace], target, { mode })
+  }
+
   async allowed(name: string): Promise<boolean> {
     const rule = this.permissions[name] ?? 'allow'
     if (rule === 'allow') return true
@@ -324,7 +333,7 @@ export class ToolRuntime {
   }
 
   async readFile({ path: rel, maxBytes = 200000 }: ReadFileArgs): Promise<ReadFileResult> {
-    const target = this.resolve(rel)
+    const target = await this.secureResolve(rel, 'read')
     const stat = await fs.stat(target)
     if (stat.isDirectory()) throw new Error(`${rel} is a directory`)
     const buf = await fs.readFile(target)
@@ -339,7 +348,7 @@ export class ToolRuntime {
   }
 
   async listDir({ path: rel = '.' }: ListDirArgs): Promise<ListDirResult> {
-    const target = this.resolve(rel)
+    const target = await this.secureResolve(rel, 'read')
     const entries = await fs.readdir(target, { withFileTypes: true })
     const out: DirEntry[] = []
     for (const e of entries) {
@@ -356,16 +365,20 @@ export class ToolRuntime {
   }
 
   async writeFile({ path: rel, content, append = false }: WriteFileArgs): Promise<WriteFileResult> {
-    const target = this.resolve(rel)
+    const target = await this.secureResolve(rel, 'write')
     await fs.mkdir(path.dirname(target), { recursive: true })
+    // Check again after parent creation; a pre-existing symlink must never be
+    // followed into an external directory on the write path.
+    if (this.sandbox) await resolveSafePath([this.workspace], target, { mode: 'write' })
     if (append) await fs.appendFile(target, content ?? '', 'utf8')
     else await fs.writeFile(target, content ?? '', 'utf8')
     return { ok: true, path: rel, bytes: (content ?? '').length }
   }
 
   async search({ pattern, path: rel = '.', maxResults = 120 }: SearchArgs): Promise<SearchResult> {
-    const root = this.resolve(rel)
+    const root = await this.secureResolve(rel, 'read')
     const source = String(pattern)
+    if (source.length > 512) throw new Error('Search pattern is too long.')
     let re: RegExp
     try {
       re = new RegExp(source, 'gi')

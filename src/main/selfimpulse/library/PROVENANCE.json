@@ -1,0 +1,38 @@
+{
+  "module": "SelfImpulse native Library",
+  "upstream": {
+    "project": "CopilotKit OpenDots",
+    "repository": "https://github.com/CopilotKit/OpenDots",
+    "commit": "8091324942b86789ed0da7facbee855145d933b0",
+    "license": "MIT",
+    "copyright": "Copyright (c) Atai Barkai",
+    "licenseFile": "LICENSE.opendots.txt",
+    "referenceFiles": [
+      "src/server/pages.ts",
+      "src/server/page-service.ts",
+      "src/server/page-tools.ts",
+      "src/shared/page-review.ts",
+      "src/client/PageReviewCard.tsx"
+    ]
+  },
+  "adaptedFiles": [
+    "src/main/selfimpulse/library/service.ts",
+    "src/main/agent/tools/library.ts",
+    "src/renderer/src/features/library/LibraryView.tsx",
+    "src/renderer/src/components/ApprovalDialog.tsx"
+  ],
+  "localChanges": [
+    "Renamed Spaces/Dots to product-native Collections/Library pages",
+    "Replaced SQLite and Intelligence APIs with bounded local JSON and atomic writes",
+    "Kept optimistic revisions, parent-cycle prevention, and exact-draft idempotent review receipts",
+    "Connected drafts to SelfImpulse's existing approval, DLP, RBAC, enterprise policy, and audit path",
+    "Added local search, hierarchy, preview, autosave conflict recovery, and transparent Captain prompt handoff"
+  ],
+  "excluded": [
+    "CopilotKit Intelligence/cloud runtime",
+    "SQLite and server/service dependencies",
+    "hosted workspace or localhost bridge",
+    "unreviewed agent writes",
+    "upstream names in product UI and integrated tool names"
+  ]
+}

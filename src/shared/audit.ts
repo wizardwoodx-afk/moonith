@@ -11,11 +11,56 @@
 
 export const AUDIT_IPC = {
   summary: 'audit:summary',
+  events: 'audit:events',
   export: 'audit:export',
   verify: 'audit:verify'
 } as const
 
-export type AuditEntryKind = 'receipt' | 'approval' | 'trace'
+export type AuditEntryKind = 'receipt' | 'approval' | 'trace' | 'runtime'
+
+export type RuntimeAuditOutcome =
+  | 'info'
+  | 'allowed'
+  | 'denied'
+  | 'requested'
+  | 'approved'
+  | 'redacted'
+  | 'blocked'
+  | 'ok'
+  | 'error'
+
+export type RuntimeAuditEvent = {
+  actor: 'captain' | 'crew' | 'system'
+  actorId: string
+  taskId?: string
+  runId?: string
+  role?: import('./governance').AgentRole
+  action: string
+  outcome: RuntimeAuditOutcome
+  target?: string
+  detail?: string
+  /** Metadata is scrubbed and size-limited before it reaches the ledger. */
+  metadata?: Record<string, unknown>
+}
+
+export interface AuditEventView extends RuntimeAuditEvent {
+  sequence: number
+  ts: string
+}
+
+export interface AuditEventQuery {
+  query?: string
+  taskId?: string
+  outcome?: RuntimeAuditOutcome
+  limit?: number
+}
+
+export interface RuntimeAuditIntegrity {
+  ok: boolean
+  entries: number
+  head: string | null
+  reason?: string
+}
 
 /**
  * One recorded decision, exactly as the engine session holds it — nothing is
@@ -34,6 +79,8 @@ export interface AuditSummary {
   receipts: number
   approvals: number
   traces: number
+  runtime: number
+  runtimeIntegrity: RuntimeAuditIntegrity
   firstTs: string | null
   lastTs: string | null
 }

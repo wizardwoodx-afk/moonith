@@ -1,5 +1,6 @@
-import { execFile } from 'node:child_process'
+import { shell } from 'electron'
 import { click, focusWindow, hotkey, screenshot, scroll, type as typeText } from './computer'
+import { safeGroundedApplicationPath, safeGroundedWebUrl } from './groundedTarget'
 import type { Screenshot } from './computer'
 
 /**
@@ -464,13 +465,16 @@ export class GroundedActions {
         await new Promise((r) => setTimeout(r, 1500))
         return { ok: true, action: type, seconds: 1.5 }
       case 'open_app': {
-        const app = (inputs.app || inputs.content || '') as string
-        if (app) execFile('cmd', ['/c', 'start', '', app], { windowsHide: true })
-        return { ok: true, action: type, app }
+        const requested = String(inputs.app || inputs.content || '')
+        const app = safeGroundedApplicationPath(requested)
+        if (!app) return { ok: false, action: type, error: 'open_app requires an absolute application path; no command shell is used.' }
+        const error = await shell.openPath(app)
+        return error ? { ok: false, action: type, app, error } : { ok: true, action: type, app }
       }
       case 'navigate': {
-        const url = (inputs.url || inputs.content || '') as string
-        if (url) execFile('cmd', ['/c', 'start', '', url], { windowsHide: true })
+        const url = safeGroundedWebUrl(String(inputs.url || inputs.content || ''))
+        if (!url) return { ok: false, action: type, error: 'Only absolute http(s) URLs without credentials may be opened.' }
+        await shell.openExternal(url)
         return { ok: true, action: type, url }
       }
       case 'back':

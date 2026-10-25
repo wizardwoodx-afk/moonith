@@ -14,13 +14,16 @@ export const SETTINGS_PANES = [
   'agent',
   'agent-team',
   'skills',
+  'learning',
   'sub-agents',
+  'browser',
   'mcp',
   'connectors',
   'channels',
   'gateway',
   'work-files',
   'desktop',
+  'enterprise',
   'audit',
   'about'
 ] as const
@@ -231,16 +234,32 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     id: 'skills',
     label: 'Skills',
     group: 'Agents',
-    summary: 'Procedures the Captain can load.',
-    keywords: ['skill', 'skills', 'registry', 'bundle', 'playbook', 'marketplace', 'install', 'skill.md'],
+    summary: 'Native Marketspace design systems and procedures the Captain can load.',
+    keywords: ['skill', 'skills', 'registry', 'bundle', 'playbook', 'marketplace', 'marketspace', 'design', 'design.md', 'preview', 'install', 'skill.md'],
+    status: 'live'
+  },
+  {
+    id: 'learning',
+    label: 'RSIRALS learning',
+    group: 'Agents',
+    summary: 'Measured runtime policies, utility memory, verified skills, and learning receipts.',
+    keywords: ['rsirals', 'recursive', 'learning', 'self-improving', 'strategy', 'lessons', 'receipts'],
     status: 'live'
   },
   {
     id: 'sub-agents',
-    label: 'Sub-agents',
+    label: 'Crew Mesh',
     group: 'Agents',
-    summary: 'Crew runs, live.',
-    keywords: ['crew', 'subagent', 'delegate', 'workers', 'parallel', 'agents', 'runs', 'live'],
+    summary: 'Supervised Crew runs and parallel teams.',
+    keywords: ['crew', 'mesh', 'subagent', 'delegate', 'workers', 'parallel', 'agents', 'runs', 'live'],
+    status: 'live'
+  },
+  {
+    id: 'browser',
+    label: 'AI Browser',
+    group: 'Agents',
+    summary: 'Stagehand AI and built-in Chromium with isolated, headless task sessions.',
+    keywords: ['browser', 'headless', 'stagehand', 'chrome', 'chromium', 'observe', 'act', 'extract', 'automation'],
     status: 'live'
   },
   {
@@ -318,6 +337,33 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
       'actions',
       'grounding',
       'automation'
+    ],
+    status: 'live'
+  },
+  {
+    id: 'enterprise',
+    label: 'Enterprise controls',
+    group: 'SelfImpulse',
+    summary: 'Verified Outcomes, scoped autonomy, agent roles, DLP, and signed evidence.',
+    keywords: [
+      'enterprise',
+      'verified outcomes',
+      'outcome contract',
+      'autonomy',
+      'grant',
+      'regression',
+      'policy shadow',
+      'rbac',
+      'role',
+      'policy',
+      'least privilege',
+      'dlp',
+      'data loss',
+      'redact',
+      'block',
+      'secrets',
+      'compliance',
+      'governance'
     ],
     status: 'live'
   },

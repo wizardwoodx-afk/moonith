@@ -1,0 +1,32 @@
+{
+  "module": "SelfImpulse restrained interaction details",
+  "upstream": [
+    {
+      "project": "Motion Primitives",
+      "repository": "https://github.com/ibelick/motion-primitives",
+      "commit": "120f64f6ca60348e251f929e9c81f11ccbe45eda",
+      "license": "MIT",
+      "copyright": "Copyright (c) 2024 ibelick",
+      "licenseFile": "LICENSE.motion-primitives.txt",
+      "referenceFile": "components/core/animated-number.tsx",
+      "adaptedFile": "LiveNumber.tsx",
+      "localChanges": "Uses the existing framer-motion runtime, real numeric props, and reduced-motion output; no motion/react dependency."
+    },
+    {
+      "project": "Animata",
+      "repository": "https://github.com/codse/animata",
+      "commit": "e7478b835a3b5c4153e71f60666634e91bb38813",
+      "license": "MIT",
+      "copyright": "Copyright (c) Animata",
+      "licenseFile": "LICENSE.animata.txt",
+      "referenceFile": "animata/button/status-button.tsx",
+      "adaptedFile": "SaveStatus.tsx",
+      "localChanges": "Replaced demo timers and cart state with actual Library save/conflict state, accessible live status, and reduced-motion transitions."
+    }
+  ],
+  "excluded": [
+    "second animation runtime",
+    "demo timers and fake product state",
+    "decorative background effects unrelated to user work"
+  ]
+}

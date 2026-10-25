@@ -4,16 +4,52 @@ export type TaskStatus = 'draft' | 'running' | 'waiting' | 'paused' | 'done' | '
 export type ProviderKind = 'anthropic' | 'openai' | 'compatible'
 
 import type {
+  AuditEventQuery,
+  AuditEventView,
   AuditExportResult,
   AuditSummary,
   AuditVerifyResult
 } from './audit'
+import type {
+  AgentRole,
+  DlpInspection,
+  GovernanceSettings,
+  SensitiveDataCategory
+} from './governance'
+import type {
+  EnterpriseAuthorization,
+  EnterpriseControlMutation,
+  EnterpriseControlSnapshot,
+  EnterpriseControlState,
+  EnterpriseDecision,
+  EnterpriseRevisionInfo
+} from './enterpriseControl'
+import type { RsiralsSnapshot } from './rsirals'
+import type {
+  OutcomeTaskBinding,
+  OutcomeTaskBindingInput,
+  VerifiedOutcomesApi
+} from './verifiedOutcomes'
+import type {
+  LibraryCollection,
+  LibraryPage,
+  LibraryPageInput,
+  LibraryPagePatch,
+  LibrarySnapshot
+} from './library'
+import type {
+  MarketspaceApplyResult,
+  MarketspaceCreateInput,
+  MarketspaceDetail,
+  MarketspaceEntry
+} from './marketspace'
 
 export type {
   AuditExportResult,
   AuditSummary,
   AuditVerifyResult
 } from './audit'
+export type { AgentRole, DlpInspection, GovernanceSettings } from './governance'
 
 export interface McpServerConfig {
   id: string
@@ -80,6 +116,8 @@ export interface ChannelRecord {
   lastMessageAt?: string
   messagesIn: number
   messagesOut: number
+  /** Telegram is deny-by-default; an empty list authorizes no inbound chat. */
+  allowedChatIds: string[]
   error?: string
 }
 
@@ -90,6 +128,7 @@ export interface ChannelInput {
   enabled: boolean
   token?: string
   removeToken?: boolean
+  allowedChatIds?: string[]
 }
 
 export interface ChannelState {
@@ -187,6 +226,22 @@ export interface MemoryInput {
 
 export type SubAgentStatus = 'running' | 'done' | 'error' | 'stopped'
 
+export type CrewRunEventType =
+  | 'spawned'
+  | 'tool_started'
+  | 'tool_finished'
+  | 'completed'
+  | 'stopped'
+  | 'error'
+
+export interface CrewRunEvent {
+  id: string
+  type: CrewRunEventType
+  label: string
+  at: string
+  agentPath: string[]
+}
+
 export interface SubAgentStep {
   id: string
   tool: string
@@ -210,6 +265,18 @@ export interface SubAgentRun {
   model: string
   startedAt: string
   endedAt?: string
+  /** Crew Mesh metadata is optional for runs persisted before the upgrade. */
+  runtime?: 'crew-mesh'
+  /** Present only for runs created with the native isolated coworker boundary. */
+  isolation?: { workspace: 'private'; browser: 'per-run' }
+  purpose?: string
+  agentPath?: string[]
+  depth?: number
+  batchId?: string
+  batchSize?: number
+  jobIndex?: number
+  usage?: { prompt: number; completion: number; total: number }
+  events?: CrewRunEvent[]
 }
 
 export interface PublicSettings {
@@ -223,6 +290,8 @@ export interface PublicSettings {
   customInstructions: string
   allowShell: boolean
   onboardingComplete: boolean
+  governance: GovernanceSettings
+  browser: BrowserSettings
   /** The transplanted the earlier shell backend: provider registry, tiers, memory, gateway. */
   backend?: BackendSettingsPublic
 }
@@ -237,6 +306,8 @@ export interface SettingsPatch {
   customInstructions?: string
   allowShell?: boolean
   onboardingComplete?: boolean
+  governance?: GovernanceSettings
+  browser?: Partial<BrowserSettings>
 }
 
 export interface TestProviderResult {
@@ -260,18 +331,29 @@ export interface ToolCallInfo {
   arguments: unknown
 }
 
+export interface MessageImage {
+  data: string
+  mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system' | 'tool'
   content: string
+  /** Ephemeral multimodal input used by native capabilities such as the AI browser. */
+  images?: MessageImage[]
   createdAt: string
   toolCalls?: ToolCallInfo[]
   toolCallId?: string
   name?: string
   error?: boolean
   attachments?: AttachmentRef[]
+  /** Reactions selected by the local profile, persisted with this message. */
+  reactions?: string[]
   hidden?: boolean
 }
+
+export const MESSAGE_REACTIONS = ['👍', '❤️', '🎉', '👀', '✅', '💡'] as const
 
 export type PlanStatus = 'pending' | 'active' | 'done'
 
@@ -319,12 +401,45 @@ export interface Artifact {
   createdAt: string
 }
 
+export type BrowserEngine = 'stagehand' | 'chromium'
+export type BrowserMode = 'headless' | 'visible'
+
+export interface BrowserSettings {
+  /** Stagehand is the default AI browser; Chromium is the deterministic built-in fallback. */
+  engine: BrowserEngine
+  headless: boolean
+}
+
+export interface BrowserRuntimeStatus {
+  engine: BrowserEngine
+  headless: boolean
+  chromeAvailable: boolean
+  stagehandReady: boolean
+  activeSessions: number
+  stagehandVersion: string
+  /** Sanitized local setup/recovery guidance; never a credential or environment dump. */
+  notice?: string
+}
+
 export interface BrowserState {
   url: string
   title: string
+  open?: boolean
+  loading?: boolean
+  /** Opaque Captain/Crew session scope; never a shared browser profile. */
+  scope?: string
+  ownerLabel?: string
   screenshotRelPath?: string
   lastAction?: string
   updatedAt: string
+  engine?: BrowserEngine
+  mode?: BrowserMode
+  aiAvailable?: boolean
+  actionCount?: number
+  blockedRequests?: number
+  /** A short, non-secret operational notice such as a built-in-engine fallback. */
+  notice?: string
+  startedAt?: string
 }
 
 export interface TokenUsage {
@@ -364,6 +479,8 @@ export interface Task {
   mode: TaskMode
   status: TaskStatus
   permissionMode: PermissionMode
+  /** Least-privilege role enforced for Captain and every inherited Crew run. */
+  agentRole?: AgentRole
   providerId?: string
   model?: string
   folders: string[]
@@ -372,6 +489,8 @@ export interface Task {
   plan: PlanItem[]
   artifacts: Artifact[]
   browser?: BrowserState
+  /** Optional pinned Verified Outcomes workflow and its explicit data/environment scope. */
+  outcome?: OutcomeTaskBinding
   error?: string
   usage?: TokenUsage
   createdAt: string
@@ -397,7 +516,9 @@ export interface CreateTaskInput {
   providerId?: string
   model?: string
   permissionMode: PermissionMode
+  agentRole?: AgentRole
   folders?: string[]
+  outcome?: OutcomeTaskBindingInput | null
 }
 
 export interface SendMessageInput {
@@ -406,13 +527,29 @@ export interface SendMessageInput {
   attachments?: AttachmentRef[]
 }
 
+export interface MessageReactionInput {
+  taskId: string
+  messageId: string
+  emoji: string
+}
+
 export interface UpdateTaskInput {
   taskId: string
   mode?: TaskMode
   permissionMode?: PermissionMode
+  agentRole?: AgentRole
   providerId?: string
   model?: string
   title?: string
+  /** Null unbinds future runs; an active run cannot change its contract mid-flight. */
+  outcome?: OutcomeTaskBindingInput | null
+}
+
+export interface ApprovalReview {
+  kind: 'library-page'
+  title: string
+  content: string
+  destination: string
 }
 
 export interface ApprovalRequest {
@@ -424,6 +561,7 @@ export interface ApprovalRequest {
   details?: string
   risk: 'low' | 'medium' | 'high'
   allowAlways: boolean
+  review?: ApprovalReview
   createdAt: string
 }
 
@@ -740,6 +878,13 @@ export interface BackendApi {
   onEvent: (cb: (event: BackendEvent) => void) => () => void
 }
 
+export interface EnterpriseControlApi {
+  snapshot: () => Promise<EnterpriseControlSnapshot>
+  mutate: (mutation: EnterpriseControlMutation) => Promise<EnterpriseControlSnapshot>
+  authorize: (request: EnterpriseAuthorization) => Promise<EnterpriseDecision>
+  revision: (revision: number) => Promise<{ info: EnterpriseRevisionInfo; state: EnterpriseControlState }>
+}
+
 export interface KnightApi {
   getAppInfo: () => Promise<AppInfo>
   getSettings: () => Promise<PublicSettings>
@@ -756,10 +901,12 @@ export interface KnightApi {
   stopTask: (id: string) => Promise<void>
   resumeTask: (id: string) => Promise<void>
   updateTask: (input: UpdateTaskInput) => Promise<Task>
+  reactToMessage: (input: MessageReactionInput) => Promise<Task>
   addFolder: (id: string) => Promise<Task | null>
   removeFolder: (id: string, folder: string) => Promise<Task>
   pickFolder: () => Promise<string | null>
   pickFiles: () => Promise<AttachmentRef[]>
+  attachDroppedFiles: (files: File[]) => Promise<AttachmentRef[]>
 
   respondApproval: (decision: ApprovalDecision) => Promise<void>
   openArtifact: (taskId: string, relPath: string) => Promise<void>
@@ -784,6 +931,13 @@ export interface KnightApi {
   createSkill: (draft: SkillDraft) => Promise<SkillSummary[]>
   removeSkill: (id: string) => Promise<SkillSummary[]>
 
+  marketspaceList: (query?: string) => Promise<MarketspaceEntry[]>
+  marketspaceRead: (id: string) => Promise<MarketspaceDetail | null>
+  marketspaceInstall: (id: string) => Promise<MarketspaceDetail>
+  marketspaceCreate: (input: MarketspaceCreateInput) => Promise<MarketspaceDetail>
+  marketspaceRemove: (id: string) => Promise<MarketspaceEntry[]>
+  marketspaceApply: (taskId: string, id: string, overwrite?: boolean) => Promise<MarketspaceApplyResult>
+
   listMemories: () => Promise<MemoryNote[]>
   addMemory: (input: MemoryInput) => Promise<MemoryNote[]>
   removeMemory: (id: string) => Promise<MemoryNote[]>
@@ -801,7 +955,15 @@ export interface KnightApi {
 
   listSubAgents: () => Promise<SubAgentRun[]>
 
-  showBrowser: (taskId: string) => Promise<void>
+  showBrowser: (taskId: string, scope?: string) => Promise<void>
+  getBrowserStatus: () => Promise<BrowserRuntimeStatus>
+
+  librarySnapshot: () => Promise<LibrarySnapshot>
+  libraryCreateCollection: (name: string) => Promise<LibraryCollection>
+  libraryCreatePage: (input: LibraryPageInput) => Promise<LibraryPage>
+  libraryUpdatePage: (id: string, patch: LibraryPagePatch) => Promise<LibraryPage>
+  libraryDeletePage: (id: string) => Promise<boolean>
+  onLibraryChanged: (cb: () => void) => () => void
 
   tableGetState: () => Promise<TableState>
   tableHost: (input: TableHostInput) => Promise<TableState>
@@ -817,8 +979,16 @@ export interface KnightApi {
   onApprovalRequest: (cb: (request: ApprovalRequest) => void) => () => void
 
   auditSummary: () => Promise<AuditSummary>
+  auditEvents: (query?: AuditEventQuery) => Promise<AuditEventView[]>
   auditExport: () => Promise<AuditExportResult | null>
   auditVerify: () => Promise<AuditVerifyResult | null>
+  inspectDlp: (
+    text: string,
+    categories?: SensitiveDataCategory[]
+  ) => Promise<DlpInspection>
+  enterpriseControl: EnterpriseControlApi
+  verifiedOutcomes: VerifiedOutcomesApi
+  rsiralsSnapshot: () => Promise<RsiralsSnapshot>
 
   backend: BackendApi
 }

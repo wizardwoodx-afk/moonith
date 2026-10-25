@@ -9,11 +9,12 @@
  *
  * Ported from the earlier desktop shell.
  */
-import { exec } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { runNpx } from '../npx'
+import { resolveSafePath } from '../security'
 import type { BackendStore } from './store'
 
 export const BASE_URL = 'https://market.lobehub.com'
@@ -158,32 +159,46 @@ function toCredentials(value: unknown): MarketplaceCredentials | null {
   return { ...value, clientId: String(clientId), clientSecret: String(clientSecret) }
 }
 
-const quote = (s: string): string =>
-  process.platform === 'win32'
-    ? `"${String(s).replace(/"/g, '\\"')}"`
-    : `'${String(s).replace(/'/g, "'\\''")}'`
+export interface MarketplaceSecretVault {
+  get(key: string): string
+  put(key: string, value: string): boolean
+}
 
-function runCli(args: string[], { env = {}, cwd, timeout = 180000 }: RunCliOptions = {}): Promise<CliResult> {
-  return new Promise((resolve, reject) => {
-    const cmd = ['npx', '-y', CLI, ...args].map(quote).join(' ')
-    exec(
-      cmd,
-      {
-        cwd,
-        timeout,
-        env: { ...process.env, MARKET_BASE_URL: BASE_URL, ...env },
-        maxBuffer: 24 * 1024 * 1024,
-        windowsHide: true
-      },
-      (err, stdout, stderr) => {
-        if (err && !stdout) {
-          reject(new Error(String(stderr || err.message).trim().slice(0, 400)))
-          return
-        }
-        resolve({ stdout, stderr })
-      }
-    )
+export function assertMarketplaceReference(value: string): string {
+  const ref = String(value ?? '').trim()
+  if (
+    !ref ||
+    ref.length > 160 ||
+    ref.startsWith('-') ||
+    ref.includes('\\') ||
+    ref.includes('\0') ||
+    ref.includes('..') ||
+    !/^@?[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(ref)
+  ) {
+    throw new Error('Invalid marketplace skill reference.')
+  }
+  return ref
+}
+
+export function assertInstalledSkillId(value: string): string {
+  const id = String(value ?? '').trim()
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(id) || id === '.' || id === '..') {
+    throw new Error('Invalid installed skill id.')
+  }
+  return id
+}
+
+async function runCli(args: string[], { env = {}, cwd, timeout = 180000 }: RunCliOptions = {}): Promise<CliResult> {
+  const result = await runNpx(CLI, args, {
+    cwd,
+    timeout,
+    env: { MARKET_BASE_URL: BASE_URL, ...env },
+    maxBuffer: 24 * 1024 * 1024
   })
+  if (result.error && !result.stdout) {
+    throw new Error(String(result.stderr || result.error.message).trim().slice(0, 400))
+  }
+  return { stdout: result.stdout, stderr: result.stderr }
 }
 
 function parseJson(text: string): unknown {
@@ -205,34 +220,53 @@ function parseJson(text: string): unknown {
 export class Marketplace {
   private readonly store: BackendStore
   private readonly workspace: string
+  private readonly secrets: MarketplaceSecretVault | null
   private cache: Map<string, { at: number; value: MarketplaceSearchResult }> | null = null
 
-  constructor(store: BackendStore, workspace: string) {
+  constructor(store: BackendStore, workspace: string, secrets?: MarketplaceSecretVault) {
     this.store = store
     this.workspace = workspace
+    this.secrets = secrets ?? null
   }
 
   get skillsDir(): string {
     return join(this.workspace, '.agents', 'skills')
   }
 
-  /** Cached marketplace credentials (registered once). */
+  /** Read only the OS-vaulted credential pair during normal operation. */
   credentials(): MarketplaceCredentials | null {
+    if (!this.secrets) return null
     const saved = this.store.settings.all().marketplace
-    const fromStore = toCredentials(saved)
-    if (fromStore) return fromStore
-    // the CLI persists its own credentials on disk
+    const clientId = this.secrets.get('marketplaceClientId') || str(saved?.clientId)
+    const clientSecret = this.secrets.get('marketplaceClientSecret')
+    return clientId && clientSecret ? { clientId, clientSecret } : null
+  }
+
+  private readCliCredentials(): MarketplaceCredentials | null {
+    // The compatibility CLI owns this legacy file. It is read only during an
+    // explicit registration/migration, never used as the app's secret store.
     try {
       const file = join(homedir(), '.marketplacehub-market', 'credentials.json')
-      const json = JSON.parse(readFileSync(file, 'utf8')) as unknown
-      return toCredentials(json)
+      return toCredentials(JSON.parse(readFileSync(file, 'utf8')) as unknown)
     } catch {
-      /* not registered yet */
+      return null
     }
-    return null
+  }
+
+  /** Migrate the old JSON credential layout without retaining plaintext. */
+  migrateLegacyCredentials(): void {
+    const saved = this.store.settings.all().marketplace
+    const legacy = toCredentials(saved)
+    if (!legacy) return
+    if (!this.secrets) throw new Error('Marketplace credentials require the operating system credential store.')
+    this.secrets.put('marketplaceClientId', legacy.clientId)
+    this.secrets.put('marketplaceClientSecret', legacy.clientSecret)
+    const { clientSecret: _clientSecret, ...publicRecord } = saved
+    this.store.settings.set('marketplace', publicRecord)
   }
 
   async register(): Promise<MarketplaceCredentials> {
+    if (!this.secrets) throw new Error('Marketplace registration requires the operating system credential store.')
     await runCli([
       'register',
       '--base-url',
@@ -242,12 +276,13 @@ export class Marketplace {
       '--source',
       'codex'
     ])
-    const creds = this.credentials()
+    const creds = this.readCliCredentials()
     if (!creds) throw new Error('Could not register with the Marketplace marketplace')
-    this.store.settings.update('marketplace', {
+    this.secrets.put('marketplaceClientId', creds.clientId)
+    this.secrets.put('marketplaceClientSecret', creds.clientSecret)
+    this.store.settings.set('marketplace', {
       baseUrl: BASE_URL,
       clientId: creds.clientId,
-      clientSecret: creds.clientSecret,
       registeredAt: Date.now()
     })
     return creds
@@ -318,14 +353,16 @@ export class Marketplace {
   }
 
   async install({ id, agent = 'codex' }: MarketplaceInstallOptions): Promise<MarketplaceInstallResult> {
+    const ref = assertMarketplaceReference(id)
+    if (!/^[a-z][a-z0-9_-]{0,30}$/i.test(agent)) throw new Error('Invalid marketplace agent target.')
     const creds = await this.ensureRegistered()
     const dir = this.skillsDir
     mkdirSync(dir, { recursive: true })
     const { stdout } = await runCli(
-      ['skills', 'install', id, '--agent', agent, '--dir', dir],
+      ['skills', 'install', ref, '--agent', agent, '--dir', dir],
       { env: { MARKET_CLIENT_ID: creds.clientId, MARKET_CLIENT_SECRET: creds.clientSecret } }
     )
-    return { ok: true, id, dir, output: String(stdout).trim().slice(0, 600) }
+    return { ok: true, id: ref, dir, output: String(stdout).trim().slice(0, 600) }
   }
 
   /** The MCP plugin catalogue from the same marketplace. */
@@ -360,9 +397,10 @@ export class Marketplace {
 
   /** Resolves a skill by its exact identifier, falling back to a title search. */
   async resolve({ id, name }: MarketplaceResolveOptions): Promise<MarketplaceResolvedSkill | null> {
+    const ref = assertMarketplaceReference(id)
     const label = name ?? ''
     try {
-      const { stdout } = await runCli(['skills', 'view', id, '--output', 'json'], {
+      const { stdout } = await runCli(['skills', 'view', ref, '--output', 'json'], {
         env: {
           MARKET_CLIENT_ID: (await this.ensureRegistered()).clientId,
           MARKET_CLIENT_SECRET: (await this.ensureRegistered()).clientSecret
@@ -370,12 +408,12 @@ export class Marketplace {
       })
       const json = asRecord(parseJson(stdout))
       return {
-        id: str(json.identifier) || id,
+        id: str(json.identifier) || ref,
         name: str(json.name) || label,
         description: str(json.description)
       }
     } catch {
-      const res = await this.search({ q: label || id, pageSize: 5 })
+      const res = await this.search({ q: label || ref, pageSize: 5 })
       const hit = res.items.find((i) => i.name === label) || res.items[0]
       return hit ? { id: hit.id, name: hit.name, description: hit.description } : null
     }
@@ -422,8 +460,8 @@ export class Marketplace {
   }
 
   async remove({ id }: { id: string }): Promise<{ ok: boolean }> {
-    const target = join(this.skillsDir, id)
-    if (!target.startsWith(this.skillsDir)) throw new Error('Invalid skill id')
+    const skillId = assertInstalledSkillId(id)
+    const target = await resolveSafePath([this.skillsDir], join(this.skillsDir, skillId), { mode: 'write' })
     rmSync(target, { recursive: true, force: true })
     return { ok: true }
   }

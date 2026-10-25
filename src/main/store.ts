@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import type {
+  BrowserSettings,
   ChannelInput,
   ChannelRecord,
   ConnectorsInput,
@@ -18,8 +19,17 @@ import type {
   Task,
   TaskSummary
 } from '@shared/types'
+import {
+  DEFAULT_GOVERNANCE_SETTINGS,
+  normalizeAgentRole,
+  normalizeGovernanceSettings,
+  type GovernanceSettings
+} from '@shared/governance'
 import { getPaths, ensureTaskWorkspace, taskWorkspace } from './paths'
 import { atomicWriteJson, newId, nowIso, readJson } from './util'
+import { sameProviderEndpoint } from './backend/provider'
+import { DEFAULT_BROWSER_SETTINGS, normalizeBrowserSettings } from '@shared/browser'
+import type { OutcomeTaskBinding } from '@shared/verifiedOutcomes'
 
 interface StoredProvider {
   id: string
@@ -47,6 +57,7 @@ interface StoredChannel {
   lastMessageAt?: string
   messagesIn: number
   messagesOut: number
+  allowedChatIds: string[]
   error?: string
 }
 
@@ -61,6 +72,8 @@ interface StoredSettings {
   customInstructions: string
   allowShell: boolean
   onboardingComplete: boolean
+  governance: GovernanceSettings
+  browser: BrowserSettings
 }
 
 const DEFAULT_SETTINGS: StoredSettings = {
@@ -71,30 +84,43 @@ const DEFAULT_SETTINGS: StoredSettings = {
   defaultPermissionMode: 'manual',
   customInstructions: '',
   allowShell: false,
-  onboardingComplete: false
+  onboardingComplete: false,
+  governance: DEFAULT_GOVERNANCE_SETTINGS,
+  browser: DEFAULT_BROWSER_SETTINGS
+}
+
+function requireSecretEncryption(): void {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('The operating system credential store is unavailable. SelfImpulse will not read or write plaintext credentials.')
+  }
 }
 
 function sealSecret(secret: string): string {
-  const buffer = safeStorage.isEncryptionAvailable()
-    ? safeStorage.encryptString(secret)
-    : Buffer.from(secret, 'utf8')
-  return `${safeStorage.isEncryptionAvailable() ? 'enc' : 'plain'}:${buffer.toString('base64')}`
+  requireSecretEncryption()
+  return `enc:${safeStorage.encryptString(secret).toString('base64')}`
 }
 
 function openSecret(sealed: string | undefined): string | undefined {
   if (!sealed) return undefined
   const [kind, payload] = sealed.split(':', 2)
-  if (!payload) return undefined
-  try {
-    const buffer = Buffer.from(payload, 'base64')
-    if (kind === 'enc' && safeStorage.isEncryptionAvailable()) {
-      return safeStorage.decryptString(buffer)
-    }
-    if (kind === 'plain') return buffer.toString('utf8')
-  } catch {
-    return undefined
+  if (kind !== 'enc' || !payload) {
+    throw new Error('A legacy plaintext or invalid credential was refused. Re-enter the credential to store it with OS encryption.')
   }
-  return undefined
+  requireSecretEncryption()
+  try {
+    return safeStorage.decryptString(Buffer.from(payload, 'base64'))
+  } catch (error) {
+    throw new Error(`A credential could not be decrypted and was not returned: ${(error as Error).message}`)
+  }
+}
+
+function normalizeChatIds(value: unknown, strict = false): string[] {
+  if (!Array.isArray(value)) return []
+  const ids = value.map(String).map((id) => id.trim()).filter(Boolean)
+  if (strict && ids.some((id) => !/^-?\d{1,20}$/.test(id))) {
+    throw new Error('Telegram chat IDs must be numeric (group IDs may start with -).')
+  }
+  return [...new Set(ids.filter((id) => /^-?\d{1,20}$/.test(id)))]
 }
 
 function sanitizeMcpServer(config: McpServerConfig): McpServerConfig {
@@ -116,10 +142,28 @@ function titleFromObjective(objective: string): string {
   return clean.length > 70 ? `${clean.slice(0, 67)}…` : clean || 'New task'
 }
 
+async function readStoredSettings(): Promise<Partial<StoredSettings>> {
+  let raw: string
+  try {
+    raw = await fs.readFile(getPaths().settingsFile, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {}
+    throw new Error(`Settings/credential storage cannot be read: ${(error as Error).message}`)
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('expected an object')
+    return parsed as Partial<StoredSettings>
+  } catch (error) {
+    throw new Error(`Settings/credential storage is corrupt; refusing to replace it: ${(error as Error).message}`)
+  }
+}
+
 class Store {
   private settings: StoredSettings | null = null
   private tasks = new Map<string, Task>()
   private schedules: ScheduleRecord[] = []
+  private taskWrites = new Map<string, Promise<void>>()
   private initialized = false
 
   async init(): Promise<void> {
@@ -127,8 +171,10 @@ class Store {
     await fs.mkdir(getPaths().tasks, { recursive: true })
     await fs.mkdir(getPaths().workspaces, { recursive: true })
 
-    const rawSettings = await readJson<Partial<StoredSettings>>(getPaths().settingsFile, {})
+    const rawSettings = await readStoredSettings()
     this.settings = { ...DEFAULT_SETTINGS, ...rawSettings }
+    this.settings.governance = normalizeGovernanceSettings(rawSettings.governance)
+    this.settings.browser = normalizeBrowserSettings(rawSettings.browser)
     this.settings.providers = Array.isArray(rawSettings.providers) ? rawSettings.providers : []
     this.settings.mcpServers = Array.isArray(rawSettings.mcpServers)
       ? rawSettings.mcpServers.map(sanitizeMcpServer)
@@ -156,6 +202,7 @@ class Store {
             lastMessageAt: channel.lastMessageAt,
             messagesIn: Number(channel.messagesIn) || 0,
             messagesOut: Number(channel.messagesOut) || 0,
+            allowedChatIds: normalizeChatIds(channel.allowedChatIds),
             error: typeof channel.error === 'string' ? channel.error : undefined
           }))
       : []
@@ -206,6 +253,7 @@ class Store {
       lastMessageAt: channel.lastMessageAt,
       messagesIn: channel.messagesIn,
       messagesOut: channel.messagesOut,
+      allowedChatIds: [...channel.allowedChatIds],
       error: channel.error
     }
   }
@@ -226,8 +274,14 @@ class Store {
       defaultPermissionMode: settings.defaultPermissionMode,
       customInstructions: settings.customInstructions,
       allowShell: settings.allowShell,
-      onboardingComplete: settings.onboardingComplete
+      onboardingComplete: settings.onboardingComplete,
+      governance: normalizeGovernanceSettings(settings.governance),
+      browser: { ...settings.browser }
     }
+  }
+
+  getGovernanceSettings(): GovernanceSettings {
+    return normalizeGovernanceSettings(this.getSettings().governance)
   }
 
   getConnectorsConfig(): { apiKey?: string; enabled: boolean; toolkits: string[] } {
@@ -273,6 +327,9 @@ class Store {
     if (input.removeToken) secret = undefined
     if (kind === 'webhook' && !secret) secret = sealSecret(`knight_${randomBytes(24).toString('hex')}`)
     if (kind === 'telegram' && input.token?.trim()) secret = sealSecret(input.token.trim())
+    const allowedChatIds = kind === 'telegram'
+      ? normalizeChatIds(input.allowedChatIds ?? existing?.allowedChatIds ?? [], true)
+      : []
 
     const channel: StoredChannel = {
       id,
@@ -284,6 +341,7 @@ class Store {
       lastMessageAt: existing?.lastMessageAt,
       messagesIn: existing?.messagesIn ?? 0,
       messagesOut: existing?.messagesOut ?? 0,
+      allowedChatIds,
       error: existing?.error
     }
     if (existing) {
@@ -358,6 +416,21 @@ class Store {
     if (patch.customInstructions !== undefined) settings.customInstructions = patch.customInstructions
     if (patch.allowShell !== undefined) settings.allowShell = patch.allowShell
     if (patch.onboardingComplete !== undefined) settings.onboardingComplete = patch.onboardingComplete
+    if (patch.governance !== undefined) {
+      settings.governance = normalizeGovernanceSettings(patch.governance, settings.governance)
+    }
+    if (patch.browser !== undefined) {
+      if (patch.browser.engine !== undefined && !['stagehand', 'chromium'].includes(patch.browser.engine)) {
+        throw new Error('Unknown browser engine.')
+      }
+      if (patch.browser.headless !== undefined && typeof patch.browser.headless !== 'boolean') {
+        throw new Error('Browser headless preference must be a boolean.')
+      }
+      settings.browser = {
+        engine: patch.browser.engine ?? settings.browser.engine,
+        headless: patch.browser.headless ?? settings.browser.headless
+      }
+    }
 
     if (
       settings.defaultProviderId &&
@@ -373,14 +446,19 @@ class Store {
 
   private mergeProvider(existing: StoredProvider | undefined, input: ProviderInput): StoredProvider {
     const id = existing?.id ?? input.id ?? newId('provider')
+    const nextBaseUrl = input.baseUrl?.trim() || undefined
+    const endpointChanged = Boolean(existing && !sameProviderEndpoint(nextBaseUrl, existing.baseUrl))
+    if (endpointChanged && existing?.secret && !input.removeKey && !input.apiKey?.trim()) {
+      throw new Error('This provider endpoint changed. Re-enter its API key before saving so the old credential cannot be sent to a new endpoint.')
+    }
     let secret = existing?.secret
-    if (input.removeKey) secret = undefined
+    if (input.removeKey || endpointChanged) secret = undefined
     if (input.apiKey && input.apiKey.trim()) secret = sealSecret(input.apiKey.trim())
     return {
       id,
       name: input.name.trim() || existing?.name || 'Provider',
       kind: input.kind,
-      baseUrl: input.baseUrl?.trim() || undefined,
+      baseUrl: nextBaseUrl,
       models: [...new Set(input.models.map((m) => m.trim()).filter(Boolean))],
       enabled: input.enabled !== false,
       secret
@@ -413,10 +491,23 @@ class Store {
   async saveTask(task: Task): Promise<void> {
     task.updatedAt = nowIso()
     this.tasks.set(task.id, task)
-    await atomicWriteJson(this.getTaskFilePath(task.id), task)
+    // Parallel Crew completions may persist the same task at once. Serialize
+    // those writes so an older snapshot cannot rename over a newer one.
+    const previous = this.taskWrites.get(task.id) ?? Promise.resolve()
+    const write = previous
+      .catch(() => undefined)
+      .then(() => atomicWriteJson(this.getTaskFilePath(task.id), task))
+    this.taskWrites.set(task.id, write)
+    try {
+      await write
+    } finally {
+      if (this.taskWrites.get(task.id) === write) this.taskWrites.delete(task.id)
+    }
   }
 
-  async createTask(input: CreateTaskInput): Promise<Task> {
+  async createTask(
+    input: Omit<CreateTaskInput, 'outcome'> & { outcome?: OutcomeTaskBinding }
+  ): Promise<Task> {
     const now = nowIso()
     const task: Task = {
       id: newId('task'),
@@ -425,9 +516,14 @@ class Store {
       mode: input.mode,
       status: 'draft',
       permissionMode: input.permissionMode,
+      agentRole: normalizeAgentRole(
+        input.agentRole,
+        this.getSettings().governance.defaultRole
+      ),
       providerId: input.providerId,
       model: input.model,
       folders: uniqueFolders(input.folders ?? []),
+      outcome: input.outcome,
       messages: [],
       steps: [],
       plan: [],

@@ -12,13 +12,17 @@
  *
  * Honesty rules kept from the engine: a refused write is reported as refused,
  * a missing provider is a sentence and not an empty string, and nothing is
- * silently downgraded to plaintext unless the OS keychain is unavailable — in
- * which case the receipt says `location: "plain-file"` and names the file.
+ * silently downgraded to plaintext. If the OS keychain is unavailable, the
+ * credential write is refused and the receipt names that refusal.
  */
 import { app, Notification, safeStorage } from 'electron'
 import { execFile } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { atomicWriteFileSync } from '../../atomic'
+import { configureNodeStorageRoot, nodeStorage } from '../persist/nodeStorage'
+
+export { nodeStorage }
 
 /* ── where the engine's durable state lives ──────────────────────────────── */
 
@@ -28,38 +32,17 @@ import { dirname, join } from 'node:path'
  * before that point in some boots.
  */
 export function selfImpulseDir(): string {
+  let root: string
   try {
-    return join(app.getPath('userData'), 'selfimpulse')
+    root = join(app.getPath('userData'), 'selfimpulse')
   } catch {
-    return join(process.cwd(), '.selfimpulse')
+    root = join(process.cwd(), '.selfimpulse')
   }
+  configureNodeStorageRoot(root)
+  return root
 }
 
-function storeFile(key: string): string {
-  const safe = key.replace(/[^a-zA-Z0-9._-]/g, '_')
-  return join(selfImpulseDir(), 'store', `${safe}.json`)
-}
-
-/** One file per engine key: the engine's large JSON stores stay readable on disk. */
-export const nodeStorage = {
-  getItem(key: string): string | null {
-    try {
-      return readFileSync(storeFile(key), 'utf8')
-    } catch {
-      return null
-    }
-  },
-  setItem(key: string, value: string): void {
-    const file = storeFile(key)
-    mkdirSync(join(selfImpulseDir(), 'store'), { recursive: true })
-    writeFileSync(file, value, 'utf8')
-  },
-  removeItem(key: string): void {
-    rmSync(storeFile(key), { force: true })
-  }
-}
-
-/* ── secrets: OS keychain first, a named file only when encryption is absent ── */
+/* ── secrets: OS-keychain-encrypted file; plaintext fallback is disabled ── */
 
 interface SecretRow {
   enc?: string
@@ -71,16 +54,25 @@ function secretsFile(): string {
 }
 
 function readSecrets(): Record<string, SecretRow> {
+  let raw: string
   try {
-    return JSON.parse(readFileSync(secretsFile(), 'utf8')) as Record<string, SecretRow>
-  } catch {
-    return {}
+    raw = readFileSync(secretsFile(), 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {}
+    throw new Error(`Native credential storage is unreadable: ${(error as Error).message}`)
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('expected an object')
+    return parsed as Record<string, SecretRow>
+  } catch (error) {
+    throw new Error(`Native credential storage is corrupt; refusing to replace it: ${(error as Error).message}`)
   }
 }
 
 function writeSecrets(data: Record<string, SecretRow>): void {
   mkdirSync(selfImpulseDir(), { recursive: true })
-  writeFileSync(secretsFile(), JSON.stringify(data, null, 2), 'utf8')
+  atomicWriteFileSync(secretsFile(), JSON.stringify(data, null, 2), { mode: 0o600 })
 }
 
 function canEncrypt(): boolean {
@@ -97,32 +89,31 @@ export function knightSecretSet(ref: string, value: string) {
     return { stored: false, location: 'absent' as const, survivesRestart: false, warning: 'an empty value removes the credential; nothing was stored.' }
   }
   const data = readSecrets()
-  const encrypted = canEncrypt()
-  data[ref] = encrypted
-    ? { enc: safeStorage.encryptString(value).toString('base64') }
-    : { plain: value }
-  writeSecrets(data)
-  return {
-    stored: true,
-    location: encrypted ? ('keychain' as const) : ('absent' as const),
-    survivesRestart: true,
-    warning: encrypted
-      ? undefined
-      : `the OS credential store is unavailable, so the credential was written to ${secretsFile()} — readable by this user account.`
+  if (!canEncrypt()) {
+    return {
+      stored: false,
+      location: 'absent' as const,
+      survivesRestart: false,
+      warning: 'the OS credential store is unavailable; the credential was not written and plaintext fallback is disabled.'
+    }
   }
+  data[ref] = { enc: safeStorage.encryptString(value).toString('base64') }
+  writeSecrets(data)
+  return { stored: true, location: 'keychain' as const, survivesRestart: true }
 }
 
 export function knightSecretGet(ref: string): string | null {
   const row = readSecrets()[ref]
   if (!row) return null
-  if (row.enc) {
-    try {
-      return safeStorage.decryptString(Buffer.from(row.enc, 'base64'))
-    } catch {
-      return null
-    }
+  if (!row.enc || row.plain !== undefined) {
+    throw new Error(`Credential "${ref}" is plaintext or invalid; re-enter it to migrate to OS encryption.`)
   }
-  return row.plain ?? null
+  if (!canEncrypt()) throw new Error('The OS credential store is unavailable; encrypted credentials cannot be opened.')
+  try {
+    return safeStorage.decryptString(Buffer.from(row.enc, 'base64'))
+  } catch (error) {
+    throw new Error(`Credential "${ref}" could not be decrypted: ${(error as Error).message}`)
+  }
 }
 
 export function knightSecretDelete(ref: string) {
@@ -135,18 +126,19 @@ export function knightSecretDelete(ref: string) {
 
 export function knightSecretExists(refs: string[]) {
   const data = readSecrets()
-  const encrypted = canEncrypt()
   return Object.fromEntries(
-    refs.map((ref) => [
-      ref,
-      data[ref]
-        ? {
-            exists: true,
-            location: encrypted || data[ref].enc ? ('keychain' as const) : ('absent' as const),
-            survivesRestart: true
-          }
-        : { exists: false, location: 'absent' as const, survivesRestart: false }
-    ])
+    refs.map((ref) => {
+      const row = data[ref]
+      if (row && (!row.enc || row.plain !== undefined)) {
+        throw new Error(`Credential "${ref}" is plaintext or invalid; re-enter it before using this provider.`)
+      }
+      return [
+        ref,
+        row
+          ? { exists: true, location: 'keychain' as const, survivesRestart: true }
+          : { exists: false, location: 'absent' as const, survivesRestart: false }
+      ]
+    })
   )
 }
 

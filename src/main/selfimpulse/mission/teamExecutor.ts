@@ -29,6 +29,7 @@
  * to review, and the base branch stays pristine until a human decides to merge.
  */
 
+import { mainStorage } from "../persist/mainStorage";
 import * as path from "node:path";
 
 import type { HarnessId } from "../domain/harness";
@@ -56,7 +57,7 @@ import { enforceMergeGate, gateForTeamReport, loadGatePolicy, type GatePolicy, t
 import { detectResumeFailure, followUpPrompt, parseSessionId, SessionStore, type SessionKey } from "./sessions";
 import { globalAgentBus } from "./interAgentChannel";
 import { globalMemoryCortex } from "./organizationalMemory";
-import { briefingForMission } from "./selfEvolveRuntime";
+import { briefingArtifactForMission, type RunAssignment } from "./selfEvolveRuntime";
 import { strategyWaveShape, evidenceDepth, reviewBriefingLines, type StrategyParams } from "./selfImprove";
 import { verifyActionPacket, packetAllowsExecution, type ActionPacket } from "./actionPacket";
 import { attenuate, BudgetGate, budgetCheck, checkEnvelope, type AuthorityEnvelope, type BudgetTicket } from "./custody";
@@ -161,7 +162,7 @@ export interface TeamRunRequest {
    *
    * Omitted: a fresh, empty ledger — which is exactly the old behaviour, because
    * nothing has been applied yet. Supply one that survives the process (the
-   * default localStorage-backed ledger does) and a re-run resumes instead of
+   * default shared-storage-backed ledger does) and a re-run resumes instead of
    * re-applying: a step an earlier run settled is read BEFORE dispatch and is
    * not dispatched again. See `SeatStepLedger`.
    */
@@ -195,7 +196,7 @@ export interface TeamRunRequest {
    * evidence depth, lesson budget) and the report records the id so settlement
    * can attribute the run's measured outcomes to the strategy that produced them.
    */
-  strategy?: { id: string; gen: number; params: StrategyParams; isCandidate: boolean } | null;
+  strategy?: RunAssignment | null;
   /** 11.12 MOSAIC — signed pre-action packet; 11.12.1: verified cryptographically before permission. */
   actionPacket?: ActionPacket | null;
   /** 11.12.2 — the runner's root authority envelope (human principal, expiring). */
@@ -338,7 +339,9 @@ export interface TeamRunReport {
   /** 11.9.4(Major+): the strategy arms the autonomy router executed this run. */
   autonomyArms?: ArmId[];
   /** 11.11.1 — the strategy version whose parameters governed this run (experiment attribution). */
-  strategy?: { id: string; gen: number; params: StrategyParams; isCandidate: boolean } | null;
+  strategy?: RunAssignment | null;
+  /** Exact organizational-memory records exposed in this run's briefings. */
+  lessonIds?: string[];
   /** 11.12 MOSAIC — the action packet that permitted this run, cryptographically verified. */
   actionPacket?: { id: string; digest: string; permission: string; reversible: boolean; verification: string; verified: boolean } | null;
   /** 11.12.1/2 — attenuated seat envelopes (custody chain when a root envelope exists). */
@@ -460,15 +463,15 @@ function isStepRecord(r: unknown): r is SeatStepRecord {
  * A step ledger.
  *
  * Persistence is best-effort and NEVER a precondition for running: the default
- * store is `globalThis.localStorage` when the host has one (browser and Tauri),
- * absent in plain Node, and the ledger falls back to memory there so probes stay
- * headless. Pass `store: null` to force memory, or a Storage-shaped object to
+ * store is the shared Storage boundary (browser storage or native files in
+ * Electron), and the ledger falls back to memory only when a caller explicitly
+ * requests that mode or a probe has no storage. Pass `store: null` to force memory, or a Storage-shaped object to
  * thread a host's own store. A corrupt or unreadable ledger is read as an EMPTY
  * ledger — it can never fail a mission, and it can never claim a step settled.
  */
 export function createSeatStepLedger(opts?: { store?: StepStore | null }): SeatStepLedger {
   const store: StepStore | null =
-    opts && "store" in opts ? (opts.store ?? null) : ((globalThis.localStorage as StepStore | undefined) ?? null);
+    opts && "store" in opts ? (opts.store ?? null) : (mainStorage() as StepStore);
   const mem = new Map<string, SeatStepRecord>();
   let loaded = false;
 
@@ -735,6 +738,7 @@ async function runTeamMission(req: TeamRunRequest, deps: TeamRunnerDeps, session
   let seatEnvelopes: Array<{ seatId: string; scope: string[]; attenuatedFrom: string | null; principal?: string; delegationChain?: string[]; expiresAt?: number | null }> = [];
   let packetVerified = false;
   let arenaStamp: TeamRunReport["arena"] = null;
+  let usedLessonIds: string[] = [];
   const emptySnapshot: ReviewSnapshotRecord = { built: false, branch: "", sha: null, writerBranches: [], conflicts: [], detail: "Not attempted." };
 
   /* ONE sentence about what the cap did, shared by both return paths so the
@@ -794,6 +798,7 @@ async function runTeamMission(req: TeamRunRequest, deps: TeamRunnerDeps, session
       wallClockMs: now() - t0,
       autonomyArms: req.autonomy?.arms,
       strategy: req.strategy ?? null,
+      lessonIds: usedLessonIds,
       actionPacket: req.actionPacket
         ? { id: req.actionPacket.id, digest: req.actionPacket.digest, permission: req.actionPacket.permission, reversible: req.actionPacket.reversible, verification: req.actionPacket.verification, verified: packetVerified }
         : null,
@@ -940,7 +945,9 @@ async function runTeamMission(req: TeamRunRequest, deps: TeamRunnerDeps, session
 
   // 11.11 SELF-EVOLVING — the org's measured lessons (and approved learned skills)
   // ride into every seat's briefing, budgeted by the adopted strategy version.
-  const lessonLines = briefingForMission(req.objective, Date.now());
+  const learningBriefing = briefingArtifactForMission(req.objective, Date.now(), req.strategy);
+  const lessonLines = learningBriefing.lines;
+  usedLessonIds = learningBriefing.lessonIds;
   if (lessonLines.length > 0) {
     const lessonsMd = `# Organizational lessons (VH 11.11)\n\n${lessonLines.map((l) => `- ${l}`).join("\n")}\n`;
     for (const seat of req.team.seats) {
@@ -1339,6 +1346,7 @@ async function runTeamMission(req: TeamRunRequest, deps: TeamRunnerDeps, session
     wallClockMs: now() - t0,
     autonomyArms: req.autonomy?.arms,
     strategy: req.strategy ?? null,
+    lessonIds: usedLessonIds,
     actionPacket: req.actionPacket
       ? { id: req.actionPacket.id, digest: req.actionPacket.digest, permission: req.actionPacket.permission, reversible: req.actionPacket.reversible, verification: req.actionPacket.verification, verified: packetVerified }
       : null,

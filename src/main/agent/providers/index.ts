@@ -3,6 +3,8 @@ import OpenAI from 'openai'
 import type { ProviderInput, TestProviderResult } from '@shared/types'
 import { store } from '../../store'
 import type { CompletionRequest, CompletionResult } from '../types'
+import { sameProviderEndpoint } from '../../backend/provider'
+import { readJsonLimited } from '../../util'
 import { streamAnthropic } from './anthropic'
 import { streamOpenAI } from './openai'
 
@@ -12,8 +14,24 @@ export async function streamCompletion(request: CompletionRequest): Promise<Comp
   return streamOpenAI(request)
 }
 
+function withStoredEndpoint(input: ProviderInput): ProviderInput {
+  if (input.baseUrl !== undefined || !input.id) return input
+  const configured = store.getProvider(input.id)
+  return configured?.baseUrl ? { ...input, baseUrl: configured.baseUrl } : input
+}
+
 function resolveKey(input: ProviderInput): string | undefined {
-  return input.apiKey?.trim() || (input.id ? store.getProviderSecret(input.id) : undefined)
+  const supplied = input.apiKey?.trim()
+  if (supplied) return supplied
+  if (!input.id) return undefined
+  const configured = store.getProvider(input.id)
+  if (!configured) return undefined
+  // A changed endpoint is a new trust decision. Never send the old secret to
+  // it merely because the caller kept the same provider id.
+  if (input.baseUrl !== undefined && !sameProviderEndpoint(input.baseUrl, configured.baseUrl)) {
+    return undefined
+  }
+  return store.getProviderSecret(input.id)
 }
 
 function friendlyError(error: unknown): string {
@@ -50,18 +68,19 @@ async function listModels(input: ProviderInput, key: string): Promise<string[]> 
     headers: { Authorization: `Bearer ${key}` }
   })
   if (!response.ok) throw new Error(`Models request failed (${response.status}).`)
-  const json = (await response.json()) as { data?: Array<{ id?: string }> }
-  return (json.data ?? []).map((item) => item.id).filter((id): id is string => Boolean(id))
+  const json = await readJsonLimited<{ data?: Array<{ id?: string }> }>(response, 2_000_000)
+  return (json.data ?? []).slice(0, 500).map((item) => item.id).filter((id): id is string => Boolean(id))
 }
 
 export async function verifyProvider(input: ProviderInput): Promise<TestProviderResult> {
-  const key = resolveKey(input)
+  const normalized = withStoredEndpoint(input)
+  const key = resolveKey(normalized)
   if (!key) return { ok: false, message: 'Add an API key first.' }
-  if (input.kind === 'compatible' && !input.baseUrl?.trim()) {
+  if (normalized.kind === 'compatible' && !normalized.baseUrl?.trim()) {
     return { ok: false, message: 'Add a base URL for this provider.' }
   }
   try {
-    const models = await listModels(input, key)
+    const models = await listModels(normalized, key)
     return {
       ok: true,
       message: models.length
@@ -75,9 +94,10 @@ export async function verifyProvider(input: ProviderInput): Promise<TestProvider
 }
 
 export async function fetchProviderModels(input: ProviderInput): Promise<string[]> {
-  const key = resolveKey(input)
+  const normalized = withStoredEndpoint(input)
+  const key = resolveKey(normalized)
   if (!key) throw new Error('Add an API key first.')
-  return listModels(input, key)
+  return listModels(normalized, key)
 }
 
 export function providerError(error: unknown): string {

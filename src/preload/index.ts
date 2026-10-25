@@ -1,6 +1,19 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IPC } from '@shared/ipc'
-import { AUDIT_IPC } from '@shared/audit'
+import { AUDIT_IPC, type AuditEventQuery } from '@shared/audit'
+import { GOVERNANCE_IPC, type SensitiveDataCategory } from '@shared/governance'
+import {
+  ENTERPRISE_CONTROL_IPC,
+  type EnterpriseAuthorization,
+  type EnterpriseControlMutation
+} from '@shared/enterpriseControl'
+import { RSIRALS_IPC } from '@shared/rsirals'
+import {
+  VERIFIED_OUTCOMES_IPC,
+  type VerifiedOutcomeMutation
+} from '@shared/verifiedOutcomes'
+import type { LibraryPageInput, LibraryPagePatch } from '@shared/library'
+import type { MarketspaceCreateInput } from '@shared/marketspace'
 import type {
   ApprovalRequest,
   ApprovalDecision,
@@ -16,6 +29,7 @@ import type {
   KnightApi,
   McpServerConfig,
   MemoryInput,
+  MessageReactionInput,
   ProviderInput,
   SendMessageInput,
   SettingsPatch,
@@ -45,11 +59,27 @@ const api: KnightApi = {
   stopTask: (id: string) => ipcRenderer.invoke(IPC.taskStop, id),
   resumeTask: (id: string) => ipcRenderer.invoke(IPC.taskResume, id),
   updateTask: (input: UpdateTaskInput) => ipcRenderer.invoke(IPC.taskUpdate, input),
+  reactToMessage: (input: MessageReactionInput) => ipcRenderer.invoke(IPC.taskReact, input),
   addFolder: (id: string) => ipcRenderer.invoke(IPC.taskAddFolder, id),
   removeFolder: (id: string, folder: string) =>
     ipcRenderer.invoke(IPC.taskRemoveFolder, id, folder),
   pickFolder: () => ipcRenderer.invoke(IPC.pickFolder),
   pickFiles: () => ipcRenderer.invoke(IPC.pickFiles),
+  attachDroppedFiles: (files: File[]) => {
+    // Chromium no longer exposes a reliable File.path. Resolve real dropped
+    // File objects inside the sandboxed preload, then let the main process
+    // apply the same regular-file validation used by the native picker.
+    const paths = files
+      .map((file) => {
+        try {
+          return webUtils.getPathForFile(file)
+        } catch {
+          return ''
+        }
+      })
+      .filter(Boolean)
+    return ipcRenderer.invoke(IPC.filesFromDrop, paths)
+  },
 
   respondApproval: (decision: ApprovalDecision) =>
     ipcRenderer.invoke(IPC.approvalRespond, decision),
@@ -81,6 +111,14 @@ const api: KnightApi = {
   createSkill: (draft: SkillDraft) => ipcRenderer.invoke(IPC.skillsCreate, draft),
   removeSkill: (id: string) => ipcRenderer.invoke(IPC.skillsRemove, id),
 
+  marketspaceList: (query?: string) => ipcRenderer.invoke(IPC.marketspaceList, query),
+  marketspaceRead: (id: string) => ipcRenderer.invoke(IPC.marketspaceRead, id),
+  marketspaceInstall: (id: string) => ipcRenderer.invoke(IPC.marketspaceInstall, id),
+  marketspaceCreate: (input: MarketspaceCreateInput) => ipcRenderer.invoke(IPC.marketspaceCreate, input),
+  marketspaceRemove: (id: string) => ipcRenderer.invoke(IPC.marketspaceRemove, id),
+  marketspaceApply: (taskId: string, id: string, overwrite?: boolean) =>
+    ipcRenderer.invoke(IPC.marketspaceApply, taskId, id, overwrite),
+
   listMemories: () => ipcRenderer.invoke(IPC.memoryList),
   addMemory: (input: MemoryInput) => ipcRenderer.invoke(IPC.memoryAdd, input),
   removeMemory: (id: string) => ipcRenderer.invoke(IPC.memoryRemove, id),
@@ -98,7 +136,20 @@ const api: KnightApi = {
 
   listSubAgents: () => ipcRenderer.invoke(IPC.subAgentsList),
 
-  showBrowser: (taskId: string) => ipcRenderer.invoke(IPC.browserShow, taskId),
+  showBrowser: (taskId: string, scope?: string) => ipcRenderer.invoke(IPC.browserShow, taskId, scope),
+  getBrowserStatus: () => ipcRenderer.invoke(IPC.browserStatus),
+
+  librarySnapshot: () => ipcRenderer.invoke(IPC.librarySnapshot),
+  libraryCreateCollection: (name: string) => ipcRenderer.invoke(IPC.libraryCollectionCreate, name),
+  libraryCreatePage: (input: LibraryPageInput) => ipcRenderer.invoke(IPC.libraryPageCreate, input),
+  libraryUpdatePage: (id: string, patch: LibraryPagePatch) =>
+    ipcRenderer.invoke(IPC.libraryPageUpdate, id, patch),
+  libraryDeletePage: (id: string) => ipcRenderer.invoke(IPC.libraryPageDelete, id),
+  onLibraryChanged: (cb: () => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IPC.eventLibrary, listener)
+    return () => ipcRenderer.removeListener(IPC.eventLibrary, listener)
+  },
 
   tableGetState: () => ipcRenderer.invoke(IPC.tableGetState),
   tableHost: (input: TableHostInput) => ipcRenderer.invoke(IPC.tableHost, input),
@@ -123,8 +174,25 @@ const api: KnightApi = {
   },
 
   auditSummary: () => ipcRenderer.invoke(AUDIT_IPC.summary),
+  auditEvents: (query?: AuditEventQuery) => ipcRenderer.invoke(AUDIT_IPC.events, query),
   auditExport: () => ipcRenderer.invoke(AUDIT_IPC.export),
   auditVerify: () => ipcRenderer.invoke(AUDIT_IPC.verify),
+  inspectDlp: (text: string, categories?: SensitiveDataCategory[]) =>
+    ipcRenderer.invoke(GOVERNANCE_IPC.inspect, text, categories),
+  rsiralsSnapshot: () => ipcRenderer.invoke(RSIRALS_IPC.snapshot),
+  enterpriseControl: {
+    snapshot: () => ipcRenderer.invoke(ENTERPRISE_CONTROL_IPC.snapshot),
+    mutate: (mutation: EnterpriseControlMutation) =>
+      ipcRenderer.invoke(ENTERPRISE_CONTROL_IPC.mutate, mutation),
+    authorize: (request: EnterpriseAuthorization) =>
+      ipcRenderer.invoke(ENTERPRISE_CONTROL_IPC.authorize, request),
+    revision: (revision: number) => ipcRenderer.invoke(ENTERPRISE_CONTROL_IPC.revision, revision)
+  },
+  verifiedOutcomes: {
+    snapshot: () => ipcRenderer.invoke(VERIFIED_OUTCOMES_IPC.snapshot),
+    mutate: (mutation: VerifiedOutcomeMutation) =>
+      ipcRenderer.invoke(VERIFIED_OUTCOMES_IPC.mutate, mutation)
+  },
 
   backend: {
     settings: () => ipcRenderer.invoke(IPC.backendSettingsGet),

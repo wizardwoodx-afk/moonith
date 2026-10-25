@@ -7,13 +7,36 @@ directories:
 extraResources:
   - from: resources/icon.png
     to: icon.png
+  # Keep attribution beside the executable, including notices for native
+  # component sources that are bundled into out/ rather than shipped as packages.
+  - from: .
+    to: licenses
+    filter:
+      - LICENSE
+      - THIRD-PARTY-NOTICES.md
+      - docs/third-party-notices.md
+      - LICENSES/**/*
+      - src/main/enterpriseControl/LICENSE.openclaw-enterprise.txt
+      - src/main/selfimpulse/impulseRuntime/LICENSE.*.txt
+      - src/main/selfimpulse/crewMesh/LICENSE.*.txt
+      - src/main/selfimpulse/durable/LICENSE.txt
+      - src/main/selfimpulse/roi/licenses/**/*
+      - src/main/selfimpulse/roi/thirdparty/**/LICENSE
+      - src/main/selfimpulse/roi/thirdparty/**/LICENSE.*
+      - src/main/selfimpulse/roi/thirdparty/**/license
+      - src/main/selfimpulse/roi/thirdparty/**/license.*
+      - src/main/selfimpulse/workflow/LICENSE.txt
+      - src/main/selfimpulse/workflow/NOTICE.txt
+      - src/main/selfimpulse/coworker/LICENSE.*.txt
+      - src/main/selfimpulse/library/LICENSE.*.txt
+      - src/renderer/src/motion/LICENSE.*.txt
 files:
   - out/**/*
   - package.json
   # Prune build-time-only artefacts from the bundled production dependencies.
-  # Source maps, type declarations, readme/licence files and browser-global
-  # IIFE bundles are read by editors, tsc and CDNs, never by the app at
-  # runtime, so removing them cannot change behaviour. Every pattern is
+  # Source maps, type declarations, readmes/changelogs and browser-global
+  # IIFE bundles are not needed at runtime. Licence and notice files are
+  # deliberately retained for redistribution compliance. Every pattern is
   # scoped to node_modules/ so the compiled app in out/ is packaged untouched.
   # UMD bundles are deliberately kept: docx and the @jridgewell packages use
   # them as their CommonJS entry point.
@@ -21,9 +44,8 @@ files:
   - '!node_modules/**/*.d.ts'
   - '!node_modules/**/*.d.mts'
   - '!node_modules/**/*.d.cts'
-  - '!node_modules/**/*.md'
-  - '!node_modules/**/{LICENSE,LICENCE,NOTICE,CHANGELOG,CHANGES}*'
-  - '!node_modules/**/{license,licence,notice,changelog,changes}*'
+  - '!node_modules/**/{README,CHANGELOG,CHANGES}*'
+  - '!node_modules/**/{readme,changelog,changes}*'
   - '!node_modules/**/*.iife.js'
 asar: true
 npmRebuild: false

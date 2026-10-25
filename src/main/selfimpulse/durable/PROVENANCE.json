@@ -1,0 +1,33 @@
+{
+  "integration": "SelfImpulse-owned local durable execution journal",
+  "updated": "2026-10-24",
+  "upstream": {
+    "name": "@restatedev/restate-sdk",
+    "version": "1.17.4",
+    "released": "2026-10-20",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2023-2024 - Restate Software, Inc., Restate GmbH"
+  },
+  "implementation": "Targeted local implementation of agent-relevant durable execution semantics. No upstream distribution files or runtime-core native artifacts were copied.",
+  "sourceFilesCopied": [],
+  "mergedFeatures": [
+    "atomic versioned journals and completed-step replay",
+    "retry policies and exponential backoff",
+    "durable timers and keyed JSON state",
+    "awakeables and one-time named promises",
+    "deterministic random values with step sequence restoration",
+    "stable idempotency keys",
+    "Captain, Crew, approval, and usage boundaries",
+    "manual and startup active-run recovery"
+  ],
+  "excluded": [
+    "external durable server or cluster",
+    "remote ingress and service discovery",
+    "upstream runtime-core native artifacts",
+    "unsupported exactly-once claims for arbitrary external side effects"
+  ],
+  "operationalContract": "One writer per application profile, enforced by the existing Electron single-instance lock. Crew shares the same store and per-journal write queue. Incomplete external side effects remain at-least-once.",
+  "licenseFiles": [
+    "LICENSE.txt"
+  ]
+}

@@ -19,6 +19,7 @@
  * recomputes each record's digest, so any edit to what-left-the-machine is
  * detectable — the CISO's audit trail, not VH's word.
  */
+import { mainStorage } from "../persist/mainStorage";
 import { sha256Hex } from "./learningReceipt";
 import { checkEnvelope, isHumanPrincipal, type AuthorityEnvelope } from "./custody";
 
@@ -52,7 +53,7 @@ export function egressCanonical(r: Omit<EgressRecord, "digest">): string {
 
 export function loadEgressLedger(): EgressRecord[] {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = mainStorage().getItem(LS_KEY);
     if (raw) {
       const p = JSON.parse(raw) as EgressRecord[];
       if (Array.isArray(p)) return p;
@@ -62,7 +63,7 @@ export function loadEgressLedger(): EgressRecord[] {
 }
 
 export function saveEgressLedger(records: EgressRecord[]): void {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(records)); } catch { /* ignore */ }
+  try { mainStorage().setItem(LS_KEY, JSON.stringify(records)); } catch { /* ignore */ }
 }
 
 /**

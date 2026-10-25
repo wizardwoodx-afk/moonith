@@ -1,0 +1,43 @@
+{
+  "surface": "SelfImpulse native Marketspace",
+  "researchDate": "2026-10-25",
+  "implementation": "SelfImpulse-owned TypeScript service, declarative catalog, static preview generator, native agent tools, and React settings surface.",
+  "upstreamSourceCopied": false,
+  "references": [
+    {
+      "project": "Open CoDesign",
+      "repository": "https://github.com/OpenCoworkAI/open-codesign",
+      "commit": "4cf33932edc5f687e3cf7190261ebbb02c898d08",
+      "license": "MIT",
+      "licenseFile": "LICENSE.open-codesign.txt",
+      "inspected": [
+        "docs/VISION.md",
+        "apps/desktop/src/main/workspace-path.ts",
+        "apps/desktop/src/main/preview-runtime.ts",
+        "apps/desktop/src/main/permission-ipc.ts",
+        "packages/core/src/security/bash-blocklist.ts"
+      ],
+      "adaptedIdeas": "Workspace-backed design artifacts, portable DESIGN.md, isolated preview thinking, and explicit permission boundaries. No Electron shell, pi runtime, provider layer, daemon, or upstream source file is included."
+    },
+    {
+      "project": "OpenDesign",
+      "repository": "https://github.com/nexu-io/open-design",
+      "commit": "9724c44142ea0afaee3d207f37901b31c66a44ad",
+      "license": "Apache-2.0",
+      "licenseFile": "LICENSE.open-design.txt",
+      "inspected": [
+        "apps/daemon/src/design-systems/frontmatter.ts",
+        "apps/daemon/src/plugins/trust.ts",
+        "apps/daemon/src/services/plugin-installation.ts",
+        "apps/daemon/tests/marketplace-install-ssrf.test.ts"
+      ],
+      "adaptedIdeas": "Portable design-system/catalog concepts, restricted declarative capabilities, and SSRF-aware marketplace review. No daemon, plugin runtime, MCP/CLI adapter, provider stack, or upstream source file is included."
+    }
+  ],
+  "nativeBoundary": {
+    "runtime": "SelfImpulse AgentRuntime and its existing tool/approval/artifact paths",
+    "storage": "userData/marketspace/design-systems/<id>/{DESIGN.md,preview.html,manifest.json}",
+    "network": "No network required for native catalog, preview, install, or apply",
+    "execution": "No package installation, lifecycle script, MCP server, localhost bridge, or external agent CLI"
+  }
+}

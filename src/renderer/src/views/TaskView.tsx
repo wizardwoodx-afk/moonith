@@ -12,21 +12,31 @@ import {
   Play,
   Trash2,
   Check,
-  MonitorUp
+  MonitorUp,
+  ShieldCheck
 } from 'lucide-react'
 import { BrandMark } from '../components/BrandMark'
 import { toast } from 'sonner'
 import type { AttachmentRef, ChatMessage, Task, TaskStatus } from '@shared/types'
+import { AGENT_ROLE_LABELS } from '@shared/governance'
+import { RolePicker } from '../motion/RolePicker'
 import { useApp } from '../store'
 import { cn, errorMessage, folderName, formatBytes, statusLabel, timeAgo } from '../lib/utils'
 import { resolveComposerModel } from '../lib/composerChoices'
 import { CaptainComposer } from '../features/captain/CaptainComposer'
+import { OutcomeContractPicker } from '../components/OutcomeContractPicker'
 import { Markdown } from '../components/Markdown'
 import { PlanCard } from '../components/PlanCard'
 import { StepList } from '../components/Steps'
 import { ArtifactChip, ArtifactPreview } from '../components/Artifacts'
 import { TaskPanel } from '../components/TaskPanel'
 import { Button, IconButton, Popover } from '../components/ui'
+import type { OrbState } from 'thinking-orbs'
+import { TaskOrb } from '../motion/TaskOrb'
+import { ShimmerText } from '../motion/ShimmerText'
+import { ReactionPicker } from '../motion/ReactionPicker'
+import { ActionNodeCard } from '../motion/ActionNodeCard'
+import { orbStateForTask } from '../motion/activityMotion'
 
 const STATUS_STYLE: Record<TaskStatus, string> = {
   draft: 'border-line bg-surface-2 text-muted',
@@ -65,19 +75,11 @@ function AttachmentChips({ message }: { message: ChatMessage }) {
   )
 }
 
-function ThinkingDots({ label }: { label: string }) {
+function ThinkingDots({ label, state }: { label: string; state: OrbState }) {
   return (
-    <div className="flex items-center gap-2 py-1 text-[12px] text-muted">
-      <span className="flex items-center gap-1">
-        {[0, 1, 2].map((index) => (
-          <span
-            key={index}
-            className="h-1 w-1 rounded-full bg-accent breathing"
-            style={{ animationDelay: `${index * 0.18}s` }}
-          />
-        ))}
-      </span>
-      {label}
+    <div className="flex items-center gap-2.5 py-1 text-[12px] text-muted">
+      <TaskOrb state={state} label={label} />
+      <ShimmerText>{label}</ShimmerText>
     </div>
   )
 }
@@ -99,6 +101,7 @@ function TaskHeader({
   const deleteTask = useApp((state) => state.deleteTask)
   const resumeCurrent = useApp((state) => state.resumeCurrent)
   const stopCurrent = useApp((state) => state.stopCurrent)
+  const updateCurrent = useApp((state) => state.updateCurrent)
 
   const provider = task.providerId
     ? settings?.providers.find((item) => item.id === task.providerId)
@@ -132,6 +135,19 @@ function TaskHeader({
           <span>·</span>
           <span className="truncate">{model || 'No model'}</span>
           <span>·</span>
+          <span className="inline-flex items-center gap-1">
+            <ShieldCheck size={9} />
+            {AGENT_ROLE_LABELS[task.agentRole ?? 'executor']}
+          </span>
+          {task.outcome ? (
+            <>
+              <span>·</span>
+              <span className="truncate text-accent-ink" title={`${task.outcome.dataClass} · ${task.outcome.environment}`}>
+                {task.outcome.contractId} · v{task.outcome.contractRevision}
+              </span>
+            </>
+          ) : null}
+          <span>·</span>
           <span>
             {task.folders.length ? folderName(task.folders[0]) : 'Task workspace'}
           </span>
@@ -160,7 +176,7 @@ function TaskHeader({
         )}
       >
         <PanelRightOpen size={13} />
-        <span className="hidden sm:inline">Work</span>
+        <span className="hidden sm:inline">Workspace</span>
         {liveCrew > 0 ? (
           <span className="flex items-center gap-1 text-[9.5px] text-accent">
             <span className="breathing h-1 w-1 rounded-full bg-accent" />
@@ -183,13 +199,35 @@ function TaskHeader({
         )}
       >
         {(close) => (
-          <div className="w-[214px]">
+          <div className="w-[280px]">
+            <div className="border-b border-line px-2 py-2.5">
+              <RolePicker
+                value={task.agentRole ?? 'executor'}
+                onChange={(agentRole) => void updateCurrent({ agentRole })}
+              />
+              <p className="mt-1.5 px-2 text-[9px] leading-relaxed text-faint">
+                Applies to Captain and inherited Crew permissions.
+              </p>
+            </div>
+            <div className="border-b border-line px-2 py-2.5">
+              <p className="mb-2 px-2 text-[9.5px] font-medium text-muted">Verified Outcomes</p>
+              <OutcomeContractPicker
+                value={task.outcome ?? null}
+                disabled={running}
+                onChange={(outcome) => void updateCurrent({ outcome })}
+              />
+              <p className="mt-2 px-2 text-[9px] leading-relaxed text-faint">
+                {task.outcome
+                  ? `Pinned to contract v${task.outcome.contractRevision}. Changes apply to the next run.`
+                  : 'Optional deterministic outcome checks and scoped autonomy for this workflow.'}
+              </p>
+            </div>
             {task.browser ? (
               <button
                 className="menu-item"
                 onClick={() => {
                   close()
-                  void window.knight.showBrowser(task.id).catch((error) => {
+                  void window.knight.showBrowser(task.id, task.browser?.scope).catch((error) => {
                     toast.error(errorMessage(error))
                   })
                 }}
@@ -240,6 +278,7 @@ export function TaskView() {
   const approval = useApp((state) => state.approval)
   const settings = useApp((state) => state.settings)
   const sendToCurrent = useApp((state) => state.sendToCurrent)
+  const reactToMessage = useApp((state) => state.reactToMessage)
   const stopCurrent = useApp((state) => state.stopCurrent)
   const resumeCurrent = useApp((state) => state.resumeCurrent)
   const updateCurrent = useApp((state) => state.updateCurrent)
@@ -314,6 +353,7 @@ export function TaskView() {
           className="scroll-thin relative min-h-0 flex-1 overflow-y-auto"
         >
           <div className="mx-auto w-full max-w-[860px] px-8 pt-7 pb-8">
+            <ActionNodeCard task={task} />
             <PlanCard plan={task.plan} live={running} />
 
             {visible.length === 0 ? (
@@ -332,7 +372,7 @@ export function TaskView() {
               {visible.map((message, index) => {
                 if (message.role === 'user') {
                   return (
-                    <div key={message.id} className="message-in flex justify-end">
+                    <div key={message.id} className="message-in flex flex-col items-end">
                       <div className="max-w-[80%] rounded-[18px] rounded-br-md border border-line/80 bg-surface-2/85 px-4 py-2.5">
                         {message.content ? (
                           <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap text-ink">
@@ -341,6 +381,11 @@ export function TaskView() {
                         ) : null}
                         <AttachmentChips message={message} />
                       </div>
+                      <ReactionPicker
+                        message={message}
+                        align="right"
+                        onReact={(emoji) => reactToMessage(message.id, emoji)}
+                      />
                     </div>
                   )
                 }
@@ -366,6 +411,7 @@ export function TaskView() {
                         <Markdown content={message.content} streaming={streaming} />
                       ) : streaming ? (
                         <ThinkingDots
+                          state={orbStateForTask(task)}
                           label={
                             task.status === 'waiting'
                               ? 'Waiting for your approval'
@@ -377,6 +423,10 @@ export function TaskView() {
                       {message.error ? (
                         <p className="mt-2 text-[11.5px] text-danger">This response was interrupted.</p>
                       ) : null}
+                      <ReactionPicker
+                        message={message}
+                        onReact={(emoji) => reactToMessage(message.id, emoji)}
+                      />
                     </div>
                   </div>
                 )

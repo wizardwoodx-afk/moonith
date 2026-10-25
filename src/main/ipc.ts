@@ -1,8 +1,9 @@
 import { app, dialog, ipcMain, shell } from 'electron'
 import { promises as fs } from 'node:fs'
-import { basename } from 'node:path'
+import { basename, join } from 'node:path'
 import { IPC } from '@shared/ipc'
 import { REA_SERVER_CONFIG } from '@shared/constants'
+import { normalizeAgentRole } from '@shared/governance'
 import type {
   AttachmentRef,
   ChannelInput,
@@ -12,6 +13,7 @@ import type {
   McpServerConfig,
   McpServerStatus,
   MemoryInput,
+  MessageReactionInput,
   ProviderInput,
   SendMessageInput,
   SettingsPatch,
@@ -38,7 +40,8 @@ import {
 import { approvals } from './approvals'
 import { sendTaskEvent } from './emitter'
 import { store } from './store'
-import { taskWorkspace } from './paths'
+import { ensureTaskWorkspace, taskWorkspace } from './paths'
+import { removeCoworkerTask, taskIdForBrowserScope } from './selfimpulse/coworker/workspaces'
 import { resolveSafePath } from './security'
 import { browserService } from './services/browser'
 import { mcpManager } from './services/mcp'
@@ -51,14 +54,32 @@ import { usageService } from './services/usage'
 import { connectorsManager } from './services/connectors'
 import { channelService } from './services/channels'
 import { subAgentService } from './services/subagents'
-import { applyTitleBarTheme } from './window'
+import { toggleMessageReaction } from './services/reactions'
+import { applyTitleBarTheme, getMainWindow } from './window'
 import { getBackend } from './backend'
 import { registerBackendIpc, setBackendEventTarget } from './backend/ipc'
 import { registerAuditIpc } from './audit'
+import { registerEnterpriseControlIpc } from './enterpriseControl/ipc'
+import { registerRsiralsIpc } from './selfimpulse/mission/rsiralsIpc'
+import { registerVerifiedOutcomesIpc } from './selfimpulse/verifiedOutcomes/ipc'
+import { verifiedOutcomes } from './selfimpulse/verifiedOutcomes/runtime'
+import { requireLocalEnterprise } from './enterpriseControl/runtime'
+import { runtimeAudit } from './audit/runtime'
 import type { BackendSettingsPublic } from '@shared/types'
+import type { LibraryPageInput, LibraryPagePatch } from '@shared/library'
+import { getLibraryService } from './selfimpulse/library'
+import { getMarketspace } from './marketspace'
+import type { MarketspaceCreateInput } from '@shared/marketspace'
 
 function publishTask(task: Task): void {
   sendTaskEvent({ type: 'task', task })
+}
+
+function requireMainWindowSender(event: Electron.IpcMainInvokeEvent): void {
+  const main = getMainWindow()
+  if (!main || main.isDestroyed() || event.sender !== main.webContents) {
+    throw new Error('This browser operation is available only to the SelfImpulse window.')
+  }
 }
 
 async function restartMcp(): Promise<void> {
@@ -130,6 +151,18 @@ export function registerIpc(): void {
     const previous = store.getPublicSettings()
     const settings = await store.saveSettings(patch)
     applyTitleBarTheme()
+    if (JSON.stringify(previous.governance) !== JSON.stringify(settings.governance)) {
+      void runtimeAudit.record({
+        actor: 'system',
+        actorId: 'local-policy-administrator',
+        action: 'policy.settings_updated',
+        outcome: 'ok',
+        metadata: {
+          previous: previous.governance,
+          current: settings.governance
+        }
+      })
+    }
     if (JSON.stringify(settings.mcpServers) !== JSON.stringify(previous.mcpServers)) {
       void restartMcp()
     }
@@ -157,14 +190,16 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.taskGet, (_event, id: string) => store.getTask(id) ?? null)
 
   ipcMain.handle(IPC.taskCreate, async (_event, input: CreateTaskInput) => {
-    const task = await store.createTask(input)
+    const outcome = input.outcome ? await verifiedOutcomes().binding(input.outcome) : undefined
+    const task = await store.createTask({ ...input, outcome })
     publishTask(task)
     return task
   })
 
   ipcMain.handle(IPC.taskDelete, async (_event, id: string) => {
     await agentRuntime.stop(id)
-    browserService.dispose(id)
+    await browserService.disposeTask(id)
+    await removeCoworkerTask(id)
     approvals.cancelTask(id)
     await store.deleteTask(id)
   })
@@ -179,9 +214,55 @@ export function registerIpc(): void {
     if (!task) throw new Error('Task not found.')
     if (input.mode !== undefined) task.mode = input.mode
     if (input.permissionMode !== undefined) task.permissionMode = input.permissionMode
+    const previousRole = task.agentRole
+    if (input.agentRole !== undefined) {
+      task.agentRole = normalizeAgentRole(input.agentRole, previousRole ?? 'executor')
+    }
     if (input.providerId !== undefined) task.providerId = input.providerId || undefined
     if (input.model !== undefined) task.model = input.model || undefined
     if (input.title !== undefined && input.title.trim()) task.title = input.title.trim()
+    const previousOutcome = task.outcome
+    if (input.outcome !== undefined) {
+      if (agentRuntime.isRunning(task.id)) {
+        throw new Error('Stop the task before changing its outcome contract; a live run cannot change scope mid-flight.')
+      }
+      if (input.outcome === null) delete task.outcome
+      else task.outcome = await verifiedOutcomes().binding(input.outcome)
+    }
+    await store.saveTask(task)
+    if (previousRole !== task.agentRole) {
+      void runtimeAudit.record({
+        actor: 'system',
+        actorId: 'local-policy-administrator',
+        taskId: task.id,
+        role: task.agentRole,
+        action: 'policy.role_changed',
+        outcome: 'ok',
+        target: task.agentRole,
+        metadata: { previousRole: previousRole ?? 'executor' }
+      })
+    }
+    if (JSON.stringify(previousOutcome) !== JSON.stringify(task.outcome)) {
+      void runtimeAudit.record({
+        actor: 'system',
+        actorId: 'local-outcome-administrator',
+        taskId: task.id,
+        action: 'outcome.task_binding',
+        outcome: 'ok',
+        target: task.outcome ? `${task.outcome.contractId}@${task.outcome.contractRevision}` : 'unbound',
+        metadata: task.outcome
+          ? { dataClass: task.outcome.dataClass, environment: task.outcome.environment }
+          : { previousContractId: previousOutcome?.contractId }
+      })
+    }
+    publishTask(task)
+    return task
+  })
+
+  ipcMain.handle(IPC.taskReact, async (_event, input: MessageReactionInput) => {
+    const task = store.getTask(String(input?.taskId ?? ''))
+    if (!task) throw new Error('Task not found.')
+    toggleMessageReaction(task, String(input?.messageId ?? ''), String(input?.emoji ?? ''))
     await store.saveTask(task)
     publishTask(task)
     return task
@@ -202,6 +283,13 @@ export function registerIpc(): void {
     })
     if (result.canceled) return []
     const refs = await Promise.all(result.filePaths.map((path) => fileRef(path)))
+    return refs.filter((ref): ref is AttachmentRef => Boolean(ref))
+  })
+
+  ipcMain.handle(IPC.filesFromDrop, async (_event, paths: string[]) => {
+    if (!Array.isArray(paths)) return []
+    const unique = [...new Set(paths.filter((path) => typeof path === 'string' && path))].slice(0, 40)
+    const refs = await Promise.all(unique.map((path) => fileRef(path)))
     return refs.filter((ref): ref is AttachmentRef => Boolean(ref))
   })
 
@@ -229,7 +317,8 @@ export function registerIpc(): void {
     return task
   })
 
-  ipcMain.handle(IPC.approvalRespond, (_event, decision: { id: string; approved: boolean; always?: boolean }) => {
+  ipcMain.handle(IPC.approvalRespond, async (_event, decision: { id: string; approved: boolean; always?: boolean }) => {
+    await requireLocalEnterprise('approval.decide', 'approval', decision.id)
     approvals.respond(decision.id, decision.approved, decision.always)
   })
 
@@ -313,8 +402,73 @@ export function registerIpc(): void {
     return mcpManager.getStatuses()
   })
 
-  ipcMain.handle(IPC.browserShow, (_event, taskId: string) => {
-    browserService.show(taskId)
+  ipcMain.handle(IPC.browserShow, async (event, taskId: string, scope?: string) => {
+    requireMainWindowSender(event)
+    const requestedScope = typeof scope === 'string' && scope ? scope : taskId
+    if (typeof taskId !== 'string' || taskIdForBrowserScope(requestedScope) !== taskId) {
+      throw new Error('Invalid task browser scope.')
+    }
+    if (!store.getTask(taskId)) throw new Error('The task owning this browser session no longer exists.')
+    await browserService.show(requestedScope)
+  })
+
+  ipcMain.handle(IPC.browserStatus, (event) => {
+    requireMainWindowSender(event)
+    return browserService.status()
+  })
+
+  ipcMain.handle(IPC.librarySnapshot, () => getLibraryService().snapshot())
+  ipcMain.handle(IPC.libraryCollectionCreate, async (_event, name: string) => {
+    await requireLocalEnterprise('tool.use', 'tool', 'library')
+    const collection = await getLibraryService().createCollection(name)
+    void runtimeAudit.record({
+      actor: 'system',
+      actorId: 'human:local',
+      action: 'library.collection_created',
+      outcome: 'ok',
+      target: collection.id
+    })
+    return collection
+  })
+  ipcMain.handle(IPC.libraryPageCreate, async (_event, input: LibraryPageInput) => {
+    await requireLocalEnterprise('tool.use', 'tool', 'library')
+    const page = await getLibraryService().createPage(input)
+    void runtimeAudit.record({
+      actor: 'system',
+      actorId: 'human:local',
+      action: 'library.page_created',
+      outcome: 'ok',
+      target: page.id,
+      metadata: { revision: page.revision, collectionId: page.collectionId }
+    })
+    return page
+  })
+  ipcMain.handle(IPC.libraryPageUpdate, async (_event, id: string, patch: LibraryPagePatch) => {
+    await requireLocalEnterprise('tool.use', 'tool', 'library')
+    const page = await getLibraryService().updatePage(id, patch)
+    void runtimeAudit.record({
+      actor: 'system',
+      actorId: 'human:local',
+      action: 'library.page_updated',
+      outcome: 'ok',
+      target: page.id,
+      metadata: { revision: page.revision }
+    })
+    return page
+  })
+  ipcMain.handle(IPC.libraryPageDelete, async (_event, id: string) => {
+    await requireLocalEnterprise('tool.use', 'tool', 'library')
+    const deleted = await getLibraryService().deletePage(id)
+    if (deleted) {
+      void runtimeAudit.record({
+        actor: 'system',
+        actorId: 'human:local',
+        action: 'library.page_deleted',
+        outcome: 'ok',
+        target: id
+      })
+    }
+    return deleted
   })
 
   ipcMain.handle(IPC.skillsList, () => skillService.list())
@@ -328,10 +482,46 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.skillsCreate, (_event, draft: SkillDraft) => skillService.create(draft))
   ipcMain.handle(IPC.skillsRemove, (_event, id: string) => skillService.remove(id))
 
-  ipcMain.handle(IPC.memoryList, () => memoryService.list())
-  ipcMain.handle(IPC.memoryAdd, (_event, input: MemoryInput) => memoryService.add(input))
-  ipcMain.handle(IPC.memoryRemove, (_event, id: string) => memoryService.remove(id))
-  ipcMain.handle(IPC.memoryImport, (_event, text: string) => memoryService.importText(text))
+  ipcMain.handle(IPC.marketspaceList, (_event, query?: string) =>
+    getMarketspace().list(typeof query === 'string' ? query : '')
+  )
+  ipcMain.handle(IPC.marketspaceRead, (_event, id: string) => getMarketspace().read(String(id ?? '')))
+  ipcMain.handle(IPC.marketspaceInstall, (_event, id: string) => getMarketspace().install(String(id ?? '')))
+  ipcMain.handle(IPC.marketspaceCreate, (_event, input: MarketspaceCreateInput) => {
+    if (!input || typeof input !== 'object') throw new Error('A design system draft is required.')
+    return getMarketspace().create(input)
+  })
+  ipcMain.handle(IPC.marketspaceRemove, async (_event, id: string) => {
+    await getMarketspace().remove(String(id ?? ''))
+    return getMarketspace().list()
+  })
+  ipcMain.handle(IPC.marketspaceApply, async (_event, taskId: string, id: string, overwrite?: boolean) => {
+    const task = store.getTask(String(taskId ?? ''))
+    if (!task) throw new Error('Task not found.')
+    const workspace = ensureTaskWorkspace(task.id)
+    const result = await getMarketspace().apply(String(id ?? ''), workspace, overwrite === true)
+    for (const file of result.files) {
+      await agentRuntime.registerArtifact(task, join(workspace, file))
+    }
+    return result
+  })
+
+  ipcMain.handle(IPC.memoryList, async () => {
+    await requireLocalEnterprise('memory.read', 'memory', 'captain')
+    return memoryService.list()
+  })
+  ipcMain.handle(IPC.memoryAdd, async (_event, input: MemoryInput) => {
+    await requireLocalEnterprise('memory.write', 'memory', 'captain')
+    return memoryService.add(input)
+  })
+  ipcMain.handle(IPC.memoryRemove, async (_event, id: string) => {
+    await requireLocalEnterprise('memory.write', 'memory', 'captain')
+    return memoryService.remove(id)
+  })
+  ipcMain.handle(IPC.memoryImport, async (_event, text: string) => {
+    await requireLocalEnterprise('memory.write', 'memory', 'captain')
+    return memoryService.importText(text)
+  })
 
   ipcMain.handle(IPC.usageSummary, () => usageService.summary())
 
@@ -367,6 +557,9 @@ export function registerIpc(): void {
 
   registerBackendIpc()
   registerAuditIpc()
+  registerEnterpriseControlIpc()
+  registerRsiralsIpc()
+  registerVerifiedOutcomesIpc()
 }
 
 async function safeArtifactPath(taskId: string, relPath: string): Promise<string> {

@@ -14,11 +14,13 @@ import { SettingsView } from './views/SettingsView'
 import { TaskView } from './views/TaskView'
 import { SchedulesView } from './views/SchedulesView'
 import { CaptainSurface } from './features/captain/CaptainSurface'
+import { LibraryView } from './features/library/LibraryView'
 import { CompanySurface } from './features/company/CompanySurface'
 import { TableSurface } from './features/table/TableSurface'
 import { HelpButton } from './shell/HelpButton'
 import { startNewTask } from './lib/navigation'
 import { Button } from './components/ui'
+import { MetalSignature } from './motion/MetalAction'
 
 function Splash() {
   return (
@@ -27,7 +29,7 @@ function Splash() {
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-surface text-accent shadow-[0_40px_80px_-40px_rgba(0,0,0,0.9)]">
           <BrandMark size={22} className="breathing" />
         </div>
-        <p className="display mt-4 text-[19px] text-ink">SelfImpulse</p>
+        <div className="mt-4 text-ink"><MetalSignature>SelfImpulse</MetalSignature></div>
         <p className="mt-1 text-[11.5px] text-faint">Opening your workspace…</p>
       </div>
     </div>
@@ -145,6 +147,9 @@ export function App() {
       } else if (event.key === '3') {
         event.preventDefault()
         openSurface('table')
+      } else if (event.key === '4') {
+        event.preventDefault()
+        openSurface('library')
       } else if (event.key.toLowerCase() === 'n') {
         event.preventDefault()
         startNewTask()
@@ -217,6 +222,9 @@ export function App() {
               {!settingsActive && view.kind === 'schedules' ? <SchedulesView /> : null}
               {!settingsActive && view.kind === 'surface' && activeSurface === 'chat' ? (
                 <CaptainSurface />
+              ) : null}
+              {!settingsActive && view.kind === 'surface' && activeSurface === 'library' ? (
+                <LibraryView />
               ) : null}
               {!settingsActive && view.kind === 'surface' && activeSurface === 'company' ? (
                 <CompanySurface />

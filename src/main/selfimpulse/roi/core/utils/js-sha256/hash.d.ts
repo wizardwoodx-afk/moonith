@@ -1,0 +1,3 @@
+//#region src/utils/js-sha256/hash.d.ts
+export declare const sha256: (...strings: string[]) => any;
+//#endregion

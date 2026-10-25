@@ -2,7 +2,7 @@
   "name": "selfimpulse",
   "productName": "SelfImpulse",
   "version": "0.3.0",
-  "description": "SelfImpulse — a local-first agentic desktop workspace",
+  "description": "SelfImpulse — the governed, local-first enterprise agent workspace",
   "main": "./out/main/index.js",
   "author": "SelfImpulse",
   "license": "UNLICENSED",
@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.136.0",
+    "@browserbasehq/stagehand": "4.3.0",
     "@fontsource-variable/fraunces": "^5.3.0",
     "@fontsource-variable/instrument-sans": "^5.3.0",
     "@fontsource-variable/inter": "^5.3.0",
@@ -29,7 +30,9 @@
     "exceljs": "^4.4.0",
     "fast-glob": "^3.3.3",
     "framer-motion": "^14.4.0",
+    "glimm": "^0.3.1",
     "lucide-react": "^1.60.0",
+    "metal-fx": "^2.0.11",
     "node-cron": "^4.6.0",
     "openai": "^7.39.0",
     "pptxgenjs": "^4.0.1",
@@ -39,6 +42,7 @@
     "remark-gfm": "^4.0.1",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
+    "thinking-orbs": "^0.3.2",
     "zod": "^4.6.7",
     "zustand": "^5.0.15"
   },
@@ -55,5 +59,11 @@
     "typescript": "^5.9.0",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"
+  },
+  "overrides": {
+    "body-parser": "2.4.0",
+    "image-size": "2.0.4",
+    "uuid": "11.1.1",
+    "zod": "$zod"
   }
 }

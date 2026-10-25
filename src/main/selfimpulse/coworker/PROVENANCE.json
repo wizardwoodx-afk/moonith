@@ -1,0 +1,39 @@
+{
+  "module": "SelfImpulse native Coworker boundary",
+  "upstream": {
+    "project": "CopilotKit OpenBot",
+    "repository": "https://github.com/CopilotKit/OpenBot",
+    "commit": "46642d6c91daa663bccff673595f4e12a419a496",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2026 CopilotKit",
+    "licenseFile": "LICENSE.openbot.txt",
+    "referenceFiles": [
+      "server/src/computer/target.ts",
+      "server/src/computer/gateway.ts",
+      "server/src/computer/policy-network.ts"
+    ]
+  },
+  "adaptedFiles": [
+    "navigation.ts"
+  ],
+  "localFiles": [
+    "artifacts.ts",
+    "scope.ts",
+    "workspaces.ts",
+    "navigation.test.ts",
+    "scope.test.ts"
+  ],
+  "excluded": [
+    "CopilotKit Intelligence and cloud dependencies",
+    "OpenBot gateway and HTTP service",
+    "Docker and PostgreSQL deployment",
+    "localhost bridges and sidecars",
+    "external browser CLI or remote debugging runtime"
+  ],
+  "localChanges": [
+    "Product-native native Electron integration beneath the existing tool/policy/audit boundary",
+    "URL credential, protocol, private IP, metadata, DNS-rebinding, redirect, and subresource checks",
+    "Per-Captain/Crew persistent Chromium partitions with task-deletion erasure",
+    "Private Crew workspaces outside shared task folders and explicit artifact promotion"
+  ]
+}

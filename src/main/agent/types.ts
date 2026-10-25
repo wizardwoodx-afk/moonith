@@ -12,6 +12,14 @@ export interface ProviderToolCall {
   arguments: Record<string, unknown>
 }
 
+export const STRUCTURED_OUTPUT_TOOL = 'selfimpulse_structured_output'
+
+export interface StructuredOutputRequest {
+  name: string
+  description?: string
+  schema: Record<string, unknown>
+}
+
 export interface CompletionRequest {
   kind: ProviderKind
   apiKey: string
@@ -20,6 +28,11 @@ export interface CompletionRequest {
   system: string
   messages: ChatMessage[]
   tools: ProviderToolSpec[]
+  /** Request one schema-bound tool call through the existing provider transport. */
+  structuredOutput?: StructuredOutputRequest
+  temperature?: number
+  stopSequences?: string[]
+  toolChoice?: 'auto' | 'required' | 'none'
   signal: AbortSignal
   onText: (delta: string) => void
 }

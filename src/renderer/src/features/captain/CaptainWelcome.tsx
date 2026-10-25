@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react'
 import { LockKeyhole } from 'lucide-react'
 import type { AttachmentRef, PermissionMode, TaskSummary } from '@shared/types'
+import type { OutcomeTaskBindingInput } from '@shared/verifiedOutcomes'
+import { OutcomeContractPicker } from '../../components/OutcomeContractPicker'
 import { cn } from '../../lib/utils'
 import { buildActivity, type ActivityMetric } from '../../lib/activity'
 import type { ComposerModelState } from '../../lib/composerChoices'
-import { CaptainDoodle } from './CaptainDoodle'
 import { CaptainComposer } from './CaptainComposer'
+import { CaptainPresence } from '../../motion/CaptainPresence'
+import { TaskDeck } from '../../motion/TaskDeck'
+import { MetalSignature } from '../../motion/MetalAction'
 
 const LEVELS = [
   'bg-surface-3',
@@ -84,6 +88,8 @@ export function CaptainWelcome({
   draft,
   attachments,
   workspace,
+  outcome,
+  onOutcomeChange,
   onDraftChange,
   onAttachmentsChange,
   onPermissionChange,
@@ -99,6 +105,8 @@ export function CaptainWelcome({
   draft: string
   attachments: AttachmentRef[]
   workspace: string | null
+  outcome: OutcomeTaskBindingInput | null
+  onOutcomeChange: (value: OutcomeTaskBindingInput | null) => void
   onDraftChange: (value: string) => void
   onAttachmentsChange: (value: AttachmentRef[]) => void
   onPermissionChange: (value: PermissionMode) => void
@@ -112,19 +120,21 @@ export function CaptainWelcome({
     <div className="scroll-thin h-full overflow-y-auto">
       <div className="mx-auto flex min-h-full w-full max-w-[924px] flex-col px-6 pt-5 pb-2">
         <div className="rise flex flex-col items-center">
-          <CaptainDoodle />
-          <h1 className="mt-4 text-center text-[20px] leading-8 font-medium text-ink">
-            Beyond Busywork
+          <CaptainPresence />
+          <h1 className="mt-3 text-center text-ink">
+            <MetalSignature size={32}>Beyond Busywork</MetalSignature>
           </h1>
-          <p className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5 text-center text-[20px] leading-6 font-medium text-muted">
-            <span>What can</span>
-            <span className="text-ink">Captain</span>
-            <span>help you build?</span>
+          <p className="mt-2 text-center text-[12.5px] leading-6 text-muted">
+            What can Captain help you build?
           </p>
 
-          <div className="mt-7 flex w-full justify-center">
-            <ActivityCard tasks={tasks} />
-          </div>
+          {tasks.length ? (
+            <div className="mt-7 flex w-full justify-center">
+              <div className="w-full max-w-[520px]">
+                <TaskDeck tasks={tasks.slice(0, 4)} />
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="mx-auto mt-auto w-full max-w-[768px] pt-10">
@@ -144,6 +154,12 @@ export function CaptainWelcome({
             placeholder="Ask Captain…"
             busy={busy}
             autoFocus
+          />
+          <OutcomeContractPicker
+            value={outcome}
+            onChange={onOutcomeChange}
+            disabled={busy}
+            className="mt-2 justify-center"
           />
           <p className="mt-2 flex items-center justify-center gap-1.5 pb-2 text-[10.5px] text-faint">
             <LockKeyhole size={10} />

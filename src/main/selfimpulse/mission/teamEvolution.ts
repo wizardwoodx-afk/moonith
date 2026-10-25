@@ -33,6 +33,7 @@
  *      the record, because an evolution you cannot roll back is not an evolution, it is drift.
  */
 
+import { mainStorage } from "../persist/mainStorage";
 import { uid } from "../app/id";
 import type { CliAgentTeam, TeamSeat } from "./agentTeam";
 
@@ -580,8 +581,7 @@ export function decideCandidate(store: TeamEvoStore, candidateId: string, decisi
 
 export function loadTeamEvoStore(): TeamEvoStore {
   try {
-    if (typeof localStorage === "undefined") return emptyStore();
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = mainStorage().getItem(LS_KEY);
     if (!raw) return emptyStore();
     const p = JSON.parse(raw) as Partial<TeamEvoStore>;
     return {
@@ -597,8 +597,7 @@ export function loadTeamEvoStore(): TeamEvoStore {
 
 export function saveTeamEvoStore(store: TeamEvoStore): void {
   try {
-    if (typeof localStorage === "undefined") return;
-    localStorage.setItem(LS_KEY, JSON.stringify(store));
+    mainStorage().setItem(LS_KEY, JSON.stringify(store));
   } catch {
     /* persistence is best-effort in browser builds */
   }

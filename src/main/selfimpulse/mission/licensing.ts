@@ -22,6 +22,7 @@
  *      harnesses, verification, SUGGEST-mode evolution — is free forever.
  */
 
+import { mainStorage } from "../persist/mainStorage";
 export type Edition = "personal" | "trial" | "pro";
 
 export interface LicensePayload {
@@ -96,18 +97,18 @@ export async function verifyLicenseKey(key: string, nowMs: number = Date.now(), 
 /* ── storage-guarded state ─────────────────────────────────────────────── */
 
 const mem: { license: LicensePayload | null; trialStart: string | null } = { license: null, trialStart: null };
-const hasLS = typeof localStorage !== "undefined";
+const hasLS = typeof localStorage !== "undefined" || (typeof process !== "undefined" && Boolean(process.versions?.electron));
 
 function lsGet(k: string): string | null {
   try {
-    return hasLS ? localStorage.getItem(k) : null;
+    return hasLS ? mainStorage().getItem(k) : null;
   } catch {
     return null;
   }
 }
 function lsSet(k: string, v: string): void {
   try {
-    if (hasLS) localStorage.setItem(k, v);
+    if (hasLS) mainStorage().setItem(k, v);
   } catch {
     /* memory only */
   }

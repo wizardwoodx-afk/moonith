@@ -8,7 +8,7 @@
  */
 
 export const APP_NAME = 'SelfImpulse'
-export const APP_TAGLINE = 'The agent that never leaves your machine.'
+export const APP_TAGLINE = 'The governed, local-first enterprise agent workspace.'
 export const APP_AUTHOR = 'K.S. / SelfImpulse'
 
 /**

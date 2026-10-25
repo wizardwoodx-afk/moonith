@@ -33,6 +33,8 @@
  * `secureKeys.ts` — no unverifiable Rust ships pretending to be one.
  */
 
+import { mainStorage } from "../persist/mainStorage";
+
 export const VAULT_FORMAT = "si-vault/1";
 const VAULT_META_KEY = "vh.vault.meta.v1";
 /* 20.x — the two-phase journal for cost upgrades. A re-seal that wrote its new
@@ -76,7 +78,8 @@ export type VaultStatus = "no-passphrase" | "unlocked" | "sealed-locked";
 
 function storage(): Storage | null {
   try {
-    return globalThis.localStorage ?? null;
+    return globalThis.localStorage ??
+      (typeof process !== "undefined" && process.versions?.electron ? mainStorage() : null);
   } catch {
     return null;
   }

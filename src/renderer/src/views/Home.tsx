@@ -10,10 +10,13 @@ import {
 } from 'lucide-react'
 import { BrandMark } from '../components/BrandMark'
 import type { AttachmentRef, PermissionMode, TaskMode } from '@shared/types'
+import type { OutcomeTaskBindingInput } from '@shared/verifiedOutcomes'
+import { OutcomeContractPicker } from '../components/OutcomeContractPicker'
 import { useApp } from '../store'
 import { cn, statusLabel, timeAgo } from '../lib/utils'
 import { Composer } from '../components/Composer'
 import { Button } from '../components/ui'
+import { TaskDeck } from '../motion/TaskDeck'
 
 const SUGGESTIONS = [
   {
@@ -71,6 +74,7 @@ export function Home() {
   )
   const [providerId, setProviderId] = useState<string | undefined>(initialProvider?.id)
   const [model, setModel] = useState<string>(initialModel)
+  const [outcome, setOutcome] = useState<OutcomeTaskBindingInput | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const noModel = !defaults.some((provider) => provider.models.length > 0)
@@ -87,7 +91,8 @@ export function Home() {
         folders,
         attachments,
         providerId,
-        model
+        model,
+        outcome
       })
       setText('')
       setAttachments([])
@@ -170,6 +175,12 @@ export function Home() {
             autoFocus
             variant="home"
           />
+          <OutcomeContractPicker
+            value={outcome}
+            onChange={setOutcome}
+            disabled={submitting}
+            className="mt-2 px-1"
+          />
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -207,35 +218,7 @@ export function Home() {
               </h2>
               <span className="text-[10.5px] text-faint">{tasks.length} tasks</span>
             </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {recent.map((task) => (
-                <button
-                  key={task.id}
-                  onClick={() => void openTask(task.id)}
-                  className={cn(
-                    'group flex items-start gap-3 rounded-xl border border-line bg-surface/50 px-3.5 py-3 text-left transition-colors hover:bg-surface'
-                  )}
-                >
-                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-muted">
-                    {task.status === 'done' ? (
-                      <CheckCircle2 size={14} className="text-positive" />
-                    ) : (
-                      <BrandMark size={14} />
-                    )}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[12.5px] font-medium text-ink">
-                      {task.title}
-                    </span>
-                    <span className="mt-0.5 flex items-center gap-1.5 text-[10.5px] text-faint">
-                      <span>{statusLabel(task.status)}</span>
-                      <span>·</span>
-                      <span>{timeAgo(task.updatedAt)}</span>
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
+            <TaskDeck tasks={recent} />
           </div>
         ) : null}
 

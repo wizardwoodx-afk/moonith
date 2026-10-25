@@ -37,7 +37,7 @@
  * does not delete: `deleteThread` refuses in words, because a run chain in
  * this product is evidence, and evidence is not deleted by a library call.
  */
-import { BaseCheckpointSaver } from "../../vendor/graphruntime/checkpoint/index.js";
+import { BaseCheckpointSaver } from "../roi/checkpoint/index.js";
 import type {
   Checkpoint,
   CheckpointMetadata,
@@ -45,8 +45,8 @@ import type {
   CheckpointTuple,
   ChannelVersions,
   PendingWrite,
-} from "../../vendor/graphruntime/checkpoint/index.js";
-import type { RunnableConfig } from "../../vendor/graphruntime/core/runnables/index.js";
+} from "../roi/checkpoint/index.js";
+import type { RunnableConfig } from "../roi/core/runnables/index.js";
 import {
   chainFor,
   checkpoint as recordChainCheckpoint,

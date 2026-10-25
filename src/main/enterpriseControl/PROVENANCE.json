@@ -1,0 +1,22 @@
+{
+  "project": "OpenClaw Enterprise",
+  "upstream": "https://github.com/openclaw/openclaw-enterprise",
+  "inspectedRevision": "6244dc498bfdf77b2ad036ebefe2e62a7d90a0aa",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2026 OpenAI",
+  "licenseFile": "LICENSE.openclaw-enterprise.txt",
+  "integration": "SelfImpulse-owned native implementation of selected IAM and lifecycle semantics; no upstream distribution is vendored or executed.",
+  "adaptedSemantics": [
+    "default-deny authorization",
+    "human and per-agent principals",
+    "namespace-scoped Roles and AccessBindings",
+    "deny-overriding Restrictions",
+    "immutable policy revisions and lifecycle state"
+  ],
+  "nativeBoundaries": [
+    "in-process TypeScript policy and atomic local persistence",
+    "existing SelfImpulse mission admission and signed runtime audit",
+    "no MCP adapter, local server, OCC sidecar, external CLI, PostgreSQL, Kubernetes, controller, or worker service",
+    "no claim of OCE-equivalent hardware, OS, tenant, or workload isolation"
+  ]
+}

@@ -14,10 +14,12 @@ export const IPC = {
   taskStop: 'task:stop',
   taskResume: 'task:resume',
   taskUpdate: 'task:update',
+  taskReact: 'task:react',
   taskAddFolder: 'task:add-folder',
   taskRemoveFolder: 'task:remove-folder',
   pickFolder: 'dialog:pick-folder',
   pickFiles: 'dialog:pick-files',
+  filesFromDrop: 'files:from-drop',
 
   approvalRespond: 'approval:respond',
   artifactOpen: 'artifact:open',
@@ -36,6 +38,13 @@ export const IPC = {
   mcpReaPreset: 'mcp:rea-preset',
 
   browserShow: 'browser:show',
+  browserStatus: 'browser:status',
+
+  librarySnapshot: 'library:snapshot',
+  libraryCollectionCreate: 'library:collection-create',
+  libraryPageCreate: 'library:page-create',
+  libraryPageUpdate: 'library:page-update',
+  libraryPageDelete: 'library:page-delete',
 
   skillsList: 'skills:list',
   skillsSearch: 'skills:search',
@@ -43,6 +52,13 @@ export const IPC = {
   skillsRead: 'skills:read',
   skillsCreate: 'skills:create',
   skillsRemove: 'skills:remove',
+
+  marketspaceList: 'marketspace:list',
+  marketspaceRead: 'marketspace:read',
+  marketspaceInstall: 'marketspace:install',
+  marketspaceCreate: 'marketspace:create',
+  marketspaceRemove: 'marketspace:remove',
+  marketspaceApply: 'marketspace:apply',
 
   memoryList: 'memory:list',
   memoryAdd: 'memory:add',
@@ -114,6 +130,7 @@ export const IPC = {
   selfImpulseThreadSelect: 'selfimpulse:thread-select',
 
   eventTask: 'event:task',
+  eventLibrary: 'event:library',
   eventApproval: 'event:approval',
   eventBackend: 'event:backend',
   eventSelfImpulse: 'event:selfimpulse'

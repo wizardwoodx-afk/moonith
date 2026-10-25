@@ -5,6 +5,7 @@ import type {
   ProviderToolCall,
   ProviderToolSpec
 } from '../types'
+import { STRUCTURED_OUTPUT_TOOL } from '../types'
 import type { ChatMessage, TokenUsage } from '@shared/types'
 import { safeJsonParse } from '../../util'
 
@@ -26,10 +27,19 @@ function toAnthropicMessages(messages: ChatMessage[]): AnthropicMessage[] {
   for (const message of messages) {
     if (message.role === 'system') continue
     if (message.role === 'user') {
+      const blocks: Anthropic.ContentBlockParam[] = []
       const text = message.content.trim()
-      if (text) push('user', [{ type: 'text', text }])
+      if (text) blocks.push({ type: 'text', text })
+      for (const image of message.images ?? []) {
+        blocks.push({
+          type: 'image',
+          source: { type: 'base64', media_type: image.mimeType, data: image.data }
+        })
+      }
+      if (blocks.length) push('user', blocks)
       continue
     }
+    if (message.images?.length) throw new Error('Only user messages can contain images.')
     if (message.role === 'assistant') {
       const blocks: Anthropic.ContentBlockParam[] = []
       if (message.content.trim()) blocks.push({ type: 'text', text: message.content })
@@ -78,14 +88,35 @@ export async function streamAnthropic(request: CompletionRequest): Promise<Compl
     apiKey: request.apiKey,
     baseURL: request.baseUrl || undefined
   })
+  const tools = request.structuredOutput
+    ? [
+        ...request.tools,
+        {
+          name: STRUCTURED_OUTPUT_TOOL,
+          description: request.structuredOutput.description ?? 'Return the requested structured result.',
+          parameters: request.structuredOutput.schema
+        }
+      ]
+    : request.tools
 
   const stream = client.messages.stream(
     {
       model: request.model,
       max_tokens: 8192,
+      temperature: request.temperature,
+      stop_sequences: request.stopSequences,
       system: request.system,
       messages: toAnthropicMessages(request.messages),
-      tools: request.tools.length ? toAnthropicTools(request.tools) : undefined
+      tools: tools.length ? toAnthropicTools(tools) : undefined,
+      tool_choice: request.structuredOutput
+        ? { type: 'tool', name: STRUCTURED_OUTPUT_TOOL }
+        : request.toolChoice === 'none'
+          ? { type: 'none' }
+          : request.toolChoice === 'required'
+            ? { type: 'any' }
+            : request.toolChoice === 'auto' && tools.length
+              ? { type: 'auto' }
+              : undefined
     },
     { signal: request.signal }
   )

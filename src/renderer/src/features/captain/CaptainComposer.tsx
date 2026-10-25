@@ -1,26 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
 import {
-  ArrowUp,
+  AtSign,
   Check,
   CheckCheck,
   ChevronDown,
+  Command,
   Cpu,
-  FileText,
   Folder,
   Paperclip,
   Plus,
   ShieldCheck,
   Sparkles,
-  Square,
   X,
   Zap
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { AttachmentRef, PermissionMode } from '@shared/types'
 import { useApp } from '../../store'
-import { cn, errorMessage, folderName, formatBytes } from '../../lib/utils'
+import { cn, errorMessage, folderName } from '../../lib/utils'
 import { PERMISSION_CHOICES, type ComposerModelState } from '../../lib/composerChoices'
 import { IconButton, Popover } from '../../components/ui'
+import { ComposerAttachments, mergeAttachments } from '../../motion/ComposerAttachments'
+import { ComposerDropzone } from '../../motion/ComposerDropzone'
+import { ComposerSendButton } from '../../motion/ComposerSendButton'
+import { GlimmBorder } from '../../motion/GlimmBorder'
+import { useComposerCommands, type ComposerCommand } from '../../motion/ComposerCommands'
 
 function permissionIcon(mode: PermissionMode): typeof ShieldCheck {
   return mode === 'manual' ? ShieldCheck : mode === 'auto' ? Zap : CheckCheck
@@ -94,6 +99,7 @@ export function CaptainComposer({
 
   const submit = async (): Promise<void> => {
     if (!canSend) return
+    setPulse((value) => value + 1)
     setSubmitting(true)
     try {
       await onSubmit()
@@ -106,7 +112,7 @@ export function CaptainComposer({
     setPickingFiles(true)
     try {
       const files = await window.knight.pickFiles()
-      if (files.length) onAttachmentsChange([...attachments, ...files])
+      if (files.length) onAttachmentsChange(mergeAttachments(attachments, files))
     } catch (error) {
       toast.error(errorMessage(error))
     } finally {
@@ -114,48 +120,115 @@ export function CaptainComposer({
     }
   }
 
+  const commandItems: ComposerCommand[] = [
+    {
+      id: 'captain-context-attach',
+      kind: '@',
+      label: 'Attach files',
+      detail: 'Add real files to this message',
+      icon: <Paperclip size={13} />,
+      run: () => void pickFiles()
+    },
+    ...(workspace
+      ? [{
+          id: 'captain-context-workspace',
+          kind: '@' as const,
+          label: folderName(workspace),
+          detail: workspace,
+          keywords: 'workspace folder context',
+          icon: <Folder size={13} />,
+          insert: `${workspace} `
+        }]
+      : []),
+    ...attachments.map((file) => ({
+      id: `captain-context-file-${file.id}`,
+      kind: '@' as const,
+      label: file.name,
+      detail: 'Attached to this message',
+      keywords: 'attachment file context',
+      icon: <AtSign size={13} />,
+      insert: `${file.name} `
+    })),
+    {
+      id: 'captain-command-attach',
+      kind: '/',
+      label: 'Attach files',
+      icon: <Paperclip size={13} />,
+      run: () => void pickFiles()
+    },
+    ...(onChooseWorkspace
+      ? [{
+          id: 'captain-command-workspace',
+          kind: '/' as const,
+          label: workspace ? 'Change workspace' : 'Choose a workspace',
+          icon: <Folder size={13} />,
+          run: () => void onChooseWorkspace()
+        }]
+      : []),
+    ...PERMISSION_CHOICES.map((choice) => ({
+      id: `captain-command-permission-${choice.value}`,
+      kind: '/' as const,
+      label: `Permissions: ${choice.label}`,
+      detail: choice.blurb,
+      keywords: 'permission approval mode',
+      icon: <Command size={13} />,
+      run: () => onPermissionChange(choice.value)
+    })),
+    ...providers.flatMap((provider) =>
+      provider.models.map((item) => ({
+        id: `captain-command-model-${provider.id}-${item}`,
+        kind: '/' as const,
+        label: item,
+        detail: `Use ${provider.name} for this task`,
+        keywords: `model provider ${provider.name}`,
+        icon: <Cpu size={13} />,
+        run: () => onModelChange({
+          providerId: provider.id,
+          providerName: provider.name,
+          model: item,
+          models: provider.models
+        })
+      }))
+    )
+  ]
+  const commands = useComposerCommands({
+    textareaRef,
+    text: draft,
+    onTextChange: onDraftChange,
+    items: commandItems
+  })
+
   return (
-    <div className={cn('w-full', className)}>
-      <div className="rounded-xl border border-line bg-surface px-3 pt-2.5 pb-2 shadow-[0_32px_64px_-32px_rgba(0,0,0,0.9)] transition-all focus-within:border-line-strong focus-within:shadow-[0_32px_64px_-32px_rgba(0,0,0,0.9),0_0_0_1px_rgba(255,255,255,0.01)]">
-        <textarea
+    <ComposerDropzone
+      onFiles={(incoming) => onAttachmentsChange(mergeAttachments(attachments, incoming))}
+    >
+      <div className={cn('w-full', className)}>
+        <motion.div
+          layout
+          className="relative rounded-xl border border-line bg-surface px-3 pt-2.5 pb-2 shadow-[0_32px_64px_-32px_rgba(0,0,0,0.9)] transition-all focus-within:border-line-strong focus-within:shadow-[0_32px_64px_-32px_rgba(0,0,0,0.9),0_0_0_1px_rgba(255,255,255,0.01)]"
+        >
+          {commands.menu}
+          <GlimmBorder pulse={pulse} />
+          <textarea
           ref={textareaRef}
           value={draft}
-          onChange={(event) => onDraftChange(event.target.value)}
+          onChange={commands.onChange}
+          onSelect={commands.onSelect}
           onKeyDown={(event) => {
+            if (commands.onKeyDown(event)) return
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault()
               void submit()
             }
           }}
+          aria-autocomplete="list"
+          aria-activedescendant={commands.activeId}
           rows={2}
           placeholder={placeholder}
           className="scroll-thin block min-h-[58px] w-full resize-none bg-transparent px-0.5 py-1 text-[14px] leading-[1.6] text-ink outline-none placeholder:text-faint"
         />
 
-        {attachments.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5 pt-1 pb-1.5">
-            {attachments.map((file) => (
-              <span
-                key={file.id}
-                title={file.path}
-                className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-line bg-canvas px-2 py-1 text-[11px] text-muted"
-              >
-                <FileText size={11} className="shrink-0 text-accent" />
-                <span className="truncate">{file.name}</span>
-                {file.size ? <span className="text-[9.5px] text-faint">{formatBytes(file.size)}</span> : null}
-                <button
-                  onClick={() =>
-                    onAttachmentsChange(attachments.filter((item) => item.id !== file.id))
-                  }
-                  className="rounded p-0.5 text-faint hover:text-ink"
-                  aria-label={`Remove ${file.name}`}
-                >
-                  <X size={10} />
-                </button>
-              </span>
-            ))}
-          </div>
-        ) : null}
+        <ComposerAttachments files={attachments} onChange={onAttachmentsChange} compact />
 
         <div className="flex items-center gap-1.5 pt-1.5">
           <Popover
@@ -358,37 +431,17 @@ export function CaptainComposer({
               )}
             </Popover>
 
-            <button
-              onClick={() => {
-                if (running) {
-                  onStop?.()
-                  return
-                }
-                setPulse((value) => value + 1)
-                void submit()
-              }}
-              disabled={!running && !canSend}
-              aria-label={running ? 'Stop' : 'Send'}
-              title={running ? 'Stop' : 'Send'}
-              className={cn(
-                'send-button relative ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-150',
-                running
-                  ? 'border border-line-strong bg-surface text-ink hover:bg-surface-2 active:scale-90'
-                  : canSend
-                    ? 'border border-white/10 bg-[#141416] text-white shadow-[0_10px_24px_-12px_rgba(0,0,0,0.65)] hover:scale-[1.04] active:scale-90'
-                    : 'bg-surface-3 text-faint'
-              )}
-            >
-              {pulse > 0 ? <span key={pulse} className="send-haptic" aria-hidden /> : null}
-              {running ? (
-                <Square size={8.5} fill="currentColor" />
-              ) : (
-                <ArrowUp size={15} strokeWidth={2.4} />
-              )}
-            </button>
+            <ComposerSendButton
+              canSend={canSend}
+              submitting={submitting || busy}
+              running={running}
+              pulse={pulse}
+              onSubmit={() => void submit()}
+              onStop={onStop}
+            />
           </div>
         </div>
-      </div>
+        </motion.div>
 
       <div className="mt-1.5 flex h-5 items-center justify-between gap-3 px-1 text-[11px] text-faint">
         <button
@@ -415,5 +468,6 @@ export function CaptainComposer({
         )}
       </div>
     </div>
+    </ComposerDropzone>
   )
 }

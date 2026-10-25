@@ -1,8 +1,8 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { atomicWriteJson, newId, readJson, safeJsonParse, slugify, truncate } from './util'
+import { atomicWriteJson, newId, readJson, readJsonLimited, readResponseText, safeJsonParse, slugify, truncate } from './util'
 
 let dir = ''
 
@@ -48,6 +48,40 @@ describe('atomicWriteJson', () => {
     await atomicWriteJson(file, { version: 1 })
     await atomicWriteJson(file, { version: 2 })
     expect(await readJson(file, null)).toEqual({ version: 2 })
+  })
+
+  it('uses distinct temporary files for concurrent writers', async () => {
+    const file = join(dir, 'concurrent.json')
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(123456789)
+    try {
+      await Promise.all(
+        Array.from({ length: 16 }, (_, writer) => atomicWriteJson(file, { writer }))
+      )
+    } finally {
+      clock.mockRestore()
+    }
+    const saved = await readJson<{ writer: number } | null>(file, null)
+    expect(saved?.writer).toBeGreaterThanOrEqual(0)
+    expect(saved?.writer).toBeLessThan(16)
+    const entries = await fs.readdir(dir)
+    expect(entries.filter((name) => name.startsWith('concurrent.json.') && name.endsWith('.tmp'))).toEqual([])
+  })
+})
+
+describe('bounded responses', () => {
+  it('parses JSON within the byte budget', async () => {
+    await expect(readJsonLimited(new Response('{"ok":true}'), 64)).resolves.toEqual({ ok: true })
+  })
+
+  it('rejects oversized streamed bodies before parsing them', async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('x'.repeat(32)))
+        controller.close()
+      }
+    })
+    await expect(readResponseText(new Response(stream), 8)).rejects.toThrow('8-byte limit')
+    await expect(readJsonLimited(new Response('not json'), 64)).rejects.toThrow('valid JSON')
   })
 })
 

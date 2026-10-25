@@ -22,6 +22,12 @@ export function sendTaskEvent(event: TaskEvent): void {
   }
 }
 
+export function sendLibraryChanged(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send(IPC.eventLibrary)
+  }
+}
+
 export function sendApprovalRequest(request: ApprovalRequest): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) win.webContents.send(IPC.eventApproval, request)

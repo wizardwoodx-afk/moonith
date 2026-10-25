@@ -1,24 +1,44 @@
+import { mainStorage } from "../persist/mainStorage";
 /**
- * VH 11.11.1 SELF-EVOLVING — settlement orchestrator.
+ * RSIRALS — Recursive Self-Improving Reinforcement Agentic Learning System.
  *
- * Called once per finished team run with the SAME measured report the other
- * engines settle on. Runs the full loop: reflect lessons → merge into org
- * memory → append the run ATTRIBUTED to the strategy that governed it →
- * settle the online experiment on attributed measured runs → propose skills →
- * issue a learning receipt for whatever was learned. Returns a plain summary
- * the runner UI can display. Never throws: a failure to persist must not
- * break the run.
+ * This is SelfImpulse's measured, non-parametric learning loop, not a second
+ * agent runtime. A mission executes an assigned harness strategy; settlement
+ * reflects measured lessons, credits only the memory actually retrieved,
+ * settles a controlled baseline/candidate experiment, proposes verifier-backed
+ * skills for human approval, and issues a learning receipt. It never trains
+ * model weights and never rewrites application source code.
  *
- * 11.11.1 causal contract: the runner asks `nextRunStrategy()` BEFORE the run,
- * executes THAT strategy's parameters, and reports the id back via
- * `strategyId`. Settlement scores each arm only on its own runs — a strategy
- * can never be credited with results it did not produce.
+ * Causal contract: `nextRunStrategy()` is called BEFORE execution and the same
+ * assignment is reported back. Development runs choose promising candidates;
+ * reserved held-out runs must confirm transfer. Simulated or contaminated runs
+ * teach no performance lesson.
  */
-import { reflectOnMission, mergeLessons, loadLessons, saveLessons, lessonsForBriefing, retrieveCausal, type Lesson } from "./lessons";
+import {
+  reflectOnMission,
+  mergeLessons,
+  loadLessons,
+  saveLessons,
+  selectLessonsForBriefing,
+  retrieveCausal,
+  creditLessonUtility,
+  type Lesson,
+} from "./lessons";
 import { beliefsForBriefing, loadBeliefs, mergeBeliefs, saveBeliefs, beliefFromMeasured, beliefDigestInput } from "./belief";
 import {
-  loadImprovement, saveImprovement, proposeVariation, settleCandidate, adoptedVersion,
-  nextAssignment, armScores, type RunOutcome, type StrategyParams, MIN_TRIALS, TRIAL_CAP, ADOPT_MARGIN,
+  loadImprovement,
+  saveImprovement,
+  proposeVariation,
+  settleCandidate,
+  adoptedVersion,
+  nextAssignment,
+  nextAssignmentHeldOut,
+  armScores,
+  type RunOutcome,
+  type StrategyParams,
+  MIN_TRIALS,
+  TRIAL_CAP,
+  ADOPT_MARGIN,
 } from "./selfImprove";
 import { proposeSkills, mergeProposals, approvedSkillDefs, loadSkills, saveSkills, type SkillProposal } from "./skillEvolution";
 import { issueLearningReceipt, loadLearningReceipts, saveLearningReceipts, sha256Hex } from "./learningReceipt";
@@ -35,6 +55,14 @@ export interface SelfEvolveInput {
   seatOutcomes: Array<{ role: string; label: string; harness: string; passed: boolean }>;
   /** The strategy version whose parameters governed this run (attribution). */
   strategyId?: string | null;
+  /** True only when this run was reserved by the experiment for transfer evaluation. */
+  heldOut?: boolean;
+  /** Contaminated evidence is persisted for audit but excluded from every score. */
+  evidenceLeak?: boolean;
+  /** Lesson ids returned by the briefing artifact used for THIS run. */
+  usedLessonIds?: string[];
+  costUsd?: number;
+  policyTokens?: number;
   now?: number;
 }
 
@@ -43,6 +71,14 @@ export interface RunAssignment {
   gen: number;
   params: StrategyParams;
   isCandidate: boolean;
+  heldOut?: boolean;
+}
+
+export interface BriefingArtifact {
+  lines: string[];
+  /** Exact memory ids exposed to the run; settlement credits no others. */
+  lessonIds: string[];
+  strategy: RunAssignment | null;
 }
 
 export interface SelfEvolveSummary {
@@ -54,8 +90,8 @@ export interface SelfEvolveSummary {
     candidateStatus: string | null;
     note: string;
     governedBy: string | null;
-    baseline: { id: string | null; measured: number; score: number | null };
-    candidate: { id: string | null; measured: number; score: number | null } | null;
+    baseline: { id: string | null; measured: number; score: number | null; quality: number | null };
+    candidate: { id: string | null; measured: number; score: number | null; quality: number | null } | null;
     nextRun: string | null;
     rule: string;
   };
@@ -65,134 +101,215 @@ export interface SelfEvolveSummary {
 
 const RUNS_KEY = "vh.selfimprove.runs.v2";
 const RUNS_KEY_V1 = "vh.selfimprove.runs.v1";
+export const RSIRALS_ACCEPTANCE_RULE = `RSIRALS: ${MIN_TRIALS} real development runs per arm, regularized margin > ${ADOPT_MARGIN}, then one non-regressing held-out run per arm; ${TRIAL_CAP}-run cap retires inconclusive; simulated, leaked, and unattributed runs score for no arm`;
 
-/**
- * Load the attributed run log. Pre-11.11.1 entries (v1, no strategyId) migrate
- * with strategyId null: they were never part of an experiment, so they are kept
- * for continuity but excluded from both arms' scores.
- */
+/** Load the attributed run log; legacy unattributed entries remain audit history only. */
 export function loadExperimentRuns(): RunOutcome[] {
-  try {
-    const raw = localStorage.getItem(RUNS_KEY);
-    if (raw) {
-      const p = JSON.parse(raw) as RunOutcome[];
-      if (Array.isArray(p)) return p;
-    }
-    const old = localStorage.getItem(RUNS_KEY_V1);
-    if (old) {
-      const p = JSON.parse(old) as Array<{ verified: boolean; simulated: boolean }>;
-      if (Array.isArray(p)) {
-        const migrated: RunOutcome[] = p.map((r) => ({ verified: r.verified, simulated: r.simulated, strategyId: null }));
-        localStorage.setItem(RUNS_KEY, JSON.stringify(migrated.slice(-100)));
-        localStorage.removeItem(RUNS_KEY_V1);
-        return migrated;
-      }
-    }
-  } catch { /* ignore */ }
-  return [];
+  const raw = mainStorage().getItem(RUNS_KEY);
+  if (raw) {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) throw new Error("Persisted experiment runs are not an array; refusing to discard them.");
+    return parsed as RunOutcome[];
+  }
+  const old = mainStorage().getItem(RUNS_KEY_V1);
+  if (!old) return [];
+  const parsed = JSON.parse(old) as unknown;
+  if (!Array.isArray(parsed)) throw new Error("Legacy experiment runs are invalid; refusing to discard them.");
+  const migrated: RunOutcome[] = (parsed as Array<{ verified: boolean; simulated: boolean }>).map((run) => ({
+    verified: run.verified,
+    simulated: run.simulated,
+    strategyId: null,
+  }));
+  mainStorage().setItem(RUNS_KEY, JSON.stringify(migrated.slice(-100)));
+  mainStorage().removeItem(RUNS_KEY_V1);
+  return migrated;
 }
 
 function saveRunLog(runs: RunOutcome[]): void {
-  try { localStorage.setItem(RUNS_KEY, JSON.stringify(runs.slice(-100))); } catch { /* ignore */ }
+  mainStorage().setItem(RUNS_KEY, JSON.stringify(runs.slice(-100)));
 }
 
-/** The strategy the NEXT run must execute. The runner records the id for attribution. */
+/** The exact strategy and evaluation split the NEXT run must execute. */
 export function nextRunStrategy(): RunAssignment | null {
-  const v = nextAssignment(loadImprovement(), loadExperimentRuns());
-  if (!v) return null;
-  return { id: v.id, gen: v.gen, params: v.params, isCandidate: v.status === "candidate" };
+  const state = loadImprovement();
+  const runs = loadExperimentRuns();
+  const version = nextAssignment(state, runs);
+  if (!version) return null;
+  return {
+    id: version.id,
+    gen: version.gen,
+    params: version.params,
+    isCandidate: version.status === "candidate",
+    heldOut: nextAssignmentHeldOut(state, runs),
+  };
 }
 
-/** Pure briefing composer: org lessons + approved learned skills, budgeted by the GOVERNING strategy. */
-/** 11.12.1 — canonical digest of the current world-belief, for action packets. */
+/** Canonical digest of the current world-belief, for action packets. */
 export async function currentBeliefDigest(): Promise<string> {
   return sha256Hex(beliefDigestInput(loadBeliefs()));
 }
 
-/**
- * Pure briefing composer: org lessons (SCAR-first) + regime-gated mosaic lines
- * (causal memory + beliefs) + approved learned skills, budgeted by the
- * GOVERNING strategy. Mosaic lines only enter when the governing regime says
- * so — which is exactly what makes the extract measurable as an experiment arm.
- */
-export function composeBriefing(lessons: Lesson[], skillLines: string[], mosaicLines: string[], goal: string, now: number, params: StrategyParams): string[] {
-  const lines = lessonsForBriefing(lessons, goal, now);
-  if (params.mosaic) for (const m of mosaicLines) lines.push(m); // regime-gated: the extract is measurable
-  for (const d of skillLines) lines.push(d);
-  return lines.slice(0, Math.max(0, params.lessonBudget) + 2 + (params.mosaic ? 4 : 0));
+export type ComposedBriefing = BriefingArtifact;
+
+/** Pure briefing composer with exact lesson attribution retained. */
+export function composeBriefingArtifact(
+  lessons: Lesson[],
+  skillLines: string[],
+  mosaicLines: string[],
+  goal: string,
+  now: number,
+  params: StrategyParams,
+  strategy: RunAssignment | null = null,
+): ComposedBriefing {
+  const selected = selectLessonsForBriefing(lessons, goal, now);
+  const lessonBudget = Math.max(0, Math.floor(params.lessonBudget));
+  const budgetedLessons = selected.lessons.slice(0, lessonBudget);
+  const budgetedIds = new Set(budgetedLessons.map((lesson) => lesson.id));
+  const lines = selected.lines.filter((_line, index) => budgetedIds.has(selected.lessons[index]?.id ?? ""));
+  if (params.mosaic) lines.push(...mosaicLines.slice(0, 4));
+  lines.push(...skillLines.slice(0, 2));
+  return {
+    lines,
+    lessonIds: budgetedLessons.map((lesson) => lesson.id),
+    strategy,
+  };
 }
 
-export function briefingForMission(goal: string, now: number): string[] {
-  const assigned = nextRunStrategy();
-  const params = assigned?.params ?? { reviewDepth: 1, checkBias: 0.5, serialExec: false, lessonBudget: 3, mosaic: false };
-  const skillLines = approvedSkillDefs(loadSkills()).map((d) => `[learned skill ${d.label}] ${d.description}`);
+/** Backward-compatible line-only composer. */
+export function composeBriefing(
+  lessons: Lesson[],
+  skillLines: string[],
+  mosaicLines: string[],
+  goal: string,
+  now: number,
+  params: StrategyParams,
+): string[] {
+  return composeBriefingArtifact(lessons, skillLines, mosaicLines, goal, now, params).lines;
+}
+
+export function briefingArtifactForMission(
+  goal: string,
+  now: number,
+  assigned?: RunAssignment | null,
+): BriefingArtifact {
+  const governing = assigned === undefined ? nextRunStrategy() : assigned;
+  const params = governing?.params ?? {
+    reviewDepth: 1,
+    checkBias: 0.5,
+    serialExec: false,
+    lessonBudget: 3,
+    mosaic: false,
+  };
+  const skillLines = approvedSkillDefs(loadSkills()).map((definition) => `[learned skill ${definition.label}] ${definition.description}`);
+  const memory = loadLessons();
   let mosaicLines: string[] = [];
+  let causalLessons: Lesson[] = [];
   if (params.mosaic) {
-    const mem = loadLessons();
+    causalLessons = retrieveCausal(memory, goal, 2, now);
     mosaicLines = [
-      ...retrieveCausal(mem, goal, 2, now).map((l) => `[causal memory] tried: ${l.causal?.action ?? l.causal?.decision ?? "-"} → ${l.causal?.outcome ?? "-"}`),
+      ...causalLessons.map((lesson) => `[causal memory] tried: ${lesson.causal?.action ?? lesson.causal?.decision ?? "-"} → ${lesson.causal?.outcome ?? "-"}`),
       ...beliefsForBriefing(loadBeliefs(), goal, now),
     ];
   }
-  return composeBriefing(loadLessons(), skillLines, mosaicLines, goal, now, params);
+  const artifact = composeBriefingArtifact(memory, skillLines, mosaicLines, goal, now, params, governing);
+  artifact.lessonIds = [...new Set([...artifact.lessonIds, ...causalLessons.map((lesson) => lesson.id)])];
+  return artifact;
+}
+
+export function briefingForMission(
+  goal: string,
+  now: number,
+  assigned?: RunAssignment | null,
+): string[] {
+  return briefingArtifactForMission(goal, now, assigned).lines;
 }
 
 export async function settleSelfEvolution(input: SelfEvolveInput): Promise<SelfEvolveSummary> {
   const now = input.now ?? Date.now();
   const governedBy = input.strategyId ?? null;
   try {
-    // 1. reflect + merge
-    const fresh = reflectOnMission(input);
-    let memory = mergeLessons(loadLessons(), fresh, now);
-    saveLessons(memory);
+    // 1. Credit only memory this run actually retrieved, then add new measured reflection.
+    const usedLessonIds = [...new Set(input.usedLessonIds ?? [])];
+    const credited = creditLessonUtility(
+      loadLessons(),
+      usedLessonIds,
+      { verified: input.verified, simulated: input.simulated || input.evidenceLeak === true, costUsd: input.costUsd },
+      now,
+    );
+    const fresh = input.evidenceLeak === true ? [] : reflectOnMission(input);
+    const memory = mergeLessons(credited, fresh, now);
+    saveLessons(memory, "agent");
 
-    // 1b. 11.12 — measured run facts also update the world-belief store.
-    // Verified real execution may be "known"; anything simulated stays uncertain.
+    // 1b. Measured run facts update the separate world-belief store.
     saveBeliefs(mergeBeliefs(loadBeliefs(), [
       beliefFromMeasured(
         `mission ${input.missionId} ${input.verified ? "verified" : "did not verify"} on ${input.simulated ? "a simulated host" : "real execution"}`,
-        input.verified && !input.simulated, 1, `run:${input.missionId}`, now,
+        input.verified && !input.simulated && input.evidenceLeak !== true,
+        1,
+        `run:${input.missionId}`,
+        now,
       ),
     ]));
 
-    // 2. strategy experiment: append the run ATTRIBUTED, settle on attributed runs
-    const runLog = [...loadExperimentRuns(), { verified: input.verified, simulated: input.simulated, strategyId: governedBy }];
+    // 2. Append the attributed observation and settle the controlled experiment.
+    const before = loadImprovement();
+    const strategyBefore = adoptedVersion(before)?.id ?? null;
+    const runLog: RunOutcome[] = [
+      ...loadExperimentRuns(),
+      {
+        verified: input.verified,
+        simulated: input.simulated,
+        strategyId: governedBy,
+        heldOut: input.heldOut === true,
+        evidenceLeak: input.evidenceLeak === true,
+        costUsd: input.costUsd,
+        policyTokens: input.policyTokens,
+      },
+    ];
     saveRunLog(runLog);
-    let imp = settleCandidate(loadImprovement(), runLog, now);
-    if (!imp.versions.some((v) => v.status === "candidate")) {
-      imp = proposeVariation(imp, now);
+    let improvement = settleCandidate(before, runLog, now);
+    if (!improvement.versions.some((version) => version.status === "candidate")) {
+      improvement = proposeVariation(improvement, now);
     }
-    const strategyBefore = adoptedVersion(loadImprovement())?.id ?? null;
-    saveImprovement(imp);
-    const adopted = adoptedVersion(imp);
-    const candidate = imp.versions.find((v) => v.status === "candidate") ?? null;
-    const arms = armScores(imp, runLog);
-    const next = nextAssignment(imp, runLog);
+    saveImprovement(improvement);
+    const adopted = adoptedVersion(improvement);
+    const candidate = improvement.versions.find((version) => version.status === "candidate") ?? null;
+    const arms = armScores(improvement, runLog);
+    const next = nextAssignment(improvement, runLog);
 
-    // 3. skills — recurring failures counted over memory
+    // 3. Skill candidates remain proposals until the existing human approval gate.
     const recurring = memory
-      .filter((l) => l.kind === "failure" && l.useCount >= 2)
-      .map((l) => l.text);
+      .filter((lesson) => lesson.kind === "failure" && lesson.useCount >= 2)
+      .map((lesson) => lesson.text);
     const freshSkills = proposeSkills({
       missionId: input.missionId,
       verified: input.verified,
-      simulated: input.simulated,
-      tasks: input.seatOutcomes.map((s) => ({ role: s.role, label: s.label, passed: s.passed })),
+      simulated: input.simulated || input.evidenceLeak === true,
+      tasks: input.seatOutcomes.map((seat) => ({ role: seat.role, label: seat.label, passed: seat.passed })),
       recurringFailureTexts: recurring,
       now,
     });
     const skills = mergeProposals(loadSkills(), freshSkills);
     saveSkills(skills);
 
-    // 4. learning receipt for what this mission taught
+    // 4. Receipts cover memory-only updates as well as lessons and strategy changes.
     const strategyChange = adopted && strategyBefore !== adopted.id ? `${strategyBefore} -> ${adopted.id}` : null;
     let receiptId: string | null = null;
-    if (fresh.length > 0 || strategyChange) {
+    if (fresh.length > 0 || strategyChange || (usedLessonIds.length > 0 && !input.simulated && input.evidenceLeak !== true)) {
       const receipt = await issueLearningReceipt({
         mjVersion: ENGINE_VERSION,
         missionId: input.missionId,
-        lessons: fresh.map((l) => ({ id: l.id, kind: l.kind, text: l.text, evidence: l.evidence })),
+        lessons: fresh.map((lesson) => ({ id: lesson.id, kind: lesson.kind, text: lesson.text, evidence: lesson.evidence })),
         strategyChange,
+        memoryCredit: usedLessonIds.length > 0 && !input.simulated && input.evidenceLeak !== true
+          ? { lessonIds: usedLessonIds, verified: input.verified, model: "bounded-retrieval-utility/v1" }
+          : undefined,
+        evaluation: {
+          heldOut: input.heldOut === true,
+          evidenceLeak: input.evidenceLeak === true,
+          costUsd: input.costUsd ?? null,
+          policyTokens: input.policyTokens ?? null,
+        },
         now,
       });
       const all = [...loadLearningReceipts(), receipt];
@@ -209,10 +326,17 @@ export async function settleSelfEvolution(input: SelfEvolveInput): Promise<SelfE
         candidateStatus: candidate?.status ?? null,
         note: candidate?.note ?? adopted?.note ?? "",
         governedBy,
-        baseline: { id: arms.baselineId, measured: arms.baseline.measured, score: arms.baseline.score },
-        candidate: arms.candidateId ? { id: arms.candidateId, measured: (arms.candidate as { measured: number }).measured, score: (arms.candidate as { score: number | null }).score } : null,
+        baseline: { id: arms.baselineId, measured: arms.baseline.measured, score: arms.baseline.score, quality: arms.baseline.quality },
+        candidate: arms.candidateId
+          ? {
+              id: arms.candidateId,
+              measured: arms.candidate?.measured ?? 0,
+              score: arms.candidate?.score ?? null,
+              quality: arms.candidate?.quality ?? null,
+            }
+          : null,
         nextRun: next?.id ?? null,
-        rule: `verdict needs ${MIN_TRIALS} measured runs per arm, strict margin > ${ADOPT_MARGIN}; ${TRIAL_CAP}-run cap retires inconclusive; unattributed runs score for no arm`,
+        rule: RSIRALS_ACCEPTANCE_RULE,
       },
       skillsProposed: freshSkills.length,
       learningReceiptId: receiptId,
@@ -223,9 +347,14 @@ export async function settleSelfEvolution(input: SelfEvolveInput): Promise<SelfE
       memorySize: 0,
       briefingLines: [],
       strategy: {
-        adoptedGen: 1, candidateStatus: null, note: "self-evolution settlement skipped",
-        governedBy, baseline: { id: null, measured: 0, score: null }, candidate: null, nextRun: null,
-        rule: `verdict needs ${MIN_TRIALS} measured runs per arm, strict margin > ${ADOPT_MARGIN}; ${TRIAL_CAP}-run cap retires inconclusive; unattributed runs score for no arm`,
+        adoptedGen: 1,
+        candidateStatus: null,
+        note: "RSIRALS settlement skipped; the mission result was not changed",
+        governedBy,
+        baseline: { id: null, measured: 0, score: null, quality: null },
+        candidate: null,
+        nextRun: null,
+        rule: RSIRALS_ACCEPTANCE_RULE,
       },
       skillsProposed: 0,
       learningReceiptId: null,

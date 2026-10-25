@@ -1,3 +1,4 @@
+import { mainStorage } from "../persist/mainStorage";
 /**
  * VH 11.11 SELF-EVOLVING — skill evolution.
  *
@@ -109,14 +110,11 @@ export function approvedSkillDefs(memory: SkillProposal[]): LearnedNodeDef[] {
 import { enforceWrite } from "./ledger";
 
 export function loadSkills(): SkillProposal[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) {
-      const p = JSON.parse(raw) as SkillProposal[];
-      if (Array.isArray(p)) return p;
-    }
-  } catch { /* storage unavailable */ }
-  return [];
+  const raw = mainStorage().getItem(LS_KEY);
+  if (!raw) return [];
+  const parsed = JSON.parse(raw) as unknown;
+  if (!Array.isArray(parsed)) throw new Error("Persisted skill proposals are not an array; refusing to discard them.");
+  return parsed as SkillProposal[];
 }
 
 export function saveSkills(memory: SkillProposal[], writer: "human" | "agent" | "experiment" = "human"): void {
@@ -124,5 +122,5 @@ export function saveSkills(memory: SkillProposal[], writer: "human" | "agent" | 
   // procedural memory), so only those records hit the matrix. Proposals remain
   // free evidence — an agent may propose anything; it may INSTALL nothing.
   for (const m of memory) if (m.status === "approved") enforceWrite("RECOURSE", writer);
-  try { localStorage.setItem(LS_KEY, JSON.stringify(memory)); } catch { /* ignore */ }
+  mainStorage().setItem(LS_KEY, JSON.stringify(memory));
 }
