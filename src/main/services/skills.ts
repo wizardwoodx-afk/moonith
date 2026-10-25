@@ -9,8 +9,9 @@ import type {
 } from '@shared/types'
 import { runNpx } from '../npx'
 import { getPaths } from '../paths'
-import { isWithin } from '../security'
-import { slugify, truncate } from '../util'
+import { isWithin, resolveSafePath } from '../security'
+import { atomicWriteFile } from '../atomic'
+import { readJsonLimited, slugify, truncate } from '../util'
 
 const MARKET_API = 'https://clawhub.ai/api/v1'
 const MARKET_SITE = 'https://clawhub.ai'
@@ -125,11 +126,9 @@ class SkillService {
   private async saveManifest(entries: InstalledEntry[]): Promise<void> {
     const unique = new Map<string, InstalledEntry>()
     for (const entry of entries) unique.set(entry.id, entry)
-    await fs.writeFile(
-      join(this.root(), MANIFEST),
-      JSON.stringify([...unique.values()], null, 2),
-      'utf8'
-    )
+    await fs.mkdir(this.root(), { recursive: true })
+    const file = await resolveSafePath([this.root()], join(this.root(), MANIFEST), { mode: 'write' })
+    await atomicWriteFile(file, JSON.stringify([...unique.values()], null, 2))
   }
 
   async list(): Promise<SkillSummary[]> {
@@ -169,7 +168,7 @@ class SkillService {
   }
 
   async read(id: string): Promise<SkillDetail | null> {
-    const dir = this.resolve(id)
+    const dir = await this.resolve(id, 'read')
     try {
       const raw = await fs.readFile(join(dir, 'SKILL.md'), 'utf8')
       const parsed = parseSkillMarkdown(raw)
@@ -214,7 +213,7 @@ class SkillService {
   }
 
   async remove(id: string): Promise<SkillSummary[]> {
-    const dir = this.resolve(id)
+    const dir = await this.resolve(id, 'write')
     if (dir === this.root()) throw new Error('That skill cannot be removed.')
     await fs.rm(dir, { recursive: true, force: true })
     const manifest = await this.manifest()
@@ -240,11 +239,11 @@ class SkillService {
       throw new Error('Could not reach the skill registry. Check your network connection.')
     }
     if (!response.ok) throw new Error(`SkillSource returned ${response.status}.`)
-    const json = (await response.json()) as {
+    const json = await readJsonLimited<{
       results?: Array<Record<string, unknown>>
       items?: Array<Record<string, unknown>>
-    }
-    const results = json.results ?? json.items ?? []
+    }>(response)
+    const results = (json.results ?? json.items ?? []).slice(0, 24)
     return results.map((item) => {
       const install = item.install as { reference?: string } | undefined
       const latest = item.latestVersion as { version?: string } | string | undefined
@@ -375,11 +374,13 @@ class SkillService {
     return { code, stdout: result.stdout, stderr: result.stderr }
   }
 
-  private resolve(id: string): string {
-    if (!id || id.includes('\0') || id.includes('..')) throw new Error('Invalid skill id.')
+  private async resolve(id: string, mode: 'read' | 'write'): Promise<string> {
+    if (!id || id.includes('\0') || id.includes('..') || id.includes('\\')) {
+      throw new Error('Invalid skill id.')
+    }
     const dir = join(this.root(), id)
     if (!isWithin(this.root(), dir)) throw new Error('Invalid skill id.')
-    return dir
+    return resolveSafePath([this.root()], dir, { mode })
   }
 }
 

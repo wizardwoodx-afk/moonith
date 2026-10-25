@@ -16,6 +16,24 @@ export interface NpxRunOptions {
   maxBuffer?: number
 }
 
+/**
+ * Third-party package executables are not trusted with the desktop's provider
+ * credentials. Keep ordinary process configuration, but remove credential-
+ * shaped variables and loader hooks before spawning a package.
+ */
+export function npxEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  for (const [key, value] of Object.entries(source)) {
+    if (/(?:api[_-]?key|token|secret|password|passwd|private[_-]?key|credential|authorization)/i.test(key)) continue
+    if (/^(?:NODE_OPTIONS|ELECTRON_RUN_AS_NODE)$/i.test(key)) continue
+    env[key] = value
+  }
+  // npm lifecycle scripts are not needed for the registry CLIs used here and
+  // are an unnecessary second code-execution step during installation.
+  env.npm_config_ignore_scripts = 'true'
+  return env
+}
+
 function isFile(path: string): boolean {
   try {
     return statSync(path).isFile()
@@ -106,9 +124,10 @@ export function runNpx(
       windowsHide: true,
       shell: false,
       env: {
-        ...process.env,
+        ...npxEnvironment(),
         ...options.env,
-        ELECTRON_RUN_AS_NODE: '1'
+        ELECTRON_RUN_AS_NODE: '1',
+        npm_config_ignore_scripts: 'true'
       }
     }
     execFile(invocation.executable, invocation.args, execOptions, (error, stdout, stderr) => {

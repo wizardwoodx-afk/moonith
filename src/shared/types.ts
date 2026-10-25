@@ -32,6 +32,12 @@ import type {
   LibraryPagePatch,
   LibrarySnapshot
 } from './library'
+import type {
+  MarketspaceApplyResult,
+  MarketspaceCreateInput,
+  MarketspaceDetail,
+  MarketspaceEntry
+} from './marketspace'
 
 export type {
   AuditExportResult,
@@ -877,6 +883,13 @@ export interface KnightApi {
   readSkill: (id: string) => Promise<SkillDetail | null>
   createSkill: (draft: SkillDraft) => Promise<SkillSummary[]>
   removeSkill: (id: string) => Promise<SkillSummary[]>
+
+  marketspaceList: (query?: string) => Promise<MarketspaceEntry[]>
+  marketspaceRead: (id: string) => Promise<MarketspaceDetail | null>
+  marketspaceInstall: (id: string) => Promise<MarketspaceDetail>
+  marketspaceCreate: (input: MarketspaceCreateInput) => Promise<MarketspaceDetail>
+  marketspaceRemove: (id: string) => Promise<MarketspaceEntry[]>
+  marketspaceApply: (taskId: string, id: string, overwrite?: boolean) => Promise<MarketspaceApplyResult>
 
   listMemories: () => Promise<MemoryNote[]>
   addMemory: (input: MemoryInput) => Promise<MemoryNote[]>

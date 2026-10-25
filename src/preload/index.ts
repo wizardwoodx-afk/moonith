@@ -9,6 +9,7 @@ import {
 } from '@shared/enterpriseControl'
 import { RSIRALS_IPC } from '@shared/rsirals'
 import type { LibraryPageInput, LibraryPagePatch } from '@shared/library'
+import type { MarketspaceCreateInput } from '@shared/marketspace'
 import type {
   ApprovalRequest,
   ApprovalDecision,
@@ -105,6 +106,14 @@ const api: KnightApi = {
   readSkill: (id: string) => ipcRenderer.invoke(IPC.skillsRead, id),
   createSkill: (draft: SkillDraft) => ipcRenderer.invoke(IPC.skillsCreate, draft),
   removeSkill: (id: string) => ipcRenderer.invoke(IPC.skillsRemove, id),
+
+  marketspaceList: (query?: string) => ipcRenderer.invoke(IPC.marketspaceList, query),
+  marketspaceRead: (id: string) => ipcRenderer.invoke(IPC.marketspaceRead, id),
+  marketspaceInstall: (id: string) => ipcRenderer.invoke(IPC.marketspaceInstall, id),
+  marketspaceCreate: (input: MarketspaceCreateInput) => ipcRenderer.invoke(IPC.marketspaceCreate, input),
+  marketspaceRemove: (id: string) => ipcRenderer.invoke(IPC.marketspaceRemove, id),
+  marketspaceApply: (taskId: string, id: string, overwrite?: boolean) =>
+    ipcRenderer.invoke(IPC.marketspaceApply, taskId, id, overwrite),
 
   listMemories: () => ipcRenderer.invoke(IPC.memoryList),
   addMemory: (input: MemoryInput) => ipcRenderer.invoke(IPC.memoryAdd, input),

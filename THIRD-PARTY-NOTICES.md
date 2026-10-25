@@ -224,6 +224,28 @@ code is included in SelfImpulse.
   rather than demo timers. The full permission text ships at
   `src/renderer/src/motion/LICENSE.animata.txt`.
 
+## Open CoDesign and OpenDesign — native Marketspace references
+
+- **Open CoDesign:** OpenCoworkAI contributors,
+  `OpenCoworkAI/open-codesign` at commit
+  `4cf33932edc5f687e3cf7190261ebbb02c898d08`. MIT; Copyright (c) 2026
+  OpenCoworkAI Contributors. The complete permission text ships at
+  `src/main/marketspace/LICENSE.open-codesign.txt`.
+- **OpenDesign:** Open Design contributors, `nexu-io/open-design` at commit
+  `9724c44142ea0afaee3d207f37901b31c66a44ad`. Apache-2.0; Copyright 2026
+  Open Design contributors. The complete license text ships at
+  `src/main/marketspace/LICENSE.open-design.txt`.
+- **Used for:** research and selective product concepts around portable
+  `DESIGN.md` systems, workspace-backed artifacts, static preview isolation,
+  declarative trust, and catalog UX. The inspected files and exact scope are
+  recorded in `src/main/marketspace/PROVENANCE.json`.
+- **Local implementation:** `src/main/marketspace/`, the native Marketspace
+  agent tools, and `MarketspaceSection.tsx` are SelfImpulse-owned code and
+  original catalog text. No upstream source file, daemon, Electron shell,
+  bundled agent/provider runtime, MCP/localhost bridge, or external CLI is
+  included. The upstream license notices are retained for attribution and
+  future redistribution; they do not change the SelfImpulse license.
+
 ## npm dependencies
 
 The dependencies declared in `package.json` — Electron, React, the Anthropic

@@ -1,6 +1,6 @@
 import { app, dialog, ipcMain, shell } from 'electron'
 import { promises as fs } from 'node:fs'
-import { basename } from 'node:path'
+import { basename, join } from 'node:path'
 import { IPC } from '@shared/ipc'
 import { REA_SERVER_CONFIG } from '@shared/constants'
 import { normalizeAgentRole } from '@shared/governance'
@@ -40,7 +40,7 @@ import {
 import { approvals } from './approvals'
 import { sendTaskEvent } from './emitter'
 import { store } from './store'
-import { taskWorkspace } from './paths'
+import { ensureTaskWorkspace, taskWorkspace } from './paths'
 import { removeCoworkerTask, taskIdForBrowserScope } from './selfimpulse/coworker/workspaces'
 import { resolveSafePath } from './security'
 import { browserService } from './services/browser'
@@ -66,6 +66,8 @@ import { runtimeAudit } from './audit/runtime'
 import type { BackendSettingsPublic } from '@shared/types'
 import type { LibraryPageInput, LibraryPagePatch } from '@shared/library'
 import { getLibraryService } from './selfimpulse/library'
+import { getMarketspace } from './marketspace'
+import type { MarketspaceCreateInput } from '@shared/marketspace'
 
 function publishTask(task: Task): void {
   sendTaskEvent({ type: 'task', task })
@@ -439,6 +441,30 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.skillsRead, (_event, id: string) => skillService.read(id))
   ipcMain.handle(IPC.skillsCreate, (_event, draft: SkillDraft) => skillService.create(draft))
   ipcMain.handle(IPC.skillsRemove, (_event, id: string) => skillService.remove(id))
+
+  ipcMain.handle(IPC.marketspaceList, (_event, query?: string) =>
+    getMarketspace().list(typeof query === 'string' ? query : '')
+  )
+  ipcMain.handle(IPC.marketspaceRead, (_event, id: string) => getMarketspace().read(String(id ?? '')))
+  ipcMain.handle(IPC.marketspaceInstall, (_event, id: string) => getMarketspace().install(String(id ?? '')))
+  ipcMain.handle(IPC.marketspaceCreate, (_event, input: MarketspaceCreateInput) => {
+    if (!input || typeof input !== 'object') throw new Error('A design system draft is required.')
+    return getMarketspace().create(input)
+  })
+  ipcMain.handle(IPC.marketspaceRemove, async (_event, id: string) => {
+    await getMarketspace().remove(String(id ?? ''))
+    return getMarketspace().list()
+  })
+  ipcMain.handle(IPC.marketspaceApply, async (_event, taskId: string, id: string, overwrite?: boolean) => {
+    const task = store.getTask(String(taskId ?? ''))
+    if (!task) throw new Error('Task not found.')
+    const workspace = ensureTaskWorkspace(task.id)
+    const result = await getMarketspace().apply(String(id ?? ''), workspace, overwrite === true)
+    for (const file of result.files) {
+      await agentRuntime.registerArtifact(task, join(workspace, file))
+    }
+    return result
+  })
 
   ipcMain.handle(IPC.memoryList, async () => {
     await requireLocalEnterprise('memory.read', 'memory', 'captain')

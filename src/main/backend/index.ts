@@ -8,7 +8,8 @@ import { McpManager } from './mcp'
 import { Memory } from './memory'
 import { SubscriptionAccount, WorkAccount, workToolSpecs, makeWorkRunner } from './work'
 import { GroundedActions } from './grounded'
-import { Provider, availableProviders, resolveConfig, DEFAULT_TIER_CONFIG, type ProviderSettings, type TierConfig } from './provider'
+import { Provider, availableProviders, resolveConfig, sameProviderEndpoint, DEFAULT_TIER_CONFIG, type ProviderSettings, type TierConfig } from './provider'
+import { maskSecret, redactBackendSecrets } from './publicSettings'
 import { AgentRunner, BUILTIN_ROLES } from './runner'
 import { GatewayToken, PermissionBroker, SecretStore } from './security'
 import { BackendStore } from './store'
@@ -196,7 +197,8 @@ export class Backend {
     })
     this.workspace = this.settings.workspace || backendWorkspace()
     mkdirSync(this.workspace, { recursive: true })
-    this.marketplace = new Marketplace(this.store, this.workspace)
+    this.marketplace = new Marketplace(this.store, this.workspace, this.secrets)
+    this.marketplace.migrateLegacyCredentials()
     this.clawhub = new SkillRegistry(this.store, this.workspace)
     this.externalAgent = new ExternalAgent(this.store, this.workspace)
 
@@ -231,8 +233,18 @@ export class Backend {
     })
   }
 
+  private savedSettings(): Record<string, unknown> {
+    const all = this.store.settings.all() as Record<string, unknown>
+    const nested = all.settings
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      return nested as Record<string, unknown>
+    }
+    // Read the original flat layout once, then write only the namespaced form.
+    return all
+  }
+
   loadSettings(): BackendSettings {
-    const saved = this.store.settings.all() as Record<string, unknown>
+    const saved = this.savedSettings()
     const resolved = resolveConfig(saved as ProviderSettings)
     const base: BackendSettings = {
       providerId: (saved.providerId as string) ?? resolved.providerId,
@@ -279,15 +291,56 @@ export class Backend {
   persistSettings(patch: Partial<BackendSettings>): BackendSettings {
     const next: BackendSettings = { ...this.settings, ...patch }
     next.permissions = { ...this.settings.permissions, ...(patch.permissions || {}) }
+
+    const patchRecord = patch as Record<string, unknown>
+    const endpointChanged =
+      patch.baseUrl !== undefined && !sameProviderEndpoint(patch.baseUrl, this.settings.baseUrl)
+    if (endpointChanged && patchRecord.apiKey === undefined) {
+      // Endpoint changes are a new credential trust decision, not an edit that
+      // inherits the previous endpoint's bearer token.
+      this.secrets.remove('apiKey')
+      next.apiKey = ''
+    }
+
     for (const key of ['apiKey', 'connectorsApiKey', 'subscriptionToken'] as const) {
-      const value = (patch as Record<string, unknown>)[key]
-      if (value !== undefined) {
-        this.writeSecret(key, String(value))
-        delete (next as Record<string, unknown>)[key]
+      const value = patchRecord[key]
+      if (value === undefined) continue
+      const text = String(value)
+      if (text.includes('••••')) {
+        // A masked value is a display placeholder, never a new credential.
+        ;(next as Record<string, unknown>)[key] = (this.settings as Record<string, unknown>)[key]
+        continue
+      }
+      this.secrets.put(key, text)
+      ;(next as Record<string, unknown>)[key] = text
+    }
+
+    if (patch.groundedActions) {
+      const incoming = patch.groundedActions as Partial<UiTarsSettings>
+      const { apiKey, ...publicPatch } = incoming
+      next.groundedActions = {
+        ...this.settings.groundedActions,
+        ...publicPatch,
+        apiKey: this.settings.groundedActions.apiKey
+      }
+      if (apiKey !== undefined && !String(apiKey).includes('••••')) {
+        const text = String(apiKey)
+        this.secrets.put('groundedActionsApiKey', text)
+        next.groundedActions.apiKey = text
       }
     }
+
     this.settings = this.applySubscriptionAccount(next)
-    this.store.settings.set('settings', this.settings as unknown as Record<string, unknown>)
+    // Only the public, non-secret projection is persisted. Runtime settings
+    // may hold decrypted values for providers, but they never go to JSON.
+    const persisted = {
+      ...(this.settings as unknown as Record<string, unknown>),
+      groundedActions: { ...this.settings.groundedActions, apiKey: undefined }
+    } as Record<string, unknown>
+    for (const key of ['apiKey', 'connectorsApiKey', 'subscriptionToken', 'groundedActionsApiKey']) {
+      delete persisted[key]
+    }
+    this.store.settings.set('settings', persisted)
     this.provider.settings = this.settings
     this.runner.settings = this.settings
     this.computer?.setEnabled(this.settings.computerUse)
@@ -350,42 +403,63 @@ export class Backend {
     return gateway.start()
   }
 
-  /** Move the secret settings out of the plain file and into the keychain. */
+  /** Move legacy plaintext settings into the OS vault, then remove them. */
   restoreSecrets(): void {
-    const saved = this.store.settings.all() as Record<string, unknown>
+    const saved = { ...this.savedSettings() }
+    let changed = false
     for (const key of ['apiKey', 'connectorsApiKey', 'subscriptionToken']) {
       const value = saved[key]
       if (typeof value === 'string' && value) {
         this.secrets.put(key, value)
         delete saved[key]
-        this.store.settings.set('settings', saved)
+        changed = true
       }
     }
+    const legacyGrounded = saved.groundedActions
+    if (legacyGrounded && typeof legacyGrounded === 'object' && !Array.isArray(legacyGrounded)) {
+      const grounded = { ...(legacyGrounded as Record<string, unknown>) }
+      if (typeof grounded.apiKey === 'string' && grounded.apiKey) {
+        this.secrets.put('groundedActionsApiKey', grounded.apiKey)
+        delete grounded.apiKey
+        saved.groundedActions = grounded
+        changed = true
+      }
+    }
+    if (changed) this.store.settings.set('settings', saved)
+
     const key = this.secrets.get('apiKey')
     if (key) this.settings.apiKey = key
+    const groundedKey = this.secrets.get('groundedActionsApiKey')
+    if (groundedKey) this.settings.groundedActions.apiKey = groundedKey
   }
 
-  /** Write the secret settings to the keychain rather than the settings file. */
+  /** Write a secret to the OS vault without copying it into settings JSON. */
   writeSecret(key: string, value: string): void {
     this.secrets.put(key, value)
-    const saved = { ...(this.store.settings.all() as Record<string, unknown>) }
+    const saved = { ...this.savedSettings() }
     delete saved[key]
+    if (key === 'groundedActionsApiKey' && saved.groundedActions && typeof saved.groundedActions === 'object') {
+      const grounded = { ...(saved.groundedActions as Record<string, unknown>) }
+      delete grounded.apiKey
+      saved.groundedActions = grounded
+    }
     this.store.settings.set('settings', saved)
     if (key === 'apiKey') this.settings.apiKey = value
     if (key === 'connectorsApiKey') this.settings.connectorsApiKey = value
     if (key === 'subscriptionToken') this.settings.subscriptionToken = value
+    if (key === 'groundedActionsApiKey') this.settings.groundedActions.apiKey = value
   }
 
-  /** The settings as the renderer may see them: no secrets, only what is safe. */
+  /** The settings as the renderer may see them: recursively secret-safe. */
   publicSettings(): Record<string, unknown> {
-    const { apiKey: _apiKey, baseUrl, ...rest } = this.settings
+    const redacted = redactBackendSecrets(this.settings) as Record<string, unknown>
     const resolved = resolveConfig(this.settings)
     return {
-      ...rest,
-      baseUrl: baseUrl || resolved.baseUrl,
-      autoBaseUrl: !baseUrl,
+      ...redacted,
+      baseUrl: this.settings.baseUrl || resolved.baseUrl,
+      autoBaseUrl: !this.settings.baseUrl,
       providerId: resolved.providerId,
-      apiKey: resolved.apiKey ? `${resolved.apiKey.slice(0, 6)}••••${resolved.apiKey.slice(-4)}` : '',
+      apiKey: maskSecret(resolved.apiKey),
       hasApiKey: Boolean(resolved.apiKey),
       resolvedModel: resolved.model,
       providers: availableProviders().map((provider) => ({

@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { npxInvocation, resolveNpxCli, runNpx } from './npx'
+import { npxEnvironment, npxInvocation, resolveNpxCli, runNpx } from './npx'
 
 let directory = ''
 let previousOverride: string | undefined
@@ -19,6 +19,26 @@ afterEach(async () => {
 })
 
 describe('shell-free npx execution', () => {
+  it('scrubs credentials and loader hooks while retaining ordinary configuration', () => {
+    const env = npxEnvironment({
+      PATH: '/usr/bin',
+      HOME: '/home/test',
+      OPENAI_API_KEY: 'do-not-leak',
+      AWS_SECRET_ACCESS_KEY: 'do-not-leak',
+      TELEGRAM_BOT_TOKEN: 'do-not-leak',
+      NODE_OPTIONS: '--require malicious.js',
+      npm_config_color: 'always'
+    })
+    expect(env.PATH).toBe('/usr/bin')
+    expect(env.HOME).toBe('/home/test')
+    expect(env.npm_config_color).toBe('always')
+    expect(env.OPENAI_API_KEY).toBeUndefined()
+    expect(env.AWS_SECRET_ACCESS_KEY).toBeUndefined()
+    expect(env.TELEGRAM_BOT_TOKEN).toBeUndefined()
+    expect(env.NODE_OPTIONS).toBeUndefined()
+    expect(env.npm_config_ignore_scripts).toBe('true')
+  })
+
   it('passes metacharacters as one literal argument without a command shell', async () => {
     const cli = join(directory, 'npx-cli.js')
     await writeFile(cli, 'process.stdout.write(JSON.stringify(process.argv.slice(2)))', 'utf8')

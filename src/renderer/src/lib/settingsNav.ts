@@ -233,8 +233,8 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     id: 'skills',
     label: 'Skills',
     group: 'Agents',
-    summary: 'Procedures the Captain can load.',
-    keywords: ['skill', 'skills', 'registry', 'bundle', 'playbook', 'marketplace', 'install', 'skill.md'],
+    summary: 'Native Marketspace design systems and procedures the Captain can load.',
+    keywords: ['skill', 'skills', 'registry', 'bundle', 'playbook', 'marketplace', 'marketspace', 'design', 'design.md', 'preview', 'install', 'skill.md'],
     status: 'live'
   },
   {

@@ -43,6 +43,7 @@ capabilities, not roadmap items.
 | **Crew Mesh** | Supervised specialists, single or multi-job delegation, bounded parallel teams, independent failures, durable lineage, usage, and live activity. New runs have private workspaces and scoped browser sessions. |
 | **Native coworker privacy** | Per-Captain/Crew Chromium storage, private Crew write roots with explicit artifact handoff, task-deletion cleanup, and localhost/private-network/metadata navigation protections. |
 | **Library** | Local collections and hierarchical Markdown pages, revision-checked autosave, conflict recovery, full human review for Captain drafts, and idempotent approved saves. |
+| **Native Marketspace** | Reviewed/local `DESIGN.md` systems, static sandboxed previews, explicit install/apply actions, and Captain-native search/read/install/apply tools—without a second design runtime. |
 | **Agent Teams & Table** | Peer Captain collaboration with shared goals, proposals, and an explicit shared ledger. |
 | **Enterprise Control Plane** | Native namespaces, human/agent principals, Roles, AccessBindings, deny-overriding Restrictions, lifecycle state, optimistic concurrency, and immutable revisions. |
 | **Runtime RBAC & DLP** | Executor/Researcher/Viewer/Custom roles, action-time checks, tool allow/deny rules, secret and sensitive-data detection, redaction, and blocking before configured egress boundaries. |
@@ -149,6 +150,9 @@ These are **planned**, not represented as shipped.
 - **Now / Crew / Tools / Files** — live operational views of the current task.
 - **Library** — local Markdown collections and pages, with revision-safe editing
   and explicit human approval for agent-created drafts.
+- **Native Marketspace** — reviewed/local design systems, inspectable static
+  previews, and approved application to real task artifacts in the existing
+  Captain runtime.
 - **Agent Teams & Table** — deliberate peer-agent collaboration.
 - **Schedules** — recurring work while SelfImpulse is running.
 - **Settings** — models, tiers, memory, skills, Crew Mesh, MCP, connectors,
@@ -230,6 +234,7 @@ Start with the [documentation index](./docs/README.md).
 - [Runtime RBAC, DLP, and signed audit](./docs/enterprise-controls.md)
 - [Impulse Runtime and Crew Mesh](./docs/impulse-runtime-crew-mesh.md)
 - [Native Coworker, privacy boundary, and Library](./docs/native-coworker-library.md)
+- [Native Marketspace, design-system research, and security remediation](./docs/native-marketspace.md)
 - [Typed workflows and durable execution](./docs/agent-workflow-durability-themes.md)
 - [Task workspace](./docs/task-workspace.md)
 - [Build and release](./docs/build-and-release.md)

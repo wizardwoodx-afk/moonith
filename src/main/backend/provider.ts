@@ -5,6 +5,8 @@
  * Ported from this app's `electron/backend/provider.js`.
  */
 
+import { readJsonLimited } from '../util'
+
 export interface ProviderDefinition {
   id: string
   name: string
@@ -91,6 +93,26 @@ function readEnvConfig(): { baseUrl: string; apiKey: string; model: string } {
 }
 
 /**
+ * Credentials are endpoint-bound. A provider edit must not silently reuse a
+ * stored key against a new origin/path (including an environment fallback).
+ */
+export function sameProviderEndpoint(left?: string, right?: string): boolean {
+  const normalize = (value?: string): string => {
+    const raw = value?.trim() ?? ''
+    if (!raw) return ''
+    try {
+      const url = new URL(raw)
+      url.hash = ''
+      url.search = ''
+      return `${url.origin.toLowerCase()}${url.pathname}`.replace(/\/+$/, '')
+    } catch {
+      return raw.replace(/\/+$/, '').toLowerCase()
+    }
+  }
+  return normalize(left) === normalize(right)
+}
+
+/**
  * Providers the backend can talk to out of the box. Each is OpenAI-compatible,
  * so one client implementation covers them all.
  */
@@ -168,7 +190,7 @@ export function resolveConfig(settings: ProviderSettings = {}): ResolvedProvider
     return {
       providerId: settings.providerId || 'custom',
       baseUrl: settings.baseUrl.replace(/\/+$/, ''),
-      apiKey: settings.apiKey || env.apiKey,
+      apiKey: settings.apiKey || (sameProviderEndpoint(settings.baseUrl, env.baseUrl) ? env.apiKey : ''),
       model: settings.model || env.model || '',
       kind: settings.kind
     }
@@ -328,11 +350,11 @@ export class Provider {
     if (!res.ok) {
       throw new Error(`models request failed: ${res.status} ${(await res.text()).slice(0, 200)}`)
     }
-    const json = (await res.json()) as {
+    const json = await readJsonLimited<{
       data?: Array<{ id?: string; name?: string }>
       models?: Array<{ id?: string; name?: string }>
-    }
-    return (json.data || json.models || []).map((model) => ({
+    }>(res, 2_000_000)
+    return (json.data || json.models || []).slice(0, 500).map((model) => ({
       id: model.id || model.name || '',
       label: model.id || model.name || ''
     }))

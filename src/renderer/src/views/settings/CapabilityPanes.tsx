@@ -29,6 +29,7 @@ import type {
 import { Button, FieldGroup, IconButton, Modal, Spin, Toggle } from '../../components/ui'
 import { cn, errorMessage, timeAgo } from '../../lib/utils'
 import { SettingsSection } from './SettingsSection'
+import { MarketspaceSection } from './MarketspaceSection'
 
 const inputClass =
   'h-9 w-full rounded-lg border border-line bg-canvas px-3 text-[12.5px] text-ink outline-none transition-colors placeholder:text-faint focus:border-accent/45'
@@ -202,6 +203,8 @@ export function SkillsPane() {
 
   return (
     <div className="space-y-9">
+      <MarketspaceSection />
+
       <SettingsSection
         title="Installed skills"
         description="Playbooks the Captain loads when the work matches."

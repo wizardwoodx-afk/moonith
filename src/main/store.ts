@@ -26,6 +26,7 @@ import {
 } from '@shared/governance'
 import { getPaths, ensureTaskWorkspace, taskWorkspace } from './paths'
 import { atomicWriteJson, newId, nowIso, readJson } from './util'
+import { sameProviderEndpoint } from './backend/provider'
 
 interface StoredProvider {
   id: string
@@ -426,14 +427,19 @@ class Store {
 
   private mergeProvider(existing: StoredProvider | undefined, input: ProviderInput): StoredProvider {
     const id = existing?.id ?? input.id ?? newId('provider')
+    const nextBaseUrl = input.baseUrl?.trim() || undefined
+    const endpointChanged = Boolean(existing && !sameProviderEndpoint(nextBaseUrl, existing.baseUrl))
+    if (endpointChanged && existing?.secret && !input.removeKey && !input.apiKey?.trim()) {
+      throw new Error('This provider endpoint changed. Re-enter its API key before saving so the old credential cannot be sent to a new endpoint.')
+    }
     let secret = existing?.secret
-    if (input.removeKey) secret = undefined
+    if (input.removeKey || endpointChanged) secret = undefined
     if (input.apiKey && input.apiKey.trim()) secret = sealSecret(input.apiKey.trim())
     return {
       id,
       name: input.name.trim() || existing?.name || 'Provider',
       kind: input.kind,
-      baseUrl: input.baseUrl?.trim() || undefined,
+      baseUrl: nextBaseUrl,
       models: [...new Set(input.models.map((m) => m.trim()).filter(Boolean))],
       enabled: input.enabled !== false,
       secret

@@ -18,6 +18,7 @@ import type { ExecException } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { runNpx } from '../npx'
+import { readResponseText } from '../util'
 import { isSafeRef, scrubEnv } from './security'
 import type { BackendStore } from './store'
 
@@ -210,7 +211,7 @@ function run(cli: string, args: string[], { timeout = 300000, cwd }: RunOptions 
 
 async function getJson(url: string): Promise<unknown> {
   const res = await fetch(url, { headers: { accept: 'application/json' } })
-  const text = await res.text()
+  const text = await readResponseText(res)
   let json: unknown
   try {
     json = JSON.parse(text)

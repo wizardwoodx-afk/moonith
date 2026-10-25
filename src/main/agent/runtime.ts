@@ -1438,7 +1438,7 @@ Inherited enterprise role: ${governanceService.role(task)}. Your tools are the i
     }
   }
 
-  private async registerArtifact(
+  async registerArtifact(
     task: Task,
     absPath: string,
     previewAbsPath?: string

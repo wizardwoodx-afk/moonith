@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { atomicWriteJson, newId, readJson, safeJsonParse, slugify, truncate } from './util'
+import { atomicWriteJson, newId, readJson, readJsonLimited, readResponseText, safeJsonParse, slugify, truncate } from './util'
 
 let dir = ''
 
@@ -65,6 +65,23 @@ describe('atomicWriteJson', () => {
     expect(saved?.writer).toBeLessThan(16)
     const entries = await fs.readdir(dir)
     expect(entries.filter((name) => name.startsWith('concurrent.json.') && name.endsWith('.tmp'))).toEqual([])
+  })
+})
+
+describe('bounded responses', () => {
+  it('parses JSON within the byte budget', async () => {
+    await expect(readJsonLimited(new Response('{"ok":true}'), 64)).resolves.toEqual({ ok: true })
+  })
+
+  it('rejects oversized streamed bodies before parsing them', async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('x'.repeat(32)))
+        controller.close()
+      }
+    })
+    await expect(readResponseText(new Response(stream), 8)).rejects.toThrow('8-byte limit')
+    await expect(readJsonLimited(new Response('not json'), 64)).rejects.toThrow('valid JSON')
   })
 })
 

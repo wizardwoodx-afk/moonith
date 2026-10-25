@@ -52,6 +52,13 @@ export const IPC = {
   skillsCreate: 'skills:create',
   skillsRemove: 'skills:remove',
 
+  marketspaceList: 'marketspace:list',
+  marketspaceRead: 'marketspace:read',
+  marketspaceInstall: 'marketspace:install',
+  marketspaceCreate: 'marketspace:create',
+  marketspaceRemove: 'marketspace:remove',
+  marketspaceApply: 'marketspace:apply',
+
   memoryList: 'memory:list',
   memoryAdd: 'memory:add',
   memoryRemove: 'memory:remove',
