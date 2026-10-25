@@ -1,0 +1,2 @@
+# pin the vendored roi runtime to LF so core.autocrlf=true can never rewrite the committed blobs
+src/main/selfimpulse/roi/** text eol=lf

@@ -3,6 +3,8 @@ out/
 release/
 release-selfimpulse/
 dist/
+# the vendored roi runtime ships thirdparty/*/dist files that roi/core imports by relative path; the blanket dist/ rule would silently un-track them on the next re-vendor
+!src/main/selfimpulse/roi/**/dist/
 *.log
 .DS_Store
 .env
