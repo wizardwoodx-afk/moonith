@@ -8,6 +8,7 @@ import type {
   SkillSource,
   SkillSummary
 } from '@shared/types'
+import { npxCommand } from '../backend/npx'
 import { getPaths } from '../paths'
 import { isWithin } from '../security'
 import { slugify, truncate } from '../util'
@@ -361,21 +362,39 @@ class SkillService {
     )
   }
 
+  /**
+   * Run a registry CLI with an argument array — never a shell string, so a
+   * skill reference can never turn into a command. On Windows the `npx` shim is
+   * resolved to its JS entrypoint instead of going through cmd.exe, matching
+   * `backend/marketplace.ts` and `backend/external-agent.ts`.
+   */
   private runCli(
     pkg: string,
     args: string[]
   ): Promise<{ code: number; stdout: string; stderr: string }> {
     return new Promise((resolve) => {
+      let invocation: ReturnType<typeof npxCommand>
+      try {
+        invocation = npxCommand(['-y', pkg, ...args])
+      } catch (err) {
+        resolve({
+          code: 1,
+          stdout: '',
+          stderr: err instanceof Error ? err.message : String(err)
+        })
+        return
+      }
       execFile(
-        'npx',
-        ['-y', pkg, ...args],
+        invocation.command,
+        invocation.args,
         {
           encoding: 'utf8',
           timeout: 300000,
           maxBuffer: 16 * 1024 * 1024,
           windowsHide: true,
-          shell: process.platform === 'win32',
-          cwd: getPaths().root
+          shell: false,
+          cwd: getPaths().root,
+          env: invocation.env
         },
         (error, stdout, stderr) => {
           const rawCode = (error as NodeJS.ErrnoException | null)?.code
