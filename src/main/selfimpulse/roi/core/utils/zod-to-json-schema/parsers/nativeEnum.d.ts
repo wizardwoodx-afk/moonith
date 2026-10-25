@@ -1,0 +1,7 @@
+import "zod/v3";
+//#region src/utils/zod-to-json-schema/parsers/nativeEnum.d.ts
+export type JsonSchema7NativeEnumType = {
+  type: "string" | "number" | ["string", "number"];
+  enum: (string | number)[];
+};
+//#endregion

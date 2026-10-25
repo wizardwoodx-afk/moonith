@@ -83,7 +83,7 @@ import {
   START,
   StateGraph,
   interrupt,
-} from "../../vendor/graphruntime/runtime/index.js";
+} from "../roi/runtime/index.js";
 import type { CliAgentTeam } from "./agentTeam";
 import { composeAssignments, dispatchChannel } from "./missionAssignments";
 import { loadAutonomy } from "./autonomyStore";
