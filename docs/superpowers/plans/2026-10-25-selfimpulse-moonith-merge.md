@@ -130,7 +130,7 @@ Expected: mission/checkpoint tests PASS (no `Cannot find module` for the runtime
 - Create: `src/main/security-sinks.test.ts`
 
 **Interfaces:**
-- Produces: `expectNoForbiddenSinks()` used by Task 16; npm dependencies for Phase D.
+- Produces: the ratchet itself — Task 16's gate is "keep `src/main/security-sinks.test.ts` green"; it does not import a helper from that file (a controller ruling after Task 2's review removed the previously promised `expectNoForbiddenSinks()` export as dead API).
 
 - [ ] **Step 1: Add the dependencies and overrides**
 
@@ -1274,3 +1274,139 @@ Installation into `D:\selfimpulse\app` requires admin (`update-selfimpulse.cmd`)
 3. **Renderer has 3 hand-merged large files** (`styles.css` 478 changed lines, `themes.ts` 379, `TaskPanel.tsx` 325 where MOON's is *smaller*). Expect conflicts; `TaskPanel.tsx` must keep TARGET's panel plus MOON's `task-panel/` split, not the donor's reduced version.
 4. **The `vendor/graphruntime` vs `roi` decision (Task 1)** changes import paths in three donor files and two TARGET files. Make it first; re-running it later means re-editing every engine import.
 5. **Web/visual verification is only real in Step 7 of Task 13 and Step 1 of Task 14** — until those are done, this build is code-verified, not product-verified.
+
+---
+
+## Phase F — cross-tree security findings (added after the crew-mesh audit)
+
+These three defects exist in the **trunk** and were independently confirmed in the donor tree. They are base-independent: they ship whether or not Phase B/C land. Tasks 21-23 may run in parallel with Phase B because they touch disjoint files (`backend/**`, `agent/tools/browser.ts` + `services/browser.ts`, `main/index.ts` protocol handler).
+
+### Task 21: Permission-gate the backend integration tools (default deny for unlisted names)
+
+**Files:**
+- Modify: `src/main/backend/index.ts:120-125` (`DEFAULT_PERMISSIONS`), `src/main/backend/tools.ts:277-287` (`allowed()`), `src/main/backend/runner.ts:381-399`
+- Test: `src/main/backend/runner.gate.test.ts` (create)
+
+**Interfaces:**
+- Produces: `ToolRuntime.allowed(name: string): Promise<boolean>` extended with prefix rules so `mcp_*`, `connectors_*`, `computer_*`, and `grounded_actions` are `ask` (and unanswered `ask` already returns false at `tools.ts:283-285`); `runner.ts` must consult it before dispatch.
+
+- [ ] **Step 1: Write the failing bypass test**
+
+```ts
+  it('refuses an mcp tool when no permission rule was ever set for it', async () => {
+    const invoked: string[] = []
+    const runtime = makeRunner({ mcpTool: (name) => { invoked.push(name); return { ok: true } } })
+    const result = await runtime.dispatch('mcp_filesystem_read_file', {})
+    expect(invoked).toEqual([])
+    expect(String(result.error ?? '')).toMatch(/permission|blocked/i)
+  })
+```
+
+- [ ] **Step 2: Run it, watch it pass or fail honestly** — `npx vitest run src/main/backend/runner.gate.test.ts`. Today the trunk's `allowed()` returns `true` for anything unlisted (`this.permissions[name] ?? 'allow'`), and `runner.ts` never calls `allowed()` on the four integration branches, so this MUST fail. If it passes, the dispatch path is already gated and the finding is stale — record the proof and stop.
+
+- [ ] **Step 3: Add prefix rules and route the dispatch through the gate**
+
+In `backend/tools.ts`, give `allowed()` an explicit default-deny for the integration surface instead of a blanket `'allow'`:
+```ts
+const DEFAULT_DENY_PREFIXES = ['mcp_', 'connectors_', 'computer_']
+const DEFAULT_DENY_NAMES = new Set(['grounded_actions'])
+```
+Resolve `this.permissions[name]` first; if absent, and the name matches a deny prefix or deny name, return `false` unless an explicit rule says otherwise. In `backend/index.ts`'s `DEFAULT_PERMISSIONS` add `grounded_actions: 'ask'`, `computer_screenshot: 'ask'`, `connectors_invoke: 'ask'`, `mcp_invoke: 'ask'` (matching the names actually used) so a user can grant them deliberately. In `backend/runner.ts`, before each of the four branches at `:381-399`, call the same gate and return `{ ok: false, error: 'Tool "<name>" is blocked by the permission rules.' }` plus an audit event when denied.
+
+- [ ] **Step 4: Prove it and prove the audit**
+
+`npx vitest run src/main/backend` → all green, including a second assertion that a denied integration call records a `denied` outcome.
+
+### Task 22: Egress guard for the browser tools (shared with web.ts)
+
+**Files:**
+- Modify: `src/main/services/browser.ts` (`open`), `src/main/agent/tools/browser.ts:20-38,142-160`, `src/main/agent/tools/web.ts:97-125`
+- Consume: `assertPublicHttpTarget` from `src/main/services/channelPolicy.ts` (Task 10) — do NOT create a second guard
+
+- [ ] **Step 1: Failing SSRF tests through the real tool**
+
+```ts
+  it.each([
+    'http://169.254.169.254/latest/meta-data/',
+    'http://127.0.0.1:8080/admin',
+    'http://[::1]:6379/',
+    'http://127.0.0.1.nip.io/'
+  ])('refuses %s through browser_open', async (url) => {
+    const result = await browserOpenTool.execute({ url }, makeToolContext())
+    expect(result.isError).toBe(true)
+    expect(result.content).toMatch(/blocked|private|loopback/i)
+  })
+```
+The `.nip.io` case requires the injected resolver; default `resolver = dns.promises.lookup` and allow the tool context to carry a test resolver so the test is deterministic offline.
+
+- [ ] **Step 2: Run to watch it fail** — `npx vitest run src/main/agent/tools/browser.test.ts`
+Expected FAIL: `browser_open` has `approval: 'never'` and `services/browser.ts` has no host check at all.
+
+- [ ] **Step 3: Guard once, at the boundary that matters**
+
+Call `assertPublicHttpTarget(url, resolver)` inside `browserService.open()` (not only inside the tool) so `browser_extract`, the panel's manual navigation, and any future caller are covered by construction. Resolve the host and re-check after redirect when the fetch path follows redirects. Keep the existing hostname check as defence in depth rather than replacing it.
+
+- [ ] **Step 4: Re-run both suites** — browser + `agent/tools/web.test.ts` → green.
+
+### Task 23: Harden the `knight-file:` privileged scheme
+
+**Files:**
+- Modify: `src/main/index.ts:49-60` (scheme privileges), `:177-201` (`registerFileProtocol`)
+- Test: `src/main/protocol.test.ts` (create)
+
+- [ ] **Step 1: Failing tests**
+
+```ts
+  it('refuses a symlink inside the task workspace that escapes it', async () => {
+    const outside = join(secretsDir, 'id_rsa')
+    symlinkSync(outside, join(workspace, 'link'))
+    const response = await handler('knight-file://task-1/link')
+    expect(response.status).toBe(403)
+  })
+
+  it('does not advertise a wildcard CORS origin on a privileged scheme', async () => {
+    const response = await handler('knight-file://task-1/a.txt')
+    expect(response.headers.get('access-control-allow-origin')).toBeNull()
+  })
+```
+
+- [ ] **Step 2: Run to watch it fail** — `npx vitest run src/main/protocol.test.ts`. Today `isWithin(workspace, target)` compares unresolved paths, so a symlink inside the workspace passes, and the handler sets `access-control-allow-origin: '*'` on a `corsEnabled` scheme.
+
+- [ ] **Step 3: Resolve before containment, and stop widening the origin**
+
+`const real = await fs.realpath(target)` and `const realRoot = await fs.realpath(workspace)`, then `isWithin(realRoot, real)`; 403 on failure. Remove `corsEnabled: true` from the scheme privileges and drop the `access-control-allow-origin: '*'` header, keeping `x-content-type-options: nosniff` and `cache-control: no-store`. If the renderer needs cross-document access to artifacts, grant it by pinning the origin to the app's own `knight-file:` origin rather than `*`, and state which you chose in the report.
+
+- [ ] **Step 4: Prove artifact preview still works** — the HTML/PDF preview paths in `components/Artifacts.tsx` must still load; assert with a unit check on the response status for a normal in-workspace file, and record the manual preview check for Task 13's UI walkthrough.
+
+---
+
+## Addendum A — donor re-pointing (controller ruling, 2026-10-25)
+
+**Ruling: `MOON` now means** `C:\Users\HARSHEN\Documents\Qoder\2026-10-24\5a3181d1\crewmesh-audit\extracted\moonith-0.3.0-impulse-runtime-crew-mesh`. The `premium-agent-workspace` tree stays as historical reference only. Evidence: `ipc.ts` and `preload/index.ts` are byte-identical between the two donors, the rest differ by 2-227 lines, and the newer tree contains tested implementations of repairs Tasks 3/9/10/11 would otherwise author. The **trunk remains the base** — the newer donor still has no `nomos/`, `sphragis/`, `aion/`, `enterprise/`, `agent/governed.ts`, and its `grounded.ts` launch path is weaker than the trunk's `SHELL_SCRIPT`/`isRunnable` refusal.
+
+### Per-task adjustments that override the task text above
+
+| Task | Adjustment | Why (auditor evidence) |
+| --- | --- | --- |
+| 3 | Port `MOON/src/main/atomic.ts` + `atomic.test.ts` and make `src/main/util.ts:atomicWriteJson` delegate to it instead of hand-rolling fsync/retry. Keep Task 3's 64-writer Windows test. | `atomic.ts` already does per-file serialization + fsync + `EPERM/EACCES/EBUSY` retry and its concurrency test passes; it is **not** read-modify-write serialized, so Task 3's settings-write serialization still applies. |
+| 3 | Keep the cancel/resume race test; the *donor engine* race is already fixed (`engine.ts` cancel-during-await), the **workflow** replay keys are still positional (`workflow.ts:484-486`). | Runtime auditor H-3. |
+| 4 | Unchanged: the DLP gaps this task must close are still live in the new donor — numeric card values never scanned (`dlp.ts:255-290`), cycles passed unexamined in `block` mode (`:265,278`), `__proto__` key re-pointing the copy's prototype (`:281-284`, reproduced by the auditor). | **Drop the ReDoS item** — the auditor measured 0 ms on pathological input and the separator class is disjoint from `\d`; a timing test here would assert nothing. |
+| 4 | Port instead of author: `delegate_to_crew` capability requirement (`policy.ts:60-63`) and role stamped at creation (`store.ts:492-495`). | Both prior gaps are closed in the new donor at the creation boundary. |
+| 5 | Unchanged, and now known to be necessary: donor ledger is still HMAC-**symmetric** (`chain.ts:84-86`), `append()` still never re-reads (`runtimeLedger.ts:213-214`), `record()` returns `false` and `governance.ts:139` discards it, and there is **no size cap or rotation anywhere** (entries are held in RAM and copied per append). The anchor is constant-size, so the earlier O(n²) concern is corrected to "memory growth", not rewrite cost. | Security + enterprise auditors. |
+| 6 | Port the donor's **improvements** (HMAC-signed revision chain, signed head, fsynced atomic persistence) then apply this task's upgrade to an Ed25519 identity; still required: sender check on `mutate`/`authorize` (`ipc.ts:12-17`) and bounding `ensureAgentPrincipal`, which runs before **every** tool call and appends a full state snapshot per seat (`service.ts:539-589`). | Enterprise auditor: two prior defects fixed, two remain. |
+| 7 | Port donor `engine.ts` (713 lines) — it already fixes the background-review escape (`engine.ts:374`, proven by `engine.test.ts:270`), cancellation reaching graph + stream, usage reducer, and budget-vs-final distinction. Add the one permanent mission-load assertion Task 1 deferred. | Runtime auditor Q6/Q4. |
+| 8 | **Do not port the donor's steering implementation.** Task 8 Step 4 stays as authored (we consume `pendingSteer`), and must additionally guarantee transcript pairing: a steered user row must never land between an assistant `tool_calls` row and its tool results. New Criticals if ported: C-1 (interleaving rejects every later turn on that task; neither `prepareReplay` nor `reconcileToolResults` repairs it), C-2 (provider failure + pending steer → `restore()` + `finally` relaunch clears `task.error` and re-executes side effects under a new journal key), H-1 (a steer landing during the `await` at `runtime.ts:319` is drained, committed, and never sent to any model — silent permanent message loss). Also add **H-4**: `ToolContext` carries no `signal`, so Stop does not interrupt an in-flight tool — worse ×3 with Crew. | Runtime auditor, with `file:line`. |
+| 9 | Port `MOON/src/main/selfimpulse/persist/nodeStorage.ts` + `mainStorage.ts` (wired at `index.ts:44`) and `mission/mainPersistence.test.ts` + `nativeDurable.test.ts` instead of authoring `kvStore.ts`. **New requirement:** the auditor found nothing outside `mission/` imports the learning graph, so the RSIRALS pane reads correct-but-permanently-empty stores — this task must prove a non-empty round trip from the actual UI entry point, or state that the pane is inert. | Enterprise auditor RSIRALS verdict + caveat. |
+| 10 | Port `MOON/src/main/services/channelPolicy.ts` + its test (Telegram/webhook allowlist, channel role, outbound DLP — channel replies now cross DLP) instead of authoring it. Then extend the same `assertPublicHttpTarget` to the browser tools per **Task 22**. | Enterprise + security auditors. |
+| 11 | Port `MOON/src/renderer/src/lib/themes.ts` + `themes.test.ts`: contrast is re-derived (blend 0.42→0.84) and **gated by a committed test** (`themes.test.ts:166` asserts `--c-muted`/`--c-faint` ≥ 4.5 across themes; 12/12 pass). Keep this task's `readable()` helper only as the mechanism if the ported derivation still fails any trunk-only theme. | Renderer auditor + controller cross-check. |
+| 13 | Port donor `components/ui.tsx` Modal (focus trap, `role="dialog"`, `aria-modal`, initial focus, restore) and `Artifacts.tsx` PDF `sandbox=""`; keep trunk's `TaskPanel.tsx` + the donor's `task-panel/` split. Carry the auditor's Minor list: collapsed faint/muted visual hierarchy, dead bridge methods, MCP-poll interval rebuild, `[data-autofocus]` set nowhere while ApprovalDialog autofocuses **Allow**, single 2.73 MB chunk, per-row orb canvases. | Renderer auditor. |
+| 14 | Adopt the donor's `electron-builder.yml` pattern (`extraResources` shipping nine upstream licence texts, `node_modules` LICENSE pruning removed) and add **Task 24** below. | Enterprise auditor licensing section. |
+| Global | `__SI_BUILT__` build timestamp makes builds non-reproducible; pin or document it at Task 14. | Renderer auditor. |
+
+### Task 24: Resolve the licensing blockers before any redistribution
+
+**Files:** `THIRD-PARTY-NOTICES.md`, `src/main/selfimpulse/**/PROVENANCE.json`, `LICENSES/`
+
+- [ ] **Step 1:** The audit found ports of **Seamoon** and **Knight Cowork** shipped with "licence not stated". Locate each (`grep -rn "Seamoon\|Knight Cowork" src docs THIRD-PARTY-NOTICES.md`), determine the upstream licence or authorisation in writing, and either ship its notice text or remove the ported code. **Until one of those is done, this build must not be redistributed** — that is a blocker, not a polish item.
+- [ ] **Step 2:** `roi/PROVENANCE.json` is accurate on the big three but ~11 embedded copies (fast-json-patch, js-sha256, sax-js, uuid, zod-to-json-schema, XXH3, …) carry **no licence text at all**. Add each licence file and a provenance line, or prove the copy was removed.
+- [ ] **Step 3:** Verify inside the built asar, not just the source tree: `npx asar list release/win-unpacked/resources/app.asar | grep -icE "LICENSE|NOTICE"` and confirm every entry named in `THIRD-PARTY-NOTICES.md` is present.
