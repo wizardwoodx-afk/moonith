@@ -1,3 +1,4 @@
+import { agentName } from './localProfile'
 export const SETTINGS_PANES = [
   'profile',
   'general',
@@ -9,18 +10,22 @@ export const SETTINGS_PANES = [
   'colors',
   'moon',
   'providers',
-  'tiers',
   'instructions',
   'agent',
   'agent-team',
+  'rook',
   'skills',
+  'learning',
   'sub-agents',
   'mcp',
+  'impdesk',
   'connectors',
+  'design-systems',
   'channels',
   'gateway',
   'work-files',
   'desktop',
+  'enterprise',
   'audit',
   'about'
 ] as const
@@ -66,7 +71,9 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     group: 'Personal',
     summary: 'Self and Collab.',
     keywords: ['self', 'collab', 'team', 'mode', 'captain', 'peer', 'table', 'seats'],
-    status: 'live'
+    status: 'live',
+    hidden: true,
+    parent: 'general'
   },
   {
     id: 'permissions',
@@ -93,7 +100,9 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     group: 'Personal',
     summary: 'Local task history.',
     keywords: ['tasks', 'runs', 'history', 'queue', 'status', 'monitor', 'sessions'],
-    status: 'live'
+    status: 'live',
+    hidden: true,
+    parent: 'profile'
   },
   {
     id: 'shortcuts',
@@ -101,7 +110,9 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     group: 'Personal',
     summary: 'Every key.',
     keywords: ['keys', 'keyboard', 'bindings', 'hotkeys', 'ctrl'],
-    status: 'live'
+    status: 'live',
+    hidden: true,
+    parent: 'about'
   },
   {
     id: 'appearance',
@@ -154,10 +165,9 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     id: 'moon',
     label: 'Moon',
     group: 'Personal',
-    summary: 'The exclusive theme.',
+    summary: 'The deep night theme.',
     keywords: ['moon', 'exclusive', 'night', 'black', 'glow', 'theme', 'moonlight'],
     status: 'live',
-    badge: 'Exclusive',
     hidden: true,
     parent: 'appearance'
   },
@@ -170,32 +180,10 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     status: 'live'
   },
   {
-    id: 'tiers',
-    label: 'Tiers',
-    group: 'Personal',
-    summary: 'How much a turn may spend.',
-    keywords: [
-      'tier',
-      'tiers',
-      'reasoning',
-      'thinking',
-      'effort',
-      'budget',
-      'tokens',
-      'swift',
-      'balanced',
-      'deep',
-      'agentic',
-      'lean',
-      'auto'
-    ],
-    status: 'live'
-  },
-  {
     id: 'instructions',
     label: 'Memory',
     group: 'Personal',
-    summary: 'What the Captain remembers.',
+    summary: `What the ${agentName()} remembers.`,
     keywords: [
       'custom',
       'prompt',
@@ -215,55 +203,103 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     id: 'agent',
     label: 'Agent',
     group: 'Agents',
-    summary: 'The Captain and the ladder behind it.',
-    keywords: ['captain', 'consul', 'adept', 'crew', 'engine', 'executor', 'ladder'],
+    summary: `The ${agentName()} and the ladder behind it.`,
+    keywords: ['captain', 'envoy', 'operator', 'team', 'engine', 'executor', 'ladder'],
     status: 'live'
   },
   {
     id: 'agent-team',
     label: 'Agent Teams',
     group: 'Agents',
-    summary: 'Two Captains, one Table.',
+    summary: `Up to four ${agentName()}s, one Table.`,
     keywords: ['team', 'peer', 'captains', 'collab', 'agents', 'joint', 'table', 'pairing'],
+    status: 'live'
+  },
+  {
+    id: 'rook',
+    label: 'ROOK Worker',
+    group: 'Agents',
+    summary: 'Autonomous digital worker, GitOps Change Requests, and 360K+ skills.',
+    keywords: ['rook', 'worker', 'yolo', 'build', 'plan', 'skills', 'change requests', 'deliverables', 'gitops'],
     status: 'live'
   },
   {
     id: 'skills',
     label: 'Skills',
     group: 'Agents',
-    summary: 'Procedures the Captain can load.',
-    keywords: ['skill', 'skills', 'registry', 'bundle', 'playbook', 'marketplace', 'install', 'skill.md'],
+    summary: 'Installed procedures and the skill catalog.',
+    keywords: ['skill', 'skills', 'catalog', 'bundle', 'playbook', 'install', 'skill.md'],
     status: 'live'
+  },
+  {
+    id: 'learning',
+    label: 'Learning',
+    group: 'Agents',
+    summary: 'Measured runtime policies, utility memory, verified skills, and learning receipts.',
+    keywords: ['learning', 'self-improving', 'strategy', 'lessons', 'receipts'],
+    status: 'live',
+    hidden: true,
+    parent: 'agent'
   },
   {
     id: 'sub-agents',
-    label: 'Sub-agents',
+    label: 'Team runs',
     group: 'Agents',
-    summary: 'Crew runs, live.',
-    keywords: ['crew', 'subagent', 'delegate', 'workers', 'parallel', 'agents', 'runs', 'live'],
-    status: 'live'
+    summary: 'Supervised team runs and parallel teammates.',
+    keywords: ['team', 'subagent', 'delegate', 'workers', 'parallel', 'agents', 'runs', 'live'],
+    status: 'live',
+    hidden: true,
+    parent: 'agent-team'
   },
   {
     id: 'mcp',
-    label: 'MCP',
+    label: 'MCP servers',
     group: 'Integrations',
-    summary: 'Local tool servers.',
-    keywords: ['tools', 'stdio', 'server', 'rea', 'reverse engineering', 'protocol', 'extensions', 'mcp'],
+    summary: 'Installed tool servers plus the community marketplace.',
+    keywords: ['tools', 'stdio', 'http', 'sse', 'server', 'rea', 'reverse engineering', 'protocol', 'extensions', 'mcp', 'marketplace'],
+    status: 'live'
+  },
+  {
+    id: 'impdesk',
+    label: 'ImpDesk',
+    group: 'Integrations',
+    summary: 'Protection, connections and behaviour for this machine.',
+    keywords: [
+      'impdesk',
+      'cockpit',
+      'protection',
+      'security',
+      'posture',
+      'desktop',
+      'connections',
+      'behaviour',
+      'behavior',
+      'engine',
+      'keys'
+    ],
     status: 'live'
   },
   {
     id: 'connectors',
     label: 'Connectors',
     group: 'Integrations',
-    summary: 'App toolkits for the Captain.',
-    keywords: ['connectors', 'apps', 'integrations', 'toolkit', 'tasks', 'mail', 'docs', 'tools', 'extensions'],
+    summary: `Connect app accounts and expose their tools to the ${agentName()}.`,
+    keywords: ['connectors', 'composio', 'apps', 'integrations', 'toolkit', 'oauth', 'connect', 'account', 'tasks', 'mail', 'docs', 'tools', 'extensions'],
+    status: 'live'
+  },
+  {
+    id: 'design-systems',
+    label: 'Design systems',
+    group: 'Agents',
+    summary: `Native Marketspace DESIGN.md systems the ${agentName()} can apply to real work.`,
+    keywords: ['marketspace', 'design', 'design.md', 'system', 'preview', 'install', 'native', 'brand', 'ui', 'interface'],
     status: 'live'
   },
   {
     id: 'channels',
     label: 'Channels',
     group: 'Integrations',
-    summary: 'Reach the Captain from another app.',
+    summary: `Reach the ${agentName()} from another app.`,
     keywords: ['channel', 'webhook', 'telegram', 'bot', 'inbound', 'messages', 'remote', 'api'],
     status: 'live'
   },
@@ -283,7 +319,9 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
       'remote',
       'api'
     ],
-    status: 'live'
+    status: 'live',
+    hidden: true,
+    parent: 'channels'
   },
   {
     id: 'work-files',
@@ -301,7 +339,9 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
       'onedrive',
       'sharepoint'
     ],
-    status: 'live'
+    status: 'live',
+    hidden: true,
+    parent: 'channels'
   },
   {
     id: 'desktop',
@@ -318,6 +358,29 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
       'actions',
       'grounding',
       'automation'
+    ],
+    status: 'live',
+    hidden: true,
+    parent: 'channels'
+  },
+  {
+    id: 'enterprise',
+    label: 'Enterprise controls',
+    group: 'SelfImpulse',
+    summary: 'Agent roles, data-loss prevention, and signed runtime evidence.',
+    keywords: [
+      'enterprise',
+      'rbac',
+      'role',
+      'policy',
+      'least privilege',
+      'dlp',
+      'data loss',
+      'redact',
+      'block',
+      'secrets',
+      'compliance',
+      'governance'
     ],
     status: 'live'
   },

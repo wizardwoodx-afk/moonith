@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import {
   Activity,
   AlertTriangle,
@@ -21,6 +21,7 @@ import {
   FileText,
   Handshake,
   Info,
+  ListChecks,
   KeyRound,
   Keyboard,
   Loader2,
@@ -28,6 +29,7 @@ import {
   Moon,
   Monitor,
   Paintbrush,
+  Palette,
   Pencil,
   Plug,
   Plus,
@@ -47,10 +49,12 @@ import {
   Zap,
   ScrollText
 } from 'lucide-react'
-import { BrandMark } from '../components/BrandMark'
 import { toast } from 'sonner'
 import type {
   AppInfo,
+  EngineStatusPublic,
+  McpMarketDetail,
+  McpMarketSearchResult,
   McpServerConfig,
   McpServerStatus,
   MemoryNote,
@@ -63,7 +67,7 @@ import type {
 } from '@shared/types'
 import { useApp, type SettingsTab } from '../store'
 import { cn, errorMessage, statusLabel, timeAgo } from '../lib/utils'
-import { PERMISSION_CHOICES, permissionChoice } from '../lib/composerChoices'
+import { ENGINE_CHOICES, PERMISSION_CHOICES, permissionChoice } from '../lib/composerChoices'
 import {
   groupSettingsNav,
   searchSettingsNav,
@@ -74,20 +78,46 @@ import {
   type SettingsPaneId
 } from '../lib/settingsNav'
 import { buildActivity } from '../lib/activity'
-import { profileInitial, saveLocalProfile, useLocalProfile } from '../lib/localProfile'
+import { agentName, profileInitial, saveLocalProfile, useLocalProfile } from '../lib/localProfile'
 import { startNewTask } from '../lib/navigation'
-import { APP_TAGLINE, buildStamp } from '@shared/identity'
+import { APP_AUTHOR, APP_SIGNATURE, APP_TAGLINE, buildStamp } from '@shared/identity'
+import { BrandGlyph, BrandMark } from '../components/BrandMarks'
+import { confirmDialog } from '../components/Confirm'
+import { createPortal } from 'react-dom'
 import { Button, FieldGroup, IconButton, Modal, Spin, Toggle } from '../components/ui'
+
 import { SettingsSection } from './settings/SettingsSection'
+import {
+  ActionWord,
+  Chip,
+  CountTabs,
+  EmptyPanel,
+  SettingCard,
+  SettingList,
+  SettingRow,
+  SettingTile,
+  StatusChip
+} from './settings/settingParts'
+
+const marketplaceInputClass =
+  'h-9 w-full rounded-lg border border-line bg-canvas px-3 text-[12.5px] text-ink outline-none transition-colors placeholder:text-faint focus:border-accent/45'
 import { AppearancePane, ColorsPane, MoonPane } from './settings/ThemePanes'
 import {
   ChannelsPane,
   ConnectorsPane,
+  DesignSystemsPane,
   SkillsPane,
   SubAgentsPane
 } from './settings/CapabilityPanes'
-import { DesktopPane, GatewayPane, TiersPane, WorkFilesPane } from './settings/BackendPanes'
+import { DesktopPane, GatewayPane, WorkFilesPane } from './settings/BackendPanes'
 import { AuditPane } from './settings/AuditPane'
+import { EnterprisePane } from './settings/EnterprisePane'
+import { RookSettingsPane } from './settings/RookSettingsPane'
+import { LearningPane } from './settings/LearningPane'
+import { ImpCodesCard } from './settings/ImpCodesCard'
+import { ImpDeskPane } from './settings/ImpDeskPane'
+import { ProviderPresets } from './settings/ProviderPresets'
+import type { ProviderPreset } from '@shared/providerPresets'
 
 const NAV_ICONS: Record<
   SettingsPaneId,
@@ -103,18 +133,22 @@ const NAV_ICONS: Record<
   colors: SwatchBook,
   moon: Moon,
   providers: Cpu,
-  tiers: Zap,
   instructions: Brain,
   agent: BrandMark,
   'agent-team': Users,
+  rook: Cpu,
   skills: Sparkles,
+  learning: Brain,
   'sub-agents': Bot,
   mcp: Plug,
+  impdesk: Aperture,
   connectors: Boxes,
+  'design-systems': Palette,
   channels: Radio,
   gateway: ServerCog,
   'work-files': Building2,
   desktop: Monitor,
+  enterprise: ShieldCheck,
   audit: ScrollText,
   about: Info
 }
@@ -144,6 +178,7 @@ export function SettingsView() {
   const openSurface = useApp((state) => state.openSurface)
   const [query, setQuery] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
+  const [actionHost, setActionHost] = useState<HTMLElement | null>(null)
 
   const tab: SettingsTab = view.kind === 'settings' ? view.tab : 'general'
   const trimmedQuery = query.trim()
@@ -167,18 +202,18 @@ export function SettingsView() {
 
   return (
     <div className="flex h-full min-h-0 bg-canvas">
-      <aside className="flex w-[248px] shrink-0 flex-col border-r border-line/60 bg-panel-2">
+      <aside className="flex w-[256px] shrink-0 flex-col border-r border-line/60 bg-panel-2">
         <div className="px-3 pt-3.5 pb-3">
           <button
             onClick={() => openSurface('chat')}
-            className="flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] text-muted transition-colors outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/30"
+            className="flex h-7 items-center gap-1.5 rounded-md px-1 text-[12.5px] text-muted transition-colors outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/30"
           >
             <ArrowLeft size={13} />
-            Back
+            Back to app
           </button>
-          <div className="relative mt-2.5">
+          <div className="relative mt-3">
             <Search
-              size={12}
+              size={13}
               className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-faint"
             />
             <input
@@ -194,40 +229,38 @@ export function SettingsView() {
                   setQuery('')
                 }
               }}
-              placeholder="Search"
+              placeholder="Search settings…"
               aria-label="Search settings"
-              className="h-[30px] w-full rounded-[8px] border border-transparent bg-canvas/50 pr-7 pl-7.5 text-[12px] text-ink outline-none transition-colors placeholder:text-faint hover:border-line/70 focus:border-line-strong focus:bg-canvas"
+              className="h-8 w-full rounded-[9px] border border-line bg-canvas/70 pr-8 pl-8 text-[12.5px] text-ink outline-none transition-colors placeholder:text-faint hover:border-line-strong focus:border-line-strong focus:bg-canvas"
             />
             {query ? (
               <button
                 onClick={() => setQuery('')}
                 aria-label="Clear search"
-                className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-1 text-faint hover:text-ink"
+                className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-faint hover:text-ink"
               >
-                <X size={10} />
+                <X size={11} />
               </button>
             ) : null}
           </div>
         </div>
 
-        <nav className="scroll-thin min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+        <nav className="scroll-thin min-h-0 flex-1 overflow-y-auto px-3 pb-5">
           {sections.length === 0 ? (
-            <div className="px-2.5 pt-3">
-              <p className="text-[11.5px] text-faint">Nothing matches “{query.trim()}”.</p>
+            <div className="pt-3">
+              <p className="text-[12.5px] text-faint">Nothing matches “{query.trim()}”.</p>
               <button
                 onClick={() => setQuery('')}
-                className="mt-1 text-[11px] text-muted underline underline-offset-2 hover:text-ink"
+                className="mt-1.5 text-[12px] text-muted underline underline-offset-2 hover:text-ink"
               >
                 Clear
               </button>
             </div>
           ) : (
             sections.map((section) => (
-              <div key={section.group} className="mt-4 first:mt-0.5">
-                <p className="px-2.5 pb-1.5 text-[10.5px] font-medium text-faint/80">
-                  {section.group}
-                </p>
-                <div className="space-y-px">
+              <div key={section.group} className="mt-5 first:mt-1">
+                <p className="pb-1.5 text-[12px] text-faint/60">{section.group}</p>
+                <div className="space-y-0.5">
                   {section.items.map((item) => {
                     const Icon = NAV_ICONS[item.id]
                     const isActive = item.id === parent
@@ -239,22 +272,24 @@ export function SettingsView() {
                           setQuery('')
                         }}
                         className={cn(
-                          'group flex h-[30px] w-full items-center gap-2.5 rounded-[7px] px-2.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent/30',
+                          'group flex h-7 w-full items-center gap-2 rounded-lg px-1.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent/30',
                           isActive
-                            ? 'bg-surface-3/80 text-ink'
+                            ? 'bg-surface-3/70 text-ink'
                             : 'text-muted hover:bg-surface-2/60 hover:text-ink'
                         )}
                       >
                         <Icon
-                          size={13.5}
+                          size={14}
                           className={cn(
                             'shrink-0',
-                            isActive ? 'text-accent' : 'text-faint group-hover:text-muted'
+                            isActive ? 'text-ink' : 'text-faint group-hover:text-muted'
                           )}
                         />
-                        <span className="min-w-0 flex-1 truncate text-[12px]">{item.label}</span>
+                        <span className="min-w-0 flex-1 truncate text-[12.5px]">{item.label}</span>
                         {item.badge ? (
-                          <span className="shrink-0 text-[9px] text-faint">{item.badge}</span>
+                          <span className="shrink-0 rounded-md bg-accent/15 px-1.5 py-px text-[10px] font-medium text-accent-ink">
+                            {item.badge}
+                          </span>
                         ) : null}
                       </button>
                     )
@@ -265,42 +300,46 @@ export function SettingsView() {
           )}
         </nav>
 
-        <div className="px-4 py-3">
-          <p className="flex items-center gap-1.5 text-[9.5px] text-faint/70">
-            <Lock size={9} />
+        <div className="border-t border-line/40 px-5 py-4">
+          <p className="flex items-center gap-2 text-[11px] text-faint/80">
+            <Lock size={11} />
             On this device
           </p>
         </div>
       </aside>
 
-      <section className="min-w-0 flex-1 bg-panel">
+      <section className={cn('min-w-0 flex-1 bg-panel', tab === 'profile' && 'settings-dots')}>
         <div className="scroll-thin h-full overflow-y-auto">
-          <div className="mx-auto w-full max-w-[780px] px-10 pt-10 pb-24">
-            <div key={`head:${searching ? 'search' : tab}`} className="tab-enter">
-              {drilled && !searching ? (
-                <button
-                  onClick={() => openSettings(parent)}
-                  className="mb-3 flex items-center gap-1 text-[11.5px] text-faint transition-colors hover:text-ink"
-                >
-                  <ArrowLeft size={12} />
-                  {settingsPane(parent).label}
-                </button>
-              ) : null}
-              <h1 className="display text-[24px] leading-tight text-ink">
-                {searching ? 'Search' : active.label}
-              </h1>
-              <p className="mt-1.5 text-[12px] text-muted">
-                {searching
-                  ? results.length
-                    ? `${results.length} match${results.length === 1 ? '' : 'es'} for “${trimmedQuery}”`
-                    : `Nothing matches “${trimmedQuery}”`
-                  : active.summary}
-              </p>
+          <div className="mx-auto w-full max-w-[757px] px-4 pt-12 pb-20">
+            <div className="flex items-start justify-between gap-6">
+              <div
+                key={`head:${searching ? 'search' : tab}`}
+                className="tab-enter min-w-0 px-4"
+              >
+                {drilled && !searching ? (
+                  <button
+                    onClick={() => openSettings(parent)}
+                    className="mb-4 flex items-center gap-1.5 text-[12.5px] text-faint transition-colors hover:text-ink"
+                  >
+                    <ArrowLeft size={13} />
+                    {settingsPane(parent).label}
+                  </button>
+                ) : null}
+                <h1 className="text-[21px] font-semibold leading-tight text-ink">
+                  {searching ? 'Search results' : active.label}
+                </h1>
+                {searching ? (
+                  <p className="mt-1.5 text-[12px] text-muted">
+                    {`Found ${results.length} setting${results.length === 1 ? '' : 's'} for “${trimmedQuery}”`}
+                  </p>
+                ) : null}
+              </div>
+              <div ref={setActionHost} className="shrink-0 pt-1" />
             </div>
 
             <div
               key={searching ? 'search' : tab}
-              className={cn('mt-9', drilled && !searching ? 'drill-in' : 'tab-enter')}
+              className={cn('mt-8', drilled && !searching ? 'drill-in' : 'tab-enter')}
             >
               {searching ? (
                 <SearchResults
@@ -320,21 +359,25 @@ export function SettingsView() {
                   {tab === 'shortcuts' ? <ShortcutsPane /> : null}
                   {tab === 'agent' ? <AgentPane settings={settings} /> : null}
                   {tab === 'agent-team' ? <AgentTeamsPane /> : null}
-                  {tab === 'skills' ? <SkillsPane /> : null}
+                  {tab === 'rook' ? <RookSettingsPane /> : null}
+                  {tab === 'skills' ? <SkillsPane actionHost={actionHost} /> : null}
+                  {tab === 'learning' ? <LearningPane /> : null}
                   {tab === 'sub-agents' ? <SubAgentsPane /> : null}
                   {tab === 'appearance' ? <AppearancePane /> : null}
                   {tab === 'colors' ? <ColorsPane /> : null}
                   {tab === 'moon' ? <MoonPane /> : null}
                   {tab === 'permissions' ? <PermissionsPane settings={settings} /> : null}
-                  {tab === 'instructions' ? <InstructionsPane settings={settings} /> : null}
-                  {tab === 'providers' ? <ProvidersTab settings={settings} /> : null}
-                  {tab === 'tiers' ? <TiersPane /> : null}
-                  {tab === 'mcp' ? <McpTab /> : null}
+                  {tab === 'instructions' ? <InstructionsPane settings={settings} actionHost={actionHost} /> : null}
+                  {tab === 'providers' ? <ProvidersTab settings={settings} actionHost={actionHost} /> : null}
+                  {tab === 'mcp' ? <McpTab actionHost={actionHost} /> : null}
+                  {tab === 'impdesk' ? <ImpDeskPane settings={settings} /> : null}
                   {tab === 'connectors' ? <ConnectorsPane /> : null}
-                  {tab === 'channels' ? <ChannelsPane /> : null}
+                  {tab === 'design-systems' ? <DesignSystemsPane actionHost={actionHost} /> : null}
+                  {tab === 'channels' ? <ChannelsPane actionHost={actionHost} /> : null}
                   {tab === 'gateway' ? <GatewayPane /> : null}
                   {tab === 'work-files' ? <WorkFilesPane /> : null}
                   {tab === 'desktop' ? <DesktopPane /> : null}
+                  {tab === 'enterprise' ? <EnterprisePane settings={settings} /> : null}
                   {tab === 'audit' ? <AuditPane /> : null}
                   {tab === 'about' ? <AboutTab /> : null}
                 </>
@@ -346,7 +389,6 @@ export function SettingsView() {
     </div>
   )
 }
-
 function SearchResults({
   query,
   results,
@@ -358,81 +400,41 @@ function SearchResults({
 }) {
   if (results.length === 0) {
     return (
-      <div className="card flex flex-col items-center px-6 py-12 text-center">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-2 text-muted">
-          <Search size={17} />
-        </div>
-        <p className="mt-3 text-[13px] font-medium">No setting matches “{query}”</p>
-        <p className="mt-1 max-w-xs text-[11.5px] leading-relaxed text-faint">
-          Try “model”, “theme”, “permissions”, or “keys”.
-        </p>
-      </div>
+      <EmptyPanel icon={<Search size={18} />} title={`No setting matches “${query}”`}>
+        Try “model”, “theme”, “permissions”, or “keys”.
+      </EmptyPanel>
     )
   }
 
   return (
-    <div className="space-y-2">
-      {results.map((item) => {
-        const Icon = NAV_ICONS[item.id]
-        return (
-          <button
-            key={item.id}
-            onClick={() => onOpen(item.id)}
-            className="group flex w-full items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-left transition-colors hover:border-line-strong"
-          >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-muted transition-colors group-hover:text-accent">
-              <Icon size={14} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-2">
-                <span className="text-[12.5px] font-medium text-ink">{item.label}</span>
-                <span className="rounded-full border border-line bg-canvas px-1.5 py-px text-[9px] text-faint">
-                  {item.group}
+    <section>
+      <h2 className="mb-2.5 px-4 text-[12px] font-medium text-muted">Matching settings</h2>
+      <SettingCard>
+        {results.map((item) => {
+          const Icon = NAV_ICONS[item.id]
+          return (
+            <SettingRow
+              key={item.id}
+              icon={<Icon size={14} />}
+              title={
+                <span className="flex flex-wrap items-center gap-2">
+                  {item.label}
+                  <span className="rounded-md border border-line bg-surface-2/60 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                    {item.group}
+                  </span>
                 </span>
-              </span>
-              <span className="mt-0.5 block text-[11px] leading-relaxed text-muted">
-                {item.summary}
-              </span>
-            </span>
-            <ChevronRight
-              size={13}
-              className="shrink-0 text-faint transition-transform group-hover:translate-x-0.5"
-            />
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function GlanceRow({
-  icon: Icon,
-  label,
-  value,
-  onClick
-}: {
-  icon: typeof ShieldCheck
-  label: string
-  value: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2/50"
-    >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-muted">
-        <Icon size={13} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[12px] font-medium text-ink">{label}</span>
-        <span className="mt-0.5 block truncate text-[10.5px] text-faint">{value}</span>
-      </span>
-      <ChevronRight
-        size={13}
-        className="shrink-0 text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-muted"
-      />
-    </button>
+              }
+              description={item.summary}
+            >
+              <Button size="sm" variant="secondary" onClick={() => onOpen(item.id)}>
+                Open
+                <ChevronRight size={12} />
+              </Button>
+            </SettingRow>
+          )
+        })}
+      </SettingCard>
+    </section>
   )
 }
 
@@ -447,25 +449,30 @@ function GeneralPane({ settings }: { settings: PublicSettings }) {
     defaultProvider?.id === settings.defaultProviderId && settings.defaultModel
       ? settings.defaultModel
       : defaultProvider?.models[0]
-  const permission = permissionChoice(settings.defaultPermissionMode)
   const mcpEnabled = settings.mcpServers.filter((server) => server.enabled).length
 
   return (
     <div className="space-y-9">
-      <SettingsSection title="Model defaults">
-        {providers.length === 0 ? (
-          <div className="flex items-center gap-3 rounded-xl border border-dashed border-line px-4 py-3.5">
-            <Sparkles size={15} className="text-accent" />
-            <p className="flex-1 text-[12.5px] text-muted">Connect a model to begin.</p>
+      {providers.length === 0 ? (
+        <EmptyPanel
+          icon={<Cpu size={19} />}
+          title={<>No model provider yet. Connect one to pick a default model.</>}
+          action={
             <Button variant="primary" size="sm" onClick={() => openSettings('providers')}>
               Set up
             </Button>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FieldGroup label="Default provider">
+          }
+        />
+      ) : (
+        <SettingsSection title="Model defaults">
+          <SettingList>
+            <SettingRow
+              icon={<Plug size={14} />}
+              title="Default provider"
+              description="Which service answers when nothing else is picked."
+            >
               <select
-                className="field"
+                className="field field-sm"
                 value={defaultProvider?.id ?? ''}
                 onChange={(event) => {
                   const provider = providers.find((item) => item.id === event.target.value)
@@ -482,10 +489,14 @@ function GeneralPane({ settings }: { settings: PublicSettings }) {
                   </option>
                 ))}
               </select>
-            </FieldGroup>
-            <FieldGroup label="Default model">
+            </SettingRow>
+            <SettingRow
+              icon={<Sparkles size={14} />}
+              title="Default model"
+              description="The model inside that provider."
+            >
               <select
-                className="field"
+                className="field field-sm"
                 value={defaultModel ?? ''}
                 disabled={!defaultProvider?.models.length}
                 onChange={(event) => {
@@ -506,38 +517,113 @@ function GeneralPane({ settings }: { settings: PublicSettings }) {
                   ))
                 )}
               </select>
-            </FieldGroup>
-          </div>
-        )}
-      </SettingsSection>
+            </SettingRow>
+          </SettingList>
+        </SettingsSection>
+      )}
 
-      <section>
-        <h2 className="mb-2.5 text-[12.5px] font-medium text-faint">Defaults</h2>
-        <div className="card divide-y divide-line overflow-hidden">
-          <GlanceRow
-            icon={ShieldCheck}
-            label="Permissions"
-            value={`${permission.label} · ${settings.allowShell ? 'shell on' : 'shell off'}`}
-            onClick={() => openSettings('permissions')}
-          />
-          <GlanceRow
-            icon={FileText}
-            label="Memory"
-            value={settings.customInstructions.trim() ? 'On' : 'Empty'}
-            onClick={() => openSettings('instructions')}
-          />
-          <GlanceRow
-            icon={Plug}
-            label="MCP"
-            value={
-              settings.mcpServers.length === 0
-                ? 'None'
-                : `${mcpEnabled} of ${settings.mcpServers.length} active`
+      <SettingsSection title="Defaults">
+        <SettingList>
+          <SettingRow
+            icon={<ShieldCheck size={14} />}
+            title="Permissions"
+            description="What runs without asking. Shell commands always ask."
+          >
+            <select
+              className="field field-sm"
+              value={settings.defaultPermissionMode}
+              aria-label="Default permission mode"
+              onChange={(event) =>
+                void saveSettings({
+                  defaultPermissionMode: event.target.value as PublicSettings['defaultPermissionMode']
+                })
+              }
+            >
+              {PERMISSION_CHOICES.map((choice) => (
+                <option key={choice.value} value={choice.value}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
+          </SettingRow>
+          <SettingRow
+            icon={<FileText size={14} />}
+            title="Memory"
+            description={
+              settings.customInstructions.trim()
+                ? `The ${agentName()} has standing instructions to follow.`
+                : 'No standing instructions yet.'
             }
-            onClick={() => openSettings('mcp')}
-          />
-        </div>
-      </section>
+          >
+            <Button size="sm" variant="secondary" onClick={() => openSettings('instructions')}>
+              Write instructions
+            </Button>
+          </SettingRow>
+          <SettingRow
+            icon={<Plug size={14} />}
+            title="MCP servers"
+            description={
+              settings.mcpServers.length === 0
+                ? 'No external tool servers connected.'
+                : `${mcpEnabled} of ${settings.mcpServers.length} running.`
+            }
+          >
+            <Button size="sm" variant="secondary" onClick={() => openSettings('mcp')}>
+              Manage
+            </Button>
+          </SettingRow>
+        </SettingList>
+      </SettingsSection>
+    </div>
+  )
+}
+
+function EngineStatusLine() {
+  const [status, setStatus] = useState<EngineStatusPublic | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    const load = async (): Promise<void> => {
+      try {
+        const next = await window.knight.getEngineStatus()
+        if (alive) setStatus(next)
+      } catch {
+        if (alive) setStatus({ state: 'error', error: 'The engine status could not be read.' })
+      }
+    }
+    void load()
+    const timer = window.setInterval(() => void load(), 3000)
+    return () => {
+      alive = false
+      window.clearInterval(timer)
+    }
+  }, [])
+
+  if (!status) return null
+  const line =
+    status.state === 'running'
+      ? `Running · port ${status.port ?? '—'} · ${status.providers ?? 0} provider${status.providers === 1 ? '' : 's'}`
+      : status.state === 'starting'
+        ? 'Starting…'
+        : status.state === 'error'
+          ? (status.error ?? 'The engine reported an error.')
+          : 'Starts on the first engine turn.'
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-2.5 text-[11.5px]">
+      <span
+        className={cn(
+          'h-1.5 w-1.5 rounded-full',
+          status.state === 'running'
+            ? 'bg-positive'
+            : status.state === 'error'
+              ? 'bg-danger'
+              : status.state === 'starting'
+                ? 'animate-pulse bg-warn'
+                : 'bg-line-strong'
+        )}
+      />
+      <span className={status.state === 'error' ? 'text-danger' : 'text-muted'}>{line}</span>
     </div>
   )
 }
@@ -546,66 +632,103 @@ function PermissionsPane({ settings }: { settings: PublicSettings }) {
   const saveSettings = useApp((state) => state.saveSettings)
 
   return (
-    <div className="space-y-7">
-      <SettingsSection title="Approval mode">
-        <div className="space-y-1.5">
-          {PERMISSION_CHOICES.map((choice) => {
-            const active = settings.defaultPermissionMode === choice.value
-            const Icon =
-              choice.value === 'manual'
-                ? ShieldCheck
-                : choice.value === 'auto'
-                  ? Zap
-                  : CheckCheck
+    <div className="space-y-9">
+      <SettingsSection title="Execution engine">
+        <SettingList>
+          {ENGINE_CHOICES.map((choice) => {
+            const active = settings.engineMode === choice.value
             return (
               <button
                 key={choice.value}
-                onClick={() => void saveSettings({ defaultPermissionMode: choice.value })}
-                className={cn(
-                  'flex w-full items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors',
-                  active
-                    ? 'border-accent/40 bg-accent-soft/20'
-                    : 'border-line hover:border-line-strong hover:bg-surface-2/40'
-                )}
+                onClick={() => void saveSettings({ engineMode: choice.value })}
+                className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-surface-2/40"
               >
-                <span
-                  className={cn(
-                    'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
-                    active ? 'bg-accent text-on-ink' : 'bg-surface-2 text-muted'
-                  )}
-                >
-                  <Icon size={13} />
-                </span>
+                <SettingTile tone={active ? 'accent' : 'default'}>
+                  <Cpu size={14} />
+                </SettingTile>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5 text-[12.5px] font-medium">
+                  <span className="block text-[13px] leading-snug font-medium text-ink">
                     {choice.label}
-                    {active ? <Check size={12} className="text-accent" /> : null}
                   </span>
-                  <span className="mt-0.5 block text-[11.5px] leading-relaxed text-muted">
+                  <span className="mt-1 block text-[12px] leading-[1.6] text-muted">
                     {choice.blurb}
                   </span>
+                </span>
+                <span
+                  className={cn(
+                    'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors',
+                    active ? 'border-accent bg-accent' : 'border-line-strong'
+                  )}
+                >
+                  {active ? <span className="h-1.5 w-1.5 rounded-full bg-on-ink" /> : null}
                 </span>
               </button>
             )
           })}
-        </div>
+        </SettingList>
+        <EngineStatusLine />
+      </SettingsSection>
 
-        <div className="mt-4 flex items-start gap-3 border-t border-line pt-4">
-          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-muted">
-            <Terminal size={13} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[12.5px] font-medium">Allow shell commands</p>
-            <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted">
-              Run commands inside approved folders.
-            </p>
-          </div>
-          <Toggle
-            checked={settings.allowShell}
-            onChange={(checked) => void saveSettings({ allowShell: checked })}
-            label="Allow shell commands"
-          />
-        </div>
+      <SettingsSection
+        title="Approval mode"
+        
+      >
+        <SettingList>
+          {PERMISSION_CHOICES.map((choice) => {
+            const active = settings.defaultPermissionMode === choice.value
+            const Icon =
+              choice.value === 'plan'
+                ? ListChecks
+                : choice.value === 'manual'
+                  ? ShieldCheck
+                  : choice.value === 'auto'
+                    ? Zap
+                    : CheckCheck
+            return (
+              <button
+                key={choice.value}
+                onClick={() => void saveSettings({ defaultPermissionMode: choice.value })}
+                className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-surface-2/40"
+              >
+                <SettingTile tone={active ? 'accent' : 'default'}>
+                  <Icon size={14} />
+                </SettingTile>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] leading-snug font-medium text-ink">
+                    {choice.label}
+                  </span>
+                  <span className="mt-1 block text-[12px] leading-[1.6] text-muted">
+                    {choice.blurb}
+                  </span>
+                </span>
+                <span
+                  className={cn(
+                    'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors',
+                    active ? 'border-accent bg-accent' : 'border-line-strong'
+                  )}
+                >
+                  {active ? <span className="h-1.5 w-1.5 rounded-full bg-on-ink" /> : null}
+                </span>
+              </button>
+            )
+          })}
+        </SettingList>
+      </SettingsSection>
+
+      <SettingsSection title="Shell">
+        <SettingList>
+          <SettingRow
+            icon={<Terminal size={14} />}
+            title="Allow shell commands"
+            description="Run commands inside approved folders. Every command still asks before it runs."
+          >
+            <Toggle
+              checked={settings.allowShell}
+              onChange={(checked) => void saveSettings({ allowShell: checked })}
+              label="Allow shell commands"
+            />
+          </SettingRow>
+        </SettingList>
       </SettingsSection>
 
       <div className="flex items-center gap-2 px-1 text-[11px] text-faint">
@@ -621,13 +744,20 @@ function workspaceLabel(note: MemoryNote): string {
   return note.scopeRef.split(/[\\/]/).filter(Boolean).pop() ?? note.scopeRef
 }
 
-function InstructionsPane({ settings }: { settings: PublicSettings }) {
+function InstructionsPane({
+  settings,
+  actionHost
+}: {
+  settings: PublicSettings
+  actionHost: HTMLElement | null
+}) {
   const saveSettings = useApp((state) => state.saveSettings)
   const [instructions, setInstructions] = useState(settings.customInstructions)
   const [saving, setSaving] = useState(false)
   const [notes, setNotes] = useState<MemoryNote[]>([])
   const [note, setNote] = useState('')
   const [adding, setAdding] = useState(false)
+  const [composerOpen, setComposerOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [importText, setImportText] = useState('')
   const [importing, setImporting] = useState(false)
@@ -662,6 +792,7 @@ function InstructionsPane({ settings }: { settings: PublicSettings }) {
     try {
       setNotes(await window.knight.addMemory({ text }))
       setNote('')
+      setComposerOpen(false)
       toast.success('Note saved.')
     } catch (error) {
       toast.error(errorMessage(error))
@@ -694,70 +825,85 @@ function InstructionsPane({ settings }: { settings: PublicSettings }) {
 
   return (
     <div className="space-y-9">
-      <SettingsSection
-        title="Saved notes"
-        description="Facts and preferences the Captain recalls when they matter."
-        action={
+      {actionHost
+        ? createPortal(
+            <Button size="sm" variant="primary" onClick={() => setComposerOpen((open) => !open)}>
+              <Plus size={12.5} /> Add note
+            </Button>,
+            actionHost
+          )
+        : null}
+
+      <section>
+        <div className="mb-2.5 flex items-end justify-between gap-4 px-4">
+          <h2 className="text-[12px] font-medium text-muted">Saved notes</h2>
           <Button size="sm" variant="ghost" onClick={() => setImportOpen(true)}>
             <FileText size={12.5} /> Import
           </Button>
-        }
-      >
-        <div className="flex gap-2">
-          <input
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') void addNote()
-            }}
-            placeholder="Something worth remembering"
-            aria-label="New memory note"
-            className="field flex-1"
-          />
-          <Button
-            size="sm"
-            variant="primary"
-            loading={adding}
-            disabled={!note.trim()}
-            onClick={() => void addNote()}
-          >
-            Add
-          </Button>
         </div>
 
+        {composerOpen ? (
+          <div className="card mb-2 flex gap-2 p-3">
+            <input
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') void addNote()
+              }}
+              placeholder="Something worth remembering"
+              aria-label="New memory note"
+              className="field flex-1"
+            />
+            <Button
+              size="sm"
+              variant="primary"
+              loading={adding}
+              disabled={!note.trim()}
+              onClick={() => void addNote()}
+            >
+              Add
+            </Button>
+          </div>
+        ) : null}
+
         {notes.length === 0 ? (
-          <p className="mt-4 text-[11.5px] text-faint">Nothing saved yet.</p>
+          <EmptyPanel
+            icon={<Brain size={18} />}
+            title={<>No notes saved yet.</>}
+          >
+            Select <ActionWord>Add note</ActionWord> in the top right to get started.
+          </EmptyPanel>
         ) : (
-          <div className="mt-4 divide-y divide-line">
+          <SettingCard>
             {notes.map((item) => (
-              <div key={item.id} className="group flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-surface-2 text-faint">
-                  <Brain size={12} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[12px] leading-relaxed text-ink">{item.text}</p>
-                  <p className="mt-0.5 text-[10px] text-faint">
-                    {workspaceLabel(item)}
-                    {item.source === 'captain' ? ' · written by the Captain' : ''}
-                    {item.source === 'import' ? ' · imported' : ''}
-                  </p>
-                </div>
+              <SettingRow
+                key={item.id}
+                icon={<Brain size={14} />}
+                title={item.text}
+                description={[
+                  workspaceLabel(item),
+                  item.source === 'captain' ? `written by the ${agentName()}` : '',
+                  item.source === 'import' ? 'imported' : ''
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              >
                 <IconButton
                   aria-label="Forget this note"
                   onClick={() => void removeNote(item.id)}
-                  className="opacity-0 group-hover:opacity-100 hover:text-danger"
+                  className="hover:text-danger"
                 >
                   <Trash2 size={12.5} />
                 </IconButton>
-              </div>
+              </SettingRow>
             ))}
-          </div>
+          </SettingCard>
         )}
-      </SettingsSection>
+      </section>
 
       <SettingsSection
         title="Instructions"
-        description="Added to every task, before the work starts."
+        
         action={
           <Button
             size="sm"
@@ -816,24 +962,28 @@ const PROVIDER_KINDS: {
   value: ProviderKind
   label: string
   blurb: string
+  address: string
   icon: typeof Sparkles
 }[] = [
   {
     value: 'anthropic',
-    label: 'Direct API',
-    blurb: 'First-party model APIs',
+    label: 'Anthropic',
+    blurb: 'Claude',
+    address: 'https://api.anthropic.com',
     icon: Sparkles
   },
   {
     value: 'openai',
-    label: 'Hosted API',
-    blurb: 'Hosted chat-completion models',
+    label: 'OpenAI',
+    blurb: 'GPT',
+    address: 'https://api.openai.com/v1',
     icon: Aperture
   },
   {
     value: 'compatible',
-    label: 'Compatible',
-    blurb: 'Any chat-completion endpoint',
+    label: 'Other',
+    blurb: 'Local or custom server',
+    address: 'http://localhost:11434/v1',
     icon: Plug
   }
 ]
@@ -853,7 +1003,13 @@ function toProviderInput(provider: ProviderPublic): ProviderInput {
   }
 }
 
-function ProvidersTab({ settings }: { settings: PublicSettings }) {
+function ProvidersTab({
+  settings,
+  actionHost
+}: {
+  settings: PublicSettings
+  actionHost: HTMLElement | null
+}) {
   const saveSettings = useApp((state) => state.saveSettings)
   const [editing, setEditing] = useState<ProviderPublic | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -877,11 +1033,13 @@ function ProvidersTab({ settings }: { settings: PublicSettings }) {
   }
 
   const removeProvider = async (provider: ProviderPublic): Promise<void> => {
-    if (
-      !window.confirm(
-        `Remove “${provider.name}”? Tasks already using it will need another model.`
-      )
-    ) {
+    const confirmed = await confirmDialog({
+      title: `Remove “${provider.name}”?`,
+      body: 'Tasks already using it will need another model.',
+      confirmLabel: 'Remove provider',
+      danger: true
+    })
+    if (!confirmed) {
       return
     }
     const saved = await saveSettings({
@@ -902,33 +1060,35 @@ function ProvidersTab({ settings }: { settings: PublicSettings }) {
 
   return (
     <div>
+      {actionHost
+        ? createPortal(
+            <Button variant="primary" size="sm" onClick={openCreate}>
+              <Plus size={13} />
+              Add provider
+            </Button>,
+            actionHost
+          )
+        : null}
+
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <p className="flex items-center gap-1.5 text-[10.5px] text-faint">
-          <ShieldCheck size={11} />
+        <p className="flex items-center gap-1.5 text-[11.5px] text-faint">
+          <ShieldCheck size={12} />
           Keys are sealed with your OS keychain and never reach the interface.
         </p>
-        <Button variant="primary" size="sm" onClick={openCreate}>
-          <Plus size={13} />
-          Add provider
-        </Button>
+      </div>
+
+      <div className="mb-3">
+        <ImpCodesCard />
       </div>
 
       <div className="space-y-2.5">
         {settings.providers.length === 0 ? (
-          <div className="card flex flex-col items-center px-6 py-12 text-center">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent-soft text-accent-ink">
-              <Cpu size={19} />
-            </div>
-            <p className="mt-3 text-[13px] font-medium">No model provider yet</p>
-            <p className="mt-1 max-w-sm text-[12px] leading-relaxed text-faint">
-              Add a key for a first-party model API, or point SelfImpulse at any
-              chat-completion endpoint — hosted or running on your own machine.
-            </p>
-            <Button variant="primary" size="sm" className="mt-4" onClick={openCreate}>
-              <Plus size={13} />
-              Connect a model
-            </Button>
-          </div>
+          <EmptyPanel
+            icon={<Cpu size={19} />}
+            title={<>No model provider yet.</>}
+          >
+            Select <ActionWord>Add provider</ActionWord> in the top right to get started.
+          </EmptyPanel>
         ) : (
           settings.providers.map((provider) => {
             const meta = kindMeta(provider.kind)
@@ -942,22 +1102,25 @@ function ProvidersTab({ settings }: { settings: PublicSettings }) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <h3 className="truncate text-[13px] font-semibold">{provider.name}</h3>
-                      <span className="rounded-full border border-line bg-canvas px-1.5 py-0.5 text-[9.5px] font-medium text-muted">
+                      <h3 className="min-w-0 truncate text-[13px] font-semibold" title={provider.name}>{provider.name}</h3>
+                      <span className="rounded-full border border-line bg-canvas px-1.5 py-0.5 text-[10px] font-medium text-muted">
                         {meta.label}
                       </span>
                       {isDefault ? (
-                        <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[9.5px] font-medium text-accent-ink">
+                        <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent-ink">
                           Default
                         </span>
                       ) : null}
                       {!provider.enabled ? (
-                        <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[9.5px] font-medium text-faint">
+                        <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-faint">
                           Disabled
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-0.5 truncate text-[11px] text-faint">
+                    <p
+                      className="mt-0.5 truncate text-[11px] text-faint"
+                      title={provider.baseUrl || undefined}
+                    >
                       {provider.baseUrl || (
                         provider.kind === 'anthropic'
                           ? 'First-party endpoint'
@@ -1058,7 +1221,6 @@ function ProviderModal({
   const [enabled, setEnabled] = useState(provider?.enabled ?? true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
-  const [fetching, setFetching] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
 
@@ -1079,37 +1241,28 @@ function ProviderModal({
     apiKey: apiKey.trim() || undefined
   })
 
+  const applyPreset = (preset: ProviderPreset): void => {
+    setName(preset.name)
+    setKind(preset.kind)
+    setBaseUrl(preset.baseUrl ?? '')
+    setModelsText(preset.models.join('\n'))
+    setTestResult(null)
+    setError(null)
+  }
+
   const runTest = async (): Promise<void> => {
     setTesting(true)
     setTestResult(null)
     try {
       const result = await window.knight.testProvider(buildInput())
       setTestResult({ ok: result.ok, message: result.message })
-      if (result.ok && models.length === 0 && result.models?.length) {
+      if (result.ok && result.models?.length) {
         setModelsText(result.models.slice(0, 40).join('\n'))
-        toast.success('Models loaded from the provider.')
       }
     } catch (caught) {
       setTestResult({ ok: false, message: errorMessage(caught) })
     } finally {
       setTesting(false)
-    }
-  }
-
-  const fetchModels = async (): Promise<void> => {
-    setFetching(true)
-    try {
-      const result = await window.knight.fetchModels(buildInput())
-      if (!result.length) {
-        toast.error('The provider returned no models.')
-        return
-      }
-      setModelsText(result.join('\n'))
-      toast.success(`Loaded ${result.length} model${result.length === 1 ? '' : 's'}.`)
-    } catch (caught) {
-      toast.error(errorMessage(caught))
-    } finally {
-      setFetching(false)
     }
   }
 
@@ -1123,12 +1276,12 @@ function ProviderModal({
       setError('Add at least one model ID.')
       return
     }
-    if (!provider?.hasKey && !apiKey.trim()) {
+    if (!provider?.hasKey && !apiKey.trim() && kind !== 'compatible') {
       setError('Add an API key for this provider.')
       return
     }
     if (kind === 'compatible' && !baseUrl.trim()) {
-      setError('A base URL is required for compatible providers.')
+      setError('Add the address of the server, for example http://localhost:11434/v1.')
       return
     }
     if (!settings) return
@@ -1186,6 +1339,8 @@ function ProviderModal({
       }
     >
       <div className="space-y-4">
+        {!provider ? <ProviderPresets onPick={applyPreset} /> : null}
+
         <FieldGroup label="Provider type">
           <div className="grid gap-2 sm:grid-cols-3">
             {PROVIDER_KINDS.map((option) => {
@@ -1224,20 +1379,27 @@ function ProviderModal({
         </FieldGroup>
 
         <FieldGroup
-          label="Base URL"
-          hint={kind === 'compatible' ? 'Required' : 'Optional'}
+          label="Server address"
+          hint={kind === 'compatible' ? 'Required' : 'Only if not the default'}
         >
           <input
             className="field"
             value={baseUrl}
             onChange={(event) => setBaseUrl(event.target.value)}
+            placeholder={meta.address}
             spellCheck={false}
           />
         </FieldGroup>
 
         <FieldGroup
           label="API key"
-          hint={provider?.hasKey ? 'A key is already saved' : undefined}
+          hint={
+            provider?.hasKey
+              ? 'A key is already saved'
+              : kind === 'compatible'
+                ? 'Leave blank for a local server'
+                : undefined
+          }
         >
           <div className="relative">
             <input
@@ -1273,25 +1435,18 @@ function ProviderModal({
             className="field min-h-[92px] font-mono text-[11.5px]"
             value={modelsText}
             onChange={(event) => setModelsText(event.target.value)}
+            placeholder={kind === 'compatible' ? 'llama3.2' : 'claude-sonnet-4-5'}
             spellCheck={false}
           />
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
               size="sm"
-              loading={fetching}
-              onClick={() => void fetchModels()}
-            >
-              <RefreshCw size={12} />
-              Fetch models
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
               loading={testing}
               onClick={() => void runTest()}
             >
-              Test connection
+              <RefreshCw size={12} />
+              Load models
             </Button>
             <span className="text-[10.5px] text-faint">
               {models.length} model{models.length === 1 ? '' : 's'} listed
@@ -1433,11 +1588,11 @@ function McpTools({
                 )}
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="font-mono text-[10.5px] font-medium text-ink">{tool.name}</span>
+                  <span className="min-w-0 break-all font-mono text-[10.5px] font-medium text-ink">{tool.name}</span>
                   {exposed ? (
                     <Check size={10} className="shrink-0 text-positive" />
                   ) : (
-                    <span className="text-[9px] text-faint">hidden</span>
+                    <span className="text-[10px] text-faint">hidden</span>
                   )}
                 </div>
                 {tool.description ? (
@@ -1484,15 +1639,15 @@ function McpServerCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <h3 className="truncate text-[13px] font-semibold">{config.name}</h3>
+            <h3 className="min-w-0 truncate text-[13px] font-semibold" title={config.name}>{config.name}</h3>
             {config.preset === 'rea' ? (
-              <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[9.5px] font-medium text-accent-ink">
-                REA preset
+              <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent-ink">
+                Preset
               </span>
             ) : null}
             <span
               className={cn(
-                'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9.5px] font-medium',
+                'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium',
                 meta.className
               )}
             >
@@ -1504,7 +1659,10 @@ function McpServerCard({
               {meta.label}
             </span>
           </div>
-          <p className="mt-0.5 truncate font-mono text-[10.5px] text-faint">
+          <p
+            className="mt-0.5 truncate font-mono text-[10.5px] text-faint"
+            title={`${config.command} ${config.args.join(' ')}`}
+          >
             {config.command} {config.args.join(' ')}
           </p>
         </div>
@@ -1572,13 +1730,173 @@ function McpServerCard({
   )
 }
 
-function McpTab() {
+function McpMarketBrowser({
+  isInstalled,
+  onInstalled
+}: {
+  isInstalled: (configId: string) => boolean
+  onInstalled: (statuses: McpServerStatus[]) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<McpMarketSearchResult[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [installingId, setInstallingId] = useState<string | null>(null)
+  const [detail, setDetail] = useState<McpMarketDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  const load = useCallback(async (target: string): Promise<void> => {
+    setLoading(true)
+    try {
+      setResults(await window.knight.searchMcpMarket(target))
+    } catch (caught) {
+      toast.error(errorMessage(caught))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load('')
+  }, [load])
+
+  const install = async (id: string): Promise<void> => {
+    setInstallingId(id)
+    try {
+      const result = await window.knight.installMcpMarket(id)
+      onInstalled(result.statuses)
+      toast.success(
+        result.updated ? `${result.config.name} updated.` : `${result.config.name} added to your servers.`
+      )
+    } catch (caught) {
+      toast.error(errorMessage(caught))
+    } finally {
+      setInstallingId(null)
+    }
+  }
+
+  const toggleDetail = async (id: string): Promise<void> => {
+    if (detail?.id === id) {
+      setDetail(null)
+      return
+    }
+    setDetailLoading(true)
+    try {
+      setDetail(await window.knight.readMcpMarket(id))
+    } catch (caught) {
+      toast.error(errorMessage(caught))
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="relative">
+        <Search
+          size={13}
+          className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-faint"
+        />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void load(query)
+          }}
+          placeholder="Search the tool server library"
+          aria-label="Search the tool server library"
+          className={cn(marketplaceInputClass, 'pl-8')}
+        />
+      </div>
+      <p className="px-1 text-[11.5px] text-faint">
+        The community library, ready to browse. Nothing installs until you choose it.
+      </p>
+
+      {loading ? (
+        <div className="card flex items-center justify-center gap-2 py-12 text-[12px] text-faint">
+          <Spin size={13} />
+          Reading the library…
+        </div>
+      ) : results && results.length > 0 ? (
+        <SettingCard>
+          {results.map((result) => {
+            const configId = `market_${result.id.replace(/[^A-Za-z0-9._-]/g, '_')}`
+            const installed = isInstalled(configId)
+            const open = detail?.id === result.id
+            return (
+              <div key={result.id}>
+                <SettingRow
+                  icon={<Boxes size={14} />}
+                  title={
+                    <span className="flex flex-wrap items-center gap-2">
+                      {result.name}
+                      {result.validated ? <Chip tone="positive">Verified</Chip> : null}
+                      {result.category ? <Chip>{result.category}</Chip> : null}
+                    </span>
+                  }
+                  description={`${result.author || 'Community'} · ${result.description || 'No description provided.'}`}
+                >
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void toggleDetail(result.id)}
+                    disabled={detailLoading}
+                  >
+                    {open ? 'Hide details' : 'Details'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={installed ? 'secondary' : 'primary'}
+                    loading={installingId === result.id}
+                    disabled={Boolean(installingId)}
+                    onClick={() => void install(result.id)}
+                  >
+                    {installed ? 'Reinstall' : 'Add'}
+                  </Button>
+                </SettingRow>
+                {open ? (
+                  <div className="mx-11 mb-3 rounded-[10px] border border-line bg-canvas/50 px-3.5 py-3">
+                    <p className="text-[11.5px] leading-relaxed text-muted">
+                      {detail?.description || result.description || 'No description provided.'}
+                    </p>
+                    {result.tools.length ? (
+                      <p className="mt-2 text-[10.5px] text-faint">
+                        Tools: {result.tools.slice(0, 12).join(', ')}
+                        {result.tools.length > 12 ? ` and ${result.tools.length - 12} more` : ''}
+                      </p>
+                    ) : null}
+                    {detail?.deploymentDescription ? (
+                      <p className="mt-2 text-[10.5px] text-faint">
+                        Runs as: {detail.deploymentDescription}
+                      </p>
+                    ) : null}
+                    {detail && detail.systemDependencies.length > 0 ? (
+                      <p className="mt-2 text-[10.5px] text-warn">
+                        Needs on this machine: {detail.systemDependencies.join(', ')}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+        </SettingCard>
+      ) : (
+        <p className="px-1 text-[12px] text-muted">
+          {results === null ? 'Reading the library…' : 'Nothing matches that search.'}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function McpTab({ actionHost }: { actionHost: HTMLElement | null }) {
   const [configs, setConfigs] = useState<McpServerConfig[]>([])
   const [statuses, setStatuses] = useState<McpServerStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<McpServerConfig | null>(null)
   const [addingRea, setAddingRea] = useState(false)
+  const [view, setView] = useState<'installed' | 'market'>('installed')
 
   const refreshConfigs = async (): Promise<void> => {
     const settings = await window.knight.getSettings()
@@ -1693,7 +2011,13 @@ function McpTab() {
   }
 
   const removeServer = async (config: McpServerConfig): Promise<void> => {
-    if (!window.confirm(`Remove MCP server “${config.name}”?`)) return
+    const confirmed = await confirmDialog({
+      title: `Remove MCP server “${config.name}”?`,
+      body: 'Its tools stop being available to the agent until you add it again.',
+      confirmLabel: 'Remove server',
+      danger: true
+    })
+    if (!confirmed) return
     try {
       await window.knight.removeMcp(config.id)
       await refresh()
@@ -1706,97 +2030,113 @@ function McpTab() {
   const hasRea = configs.some((config) => config.preset === 'rea' || config.id === 'mcp-rea')
 
   return (
-    <div>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <p className="flex items-center gap-1.5 text-[10.5px] text-faint">
-          <Plug size={11} />
-          Servers run locally over stdio. Add only what you trust.
-        </p>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            setEditing(null)
-            setModalOpen(true)
-          }}
-        >
-          <Plus size={13} />
-          Add server
-        </Button>
-      </div>
-
-      <div className="rounded-2xl border border-accent/25 bg-accent-soft/25 p-4">
-        <div className="flex flex-wrap items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-surface text-accent">
-            <Boxes size={18} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <p className="text-[12.5px] font-semibold">Reverse Engineer Anything</p>
-              <span className="rounded-full border border-line bg-surface/70 px-1.5 py-0.5 text-[9.5px] font-medium text-muted">
-                REA · 200+ tools
-              </span>
-            </div>
-            <p className="mt-1 max-w-[560px] text-[11.5px] leading-relaxed text-muted">
-              Inspect binaries, Electron apps, .NET assemblies, and websites. SelfImpulse exposes a
-              curated set of 20 analysis tools by default. Only analyze software you are authorized
-              to inspect.
-            </p>
-          </div>
-          <Button
-            variant={hasRea ? 'secondary' : 'primary'}
-            size="sm"
-            loading={addingRea}
-            onClick={() => void addRea()}
-          >
-            {hasRea ? <RefreshCw size={12} /> : <Plus size={12} />}
-            {hasRea ? 'Reconnect' : 'Add REA preset'}
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-3 space-y-2.5">
-        {loading ? (
-          <div className="card flex items-center justify-center gap-2 py-12 text-[12px] text-faint">
-            <Spin size={13} />
-            Reading installed servers…
-          </div>
-        ) : configs.length === 0 ? (
-          <div className="card flex flex-col items-center px-6 py-10 text-center">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-2 text-muted">
-              <Plug size={17} />
-            </div>
-            <p className="mt-3 text-[12.5px] font-medium">No MCP servers installed</p>
-            <p className="mt-1 max-w-sm text-[11.5px] leading-relaxed text-faint">
-              Add the REA preset above, or connect any stdio MCP server with its command, arguments,
-              and environment variables.
-            </p>
-          </div>
-        ) : (
-          configs.map((config) => (
-            <McpServerCard
-              key={config.id}
-              config={config}
-              status={statuses.find((status) => status.id === config.id)}
-              onEdit={() => {
-                setEditing(config)
+    <div className="space-y-6">
+      {actionHost && view === 'installed'
+        ? createPortal(
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                setEditing(null)
                 setModalOpen(true)
               }}
-              onRemove={() => void removeServer(config)}
-              onToggle={(enabled) => toggleServer(config, enabled)}
-              onRestart={() => restartServer(config)}
-            />
-          ))
-        )}
+            >
+              <Plus size={13} />
+              Add server
+            </Button>,
+            actionHost
+          )
+        : null}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <CountTabs
+          value={view}
+          onChange={setView}
+          tabs={[
+            { value: 'installed', label: 'Installed', count: configs.length },
+            { value: 'market', label: 'Library' }
+          ]}
+        />
+        {view === 'installed' ? (
+          <IconButton onClick={() => void refresh()} aria-label="Refresh servers">
+            <RefreshCw size={13} />
+          </IconButton>
+        ) : null}
       </div>
 
-      <div className="mt-6 flex items-start gap-2 rounded-xl border border-line bg-canvas-deep/40 px-3.5 py-3 text-[11px] leading-relaxed text-faint">
-        <Info size={13} className="mt-0.5 shrink-0" />
-        <p>
-          MCP servers run as local processes on your machine. Only add servers from sources you
-          trust. Tool calls follow the same permission rules as built-in tools.
-        </p>
-      </div>
+      {view === 'market' ? (
+        <McpMarketBrowser
+          isInstalled={(configId) => configs.some((config) => config.id === configId)}
+          onInstalled={(next) => {
+            setStatuses(next)
+            void refreshConfigs()
+          }}
+        />
+      ) : (
+        <>
+          <p className="flex items-center gap-1.5 text-[11.5px] text-faint">
+            <Plug size={12} />
+            Servers run locally over stdio. Only add servers you trust — tool calls follow the same
+            permission rules as built-in tools.
+          </p>
+
+          <div className="rounded-2xl border border-accent/25 bg-accent-soft/25 p-4">
+            <div className="flex flex-wrap items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-surface text-accent">
+                <Boxes size={18} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-semibold">Analysis preset</p>
+                <p className="mt-1 max-w-[560px] text-[12px] leading-[1.6] text-muted">
+                  Adds a ready-made tool server for inspecting binaries, apps and websites. Only
+                  analyze software you are authorized to inspect.
+                </p>
+              </div>
+              <Button
+                variant={hasRea ? 'secondary' : 'primary'}
+                size="sm"
+                loading={addingRea}
+                onClick={() => void addRea()}
+              >
+                {hasRea ? <RefreshCw size={12} /> : <Plus size={12} />}
+                {hasRea ? 'Reconnect' : 'Add preset'}
+              </Button>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="card flex items-center justify-center gap-2 py-12 text-[12px] text-faint">
+              <Spin size={13} />
+              Reading installed servers…
+            </div>
+          ) : configs.length === 0 ? (
+            <EmptyPanel
+              icon={<Plug size={17} />}
+              title={<>No MCP servers installed.</>}
+            >
+              Select <ActionWord>Add server</ActionWord> in the top right, or open the{' '}
+              <ActionWord>Library</ActionWord> tab to browse the community catalogue.
+            </EmptyPanel>
+          ) : (
+            <div className="space-y-2.5">
+              {configs.map((config) => (
+                <McpServerCard
+                  key={config.id}
+                  config={config}
+                  status={statuses.find((status) => status.id === config.id)}
+                  onEdit={() => {
+                    setEditing(config)
+                    setModalOpen(true)
+                  }}
+                  onRemove={() => void removeServer(config)}
+                  onToggle={(enabled) => toggleServer(config, enabled)}
+                  onRestart={() => restartServer(config)}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
       {modalOpen ? (
         <McpServerModal
@@ -1980,55 +2320,43 @@ function ProfilePane({ settings }: { settings: PublicSettings }) {
 
   return (
     <div className="space-y-9">
-      <div className="card relative overflow-hidden p-5">
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-32 opacity-70"
-          style={{
-            background:
-              'radial-gradient(ellipse 65% 100% at 15% 0%, var(--c-accent-soft) 0%, transparent 78%)'
-          }}
-        />
-        <div className="relative flex flex-wrap items-start gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-line bg-surface-3 text-[18px] font-semibold text-accent-ink">
-            {profileInitial(profile)}
+      <div className="flex flex-wrap items-center gap-4 px-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[15px] font-semibold text-ink">{profile.name}</p>
+            <span className="rounded-md border border-line bg-surface-2/60 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+              Owner
+            </span>
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="display text-[20px] leading-tight text-ink">{profile.name}</h2>
-              <span className="rounded-full border border-gold/20 bg-gold-soft/60 px-2 py-0.5 text-[9.5px] font-medium text-gold">
-                Owner
-              </span>
-            </div>
-            <p className="mt-0.5 text-[11.5px] text-muted">
-              {profile.role} · {profile.email}
-            </p>
-          </div>
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-canvas/70 px-2.5 py-1 text-[10px] text-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-positive" /> Local
-          </span>
+          <p className="mt-1 text-[12px] leading-[1.6] text-muted">
+            {profile.role} · {profile.email}
+          </p>
         </div>
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-line bg-surface-2/60 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+          <span className="h-1.5 w-1.5 rounded-full bg-positive" /> Local
+        </span>
       </div>
 
       <section>
-        <div className="mb-2.5 flex items-end justify-between gap-4">
-          <h2 className="text-[12.5px] font-medium text-faint">Usage</h2>
+        <div className="mb-3 flex items-end justify-between gap-4">
+          <h2 className="text-[12px] font-medium text-muted">Usage</h2>
           <button
             onClick={() => openSettings('task-monitor')}
-            className="text-[11px] text-muted transition-colors hover:text-ink"
+            className="text-[11.5px] text-muted transition-colors hover:text-ink"
           >
             All tasks
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 divide-x divide-y divide-line/70 rounded-[var(--r-card)] border border-line bg-canvas/40 sm:grid-cols-4 sm:divide-y-0">
           {[
             { label: 'Tokens', value: compactNumber(usage?.totals.total ?? 0) },
             { label: 'Model calls', value: compactNumber(usage?.totals.calls ?? 0) },
             { label: 'Sessions', value: String(sessions.stats.total) },
             { label: 'Day streak', value: `${sessions.stats.streak}d` }
           ].map((stat) => (
-            <div key={stat.label} className="card px-3.5 py-3">
-              <p className="font-mono text-[20px] leading-7 text-ink">{stat.value}</p>
-              <p className="mt-0.5 text-[9.5px] text-faint">{stat.label}</p>
+            <div key={stat.label} className="px-5 py-4 text-center">
+              <p className="font-data text-[22px] leading-none font-semibold text-ink">{stat.value}</p>
+              <p className="mt-1.5 text-[11px] text-muted">{stat.label}</p>
             </div>
           ))}
         </div>
@@ -2097,30 +2425,33 @@ function ProfilePane({ settings }: { settings: PublicSettings }) {
       </SettingsSection>
 
       <SettingsSection title="Account">
-        <div className="divide-y divide-line">
-          <div className="flex items-center justify-between gap-4 py-2.5 first:pt-0">
-            <span className="text-[12px] text-muted">Mode</span>
+        <SettingList>
+          <SettingRow title="Mode" description="How this device is set up.">
             <span className="text-[12px] font-medium text-ink">Self · this device</span>
-          </div>
-          <div className="flex items-center justify-between gap-4 py-2.5">
-            <span className="text-[12px] text-muted">Default permission</span>
+          </SettingRow>
+          <SettingRow
+            title="Default permission"
+            description={`What ${agentName()} may do without asking.`}
+          >
             <button
               onClick={() => openSettings('permissions')}
-              className="text-[12px] font-medium text-ink hover:text-accent-ink"
+              className="text-[12px] font-medium text-ink transition-colors hover:text-accent-ink"
             >
               {permission.label}
             </button>
-          </div>
-          <div className="flex items-center justify-between gap-4 py-2.5 last:pb-0">
-            <span className="text-[12px] text-muted">Execution engine</span>
+          </SettingRow>
+          <SettingRow
+            title="Execution engine"
+            description="The loop that runs every task on this machine."
+          >
             <span className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
               <span
                 className={cn('h-1 w-1 rounded-full', hasModel ? 'bg-positive' : 'bg-warn')}
               />
               Local engine · {hasModel ? 'ready' : 'needs a model'}
             </span>
-          </div>
-        </div>
+          </SettingRow>
+        </SettingList>
       </SettingsSection>
     </div>
   )
@@ -2137,7 +2468,7 @@ function ModeConfigPane({ settings }: { settings: PublicSettings }) {
       icon: BrandMark,
       blurb: 'One person. Chat and Company, private to this laptop.',
       points: [
-        'Captain → Consul → Adept → Crew.',
+        `${agentName()} → Envoy → Operator → Team.`,
         'Your key turns every local gate.'
       ],
       actionLabel: 'Open Chat',
@@ -2147,9 +2478,9 @@ function ModeConfigPane({ settings }: { settings: PublicSettings }) {
       name: 'Collab',
       tag: 'Two machines',
       icon: Handshake,
-      blurb: 'Two people, each running their own Captain and engine.',
+      blurb: `Two people, each running their own ${agentName()} and engine.`,
       points: [
-        'Captains meet as peers at the Table.',
+        `${agentName()}s meet as peers at the Table.`,
         'Joint actions need both keys.'
       ],
       actionLabel: 'Open Table',
@@ -2173,7 +2504,7 @@ function ModeConfigPane({ settings }: { settings: PublicSettings }) {
                     <h3 className="text-[13.5px] font-semibold text-ink">{mode.name}</h3>
                     <span
                       className={cn(
-                        'rounded-full border px-1.5 py-0.5 text-[8.5px] font-medium',
+                        'rounded-full border px-1.5 py-0.5 text-[10px] font-medium',
                         mode.name === 'Self'
                           ? 'border-gold/25 bg-gold-soft/60 text-gold'
                           : 'border-identity-a/25 bg-identity-a/10 text-identity-a'
@@ -2234,25 +2565,26 @@ function TaskMonitorPane() {
 
   return (
     <div className="space-y-9">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {[
-          { label: 'Total', value: tasks.length },
-          { label: 'Running', value: tasks.filter((task) => task.status === 'running').length },
-          { label: 'Waiting', value: tasks.filter((task) => task.status === 'waiting').length },
-          { label: 'Done', value: tasks.filter((task) => task.status === 'done').length }
-        ].map((stat) => (
-          <div key={stat.label} className="card px-3.5 py-3">
-            <p className="font-mono text-[20px] leading-7 text-ink">{stat.value}</p>
-            <p className="mt-0.5 text-[9.5px] tracking-[0.09em] text-faint uppercase">
-              {stat.label}
-            </p>
-          </div>
-        ))}
-      </div>
+      <SettingsSection title="Overview">
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-line/60 sm:grid-cols-4">
+          {[
+            { label: 'Total', value: tasks.length },
+            { label: 'Running', value: tasks.filter((task) => task.status === 'running').length },
+            { label: 'Waiting', value: tasks.filter((task) => task.status === 'waiting').length },
+            { label: 'Done', value: tasks.filter((task) => task.status === 'done').length }
+          ].map((stat) => (
+            <div key={stat.label} className="bg-canvas px-3.5 py-3">
+              <p className="font-mono text-[20px] leading-7 text-ink">{stat.value}</p>
+              <p className="mt-0.5 text-[10px] tracking-[0.09em] text-faint uppercase">
+                {stat.label}
+              </p>
+            </div>
+          ))}
+        </div>
+      </SettingsSection>
 
       <SettingsSection
         title="Local tasks"
-        description="Read from this machine's task store. Only tasks you actually start appear here."
         action={
           tasks.length ? (
             <Button size="sm" variant="secondary" onClick={() => openSurface('chat')}>
@@ -2262,34 +2594,37 @@ function TaskMonitorPane() {
         }
       >
         {tasks.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-6 text-center">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-2 text-faint">
-              <Activity size={17} />
-            </span>
-            <p className="text-[12.5px] font-medium text-ink">Nothing has run yet</p>
-            <p className="max-w-[320px] text-[11px] leading-relaxed text-faint">
-              When a task starts, its state and receipts appear here.
-            </p>
-            <Button size="sm" variant="primary" className="mt-1" onClick={startNewTask}>
-              Start a task
-            </Button>
-          </div>
+          <EmptyPanel
+            icon={<Activity size={19} />}
+            title={<>Nothing has run yet.</>}
+            action={
+              <Button size="sm" variant="primary" onClick={startNewTask}>
+                Start a task
+              </Button>
+            }
+          >
+            When a task starts, its state and receipts appear here.
+          </EmptyPanel>
         ) : (
-          <div className="divide-y divide-line">
+          <SettingList>
             {tasks.map((task) => (
               <button
                 key={task.id}
                 onClick={() => void openTask(task.id)}
-                className="group flex w-full items-center gap-3 py-2.5 text-left first:pt-0 last:pb-0"
+                className="group flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-surface-2/40"
               >
-                <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', TASK_DOT[task.status])} />
+                <span
+                  className={cn('h-2 w-2 shrink-0 rounded-full', TASK_DOT[task.status])}
+                />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[12.5px] text-ink">{task.title}</span>
-                  <span className="mt-0.5 block text-[10px] text-faint">
+                  <span className="block truncate text-[13px] font-medium text-ink" title={task.title}>
+                    {task.title}
+                  </span>
+                  <span className="mt-1 block text-[12px] text-muted">
                     {statusLabel(task.status)} · updated {timeAgo(task.updatedAt)}
                   </span>
                 </span>
-                <span className="shrink-0 text-[10px] text-faint">
+                <span className="shrink-0 text-[11.5px] text-faint">
                   {task.artifactsCount} receipt{task.artifactsCount === 1 ? '' : 's'}
                 </span>
                 <ChevronRight
@@ -2298,7 +2633,7 @@ function TaskMonitorPane() {
                 />
               </button>
             ))}
-          </div>
+          </SettingList>
         )}
       </SettingsSection>
     </div>
@@ -2310,89 +2645,163 @@ const SHORTCUT_GROUPS = [
     title: 'Global',
     description: 'Work anywhere in the app.',
     rows: [
-      { label: 'New task', keys: ['Ctrl', 'N'] },
-      { label: 'Search settings', keys: ['Ctrl', 'K'] },
-      { label: 'Toggle sidebar', keys: ['Ctrl', 'B'] },
-      { label: 'Open Chat', keys: ['Ctrl', '1'] },
-      { label: 'Open Company', keys: ['Ctrl', '2'] },
-      { label: 'Open Table', keys: ['Ctrl', '3'] },
-      { label: 'Open settings', keys: ['Ctrl', ','] }
+      {
+        label: 'New task',
+        description: 'Start a fresh task in the Chat surface.',
+        keys: ['Ctrl', 'N']
+      },
+      {
+        label: 'Search settings',
+        description: 'Find any pane in Settings.',
+        keys: ['Ctrl', 'K']
+      },
+      {
+        label: 'Toggle sidebar',
+        description: 'Show or hide the navigation rail.',
+        keys: ['Ctrl', 'B']
+      },
+      {
+        label: 'Open Chat',
+        description: 'Jump to the conversation surface.',
+        keys: ['Ctrl', '1']
+      },
+      {
+        label: 'Open Company',
+        description: 'Jump to the shared workspace.',
+        keys: ['Ctrl', '2']
+      },
+      {
+        label: 'Open Table',
+        description: 'Jump to the collaborative table.',
+        keys: ['Ctrl', '3']
+      },
+      {
+        label: 'Open settings',
+        description: 'Open this page.',
+        keys: ['Ctrl', ',']
+      }
     ]
   },
   {
     title: 'Composer',
     description: 'While the cursor is in a message box.',
     rows: [
-      { label: 'Send', keys: ['Enter'] },
-      { label: 'New line', keys: ['Shift', 'Enter'] },
-      { label: 'Close a menu', keys: ['Esc'] }
+      {
+        label: 'Send',
+        description: `Send the message to the ${agentName()}.`,
+        keys: ['Enter']
+      },
+      {
+        label: 'New line',
+        description: 'Keep writing without sending.',
+        keys: ['Shift', 'Enter']
+      },
+      {
+        label: 'Close a menu',
+        description: 'Dismiss any open menu or dialog.',
+        keys: ['Esc']
+      }
     ]
   }
 ]
 
 function ShortcutsPane() {
+  const [query, setQuery] = useState('')
+  const needle = query.trim().toLowerCase()
+  const total = SHORTCUT_GROUPS.reduce((count, group) => count + group.rows.length, 0)
+  const groups = SHORTCUT_GROUPS.map((group) => ({
+    ...group,
+    rows: needle
+      ? group.rows.filter((row) =>
+          [row.label, row.description, ...row.keys].some((value) =>
+            value.toLowerCase().includes(needle)
+          )
+        )
+      : group.rows
+  })).filter((group) => group.rows.length > 0)
+
   return (
     <div className="space-y-9">
-      {SHORTCUT_GROUPS.map((group) => (
-        <SettingsSection
-          key={group.title}
-          title={group.title}
-          description={group.description}
-        >
-          <div className="grid gap-x-10 gap-y-2.5 sm:grid-cols-2">
-            {group.rows.map((shortcut) => (
-              <div
-                key={shortcut.label}
-                className="flex items-center justify-between gap-3 py-1"
-              >
-                <span className="text-[11.5px] text-muted">{shortcut.label}</span>
-                <span className="flex shrink-0 items-center gap-1">
-                  {shortcut.keys.map((key) => (
-                    <kbd
-                      key={key}
-                      className="rounded-[5px] border border-line bg-canvas px-1.5 py-0.5 font-sans text-[9.5px] font-medium text-muted"
-                    >
-                      {key}
-                    </kbd>
-                  ))}
-                </span>
-              </div>
-            ))}
-          </div>
-        </SettingsSection>
-      ))}
+      <SettingsSection title="Shortcuts">
+        <p className="text-[13px] font-medium text-ink">Search shortcuts</p>
+        <p className="mt-1 text-[12px] text-muted">
+          {total} shortcut{total === 1 ? '' : 's'}, 0 customized.
+        </p>
+        <div className="relative mt-3.5">
+          <Search
+            size={13}
+            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-faint"
+          />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Search shortcuts"
+            placeholder="Search commands, descriptions, or key combos"
+            className="h-9 w-full rounded-lg border border-line bg-canvas pl-8 text-[12.5px] text-ink outline-none transition-colors placeholder:text-faint focus:border-line-strong"
+          />
+        </div>
+      </SettingsSection>
+
+      {groups.length === 0 ? (
+        <EmptyPanel
+          icon={<Keyboard size={19} />}
+          title={<>No shortcut matches “{query.trim()}”.</>}
+        />
+      ) : (
+        groups.map((group) => (
+          <SettingsSection key={group.title} title={group.title}>
+            <SettingList>
+              {group.rows.map((shortcut) => (
+                <div
+                  key={shortcut.label}
+                  className="flex items-start gap-[14px] px-4 py-3.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] leading-snug font-medium text-ink">
+                      {shortcut.label}
+                    </p>
+                    <p className="mt-1 text-[12px] leading-[1.6] text-muted">
+                      {shortcut.description}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center justify-end gap-1 pt-px">
+                    {shortcut.keys.map((key) => (
+                      <kbd
+                        key={key}
+                        className="rounded-[5px] border border-line bg-surface-2/80 px-1.5 py-0.5 font-sans text-[10px] font-medium text-muted"
+                      >
+                        {key}
+                      </kbd>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </SettingList>
+          </SettingsSection>
+        ))
+      )}
     </div>
   )
 }
 
 const AGENT_SEATS = [
   {
-    name: 'Captain',
-    role: 'The one voice',
-    detail: 'The only seat you message. Holds the plan, speaks for the company, signs receipts.',
-    icon: BrandMark,
-    tag: 'You talk here'
-  },
-  {
-    name: 'Consul',
+    name: 'Envoy',
     role: 'Interpreter',
-    detail: 'Reads the request, shapes the plan, and carries messages between Captain and Adept.',
-    icon: Building2,
-    tag: 'Internal'
+    detail: `Reads the request, shapes the plan, and carries messages between ${agentName()} and Operator.`,
+    icon: Building2
   },
   {
-    name: 'Adept',
+    name: 'Operator',
     role: 'Executor',
     detail: 'Turns one step of the plan into action, then returns the result up the ladder.',
-    icon: Cpu,
-    tag: 'Internal'
+    icon: Cpu
   },
   {
-    name: 'Crew',
+    name: 'Team',
     role: 'Hands and tools',
     detail: 'Files, shell and MCP tools, confined to the folders and gates the task allows.',
-    icon: Terminal,
-    tag: 'Internal'
+    icon: Terminal
   }
 ]
 
@@ -2410,118 +2819,83 @@ function AgentPane({ settings }: { settings: PublicSettings }) {
 
   return (
     <div className="space-y-9">
-      <div className="card relative overflow-hidden p-6">
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-36 opacity-60"
-          style={{
-            background:
-              'radial-gradient(ellipse 60% 100% at 10% 0%, var(--c-gold-soft) 0%, transparent 75%)'
-          }}
-        />
-        <div className="relative flex flex-wrap items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ink-button text-on-ink shadow-sm">
-            <BrandMark size={19} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-[14px] font-semibold text-ink">Captain</h2>
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9.5px] font-medium',
-                  ready
-                    ? 'border-positive/25 bg-positive/10 text-positive'
-                    : 'border-warn/25 bg-warn/10 text-warn'
-                )}
-              >
-                <span
-                  className={cn('h-1 w-1 rounded-full', ready ? 'bg-positive' : 'bg-warn')}
-                />
-                {ready ? 'Ready' : 'Needs a model'}
-              </span>
-            </div>
-            <p className="mt-1.5 max-w-[540px] text-[11.5px] leading-[1.7] text-muted">
-              The one agent you message. Holds the plan and signs every receipt.
-            </p>
-            {ready ? (
-              <p className="mt-2 flex flex-wrap items-center gap-1.5 text-[10.5px] text-faint">
-                <Cpu size={11} className="text-accent" />
-                <span className="font-medium text-muted">{defaultProvider?.name}</span>
-                <span className="text-faint/70">/</span>
-                <span className="font-mono text-[10px]">{defaultModel}</span>
-              </p>
-            ) : null}
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" onClick={() => openSettings('providers')}>
-                Models
-                <ChevronRight size={12} />
-              </Button>
-              <Button size="sm" variant="secondary" onClick={() => openSettings('permissions')}>
-                Permissions
-                <ChevronRight size={12} />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <section>
-        <h2 className="mb-2.5 text-[12.5px] font-medium text-faint">The ladder</h2>
-        <div className="card divide-y divide-line">
-          {AGENT_SEATS.map((seat, index) => {
-            const Icon = seat.icon
-            return (
-              <div
-                key={seat.name}
-                className="flex flex-wrap items-center gap-3 px-5 py-3.5 first:pt-1.5 last:pb-1.5"
-              >
-                <span className="font-mono text-[9.5px] text-faint">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line bg-surface-2 text-muted">
-                  <Icon size={14} />
-                </span>
-                <span className="w-[92px] shrink-0">
-                  <span className="block text-[12.5px] font-medium text-ink">{seat.name}</span>
-                  <span className="block text-[9.5px] text-faint">{seat.role}</span>
-                </span>
-                <span className="min-w-[180px] flex-1 text-[11px] leading-[1.65] text-muted">
-                  {seat.detail}
-                </span>
-                <span
-                  className={cn(
-                    'shrink-0 rounded-full border px-2 py-0.5 text-[8.5px] font-medium tracking-[0.05em] uppercase',
-                    seat.tag === 'You talk here'
-                      ? 'border-gold/25 bg-gold-soft/50 text-gold'
-                      : 'border-line bg-canvas/70 text-faint'
-                  )}
-                >
-                  {seat.tag}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-        <p className="mt-3 px-1 text-[11px] leading-relaxed text-faint">
-          The Consul relays between the Captain and the Adept. No internal seat ever addresses you.
-        </p>
+        <h2 className="mb-2.5 px-4 text-[12px] font-medium text-muted">The {agentName()}</h2>
+        <SettingCard>
+          <SettingRow
+            icon={<BrandMark size={14} />}
+            title={agentName()}
+            description="The one agent you message. Holds the plan and signs every receipt."
+          >
+            <StatusChip tone={ready ? 'positive' : 'warn'}>
+              {ready ? 'Ready' : 'Needs a model'}
+            </StatusChip>
+          </SettingRow>
+          <SettingRow
+            icon={<Cpu size={14} />}
+            title="Model"
+            description={
+              ready
+                ? `${defaultProvider?.name} · ${defaultModel}`
+                : 'No model provider is enabled yet.'
+            }
+          >
+            <Button size="sm" variant="secondary" onClick={() => openSettings('providers')}>
+              Change
+              <ChevronRight size={12} />
+            </Button>
+          </SettingRow>
+        </SettingCard>
       </section>
 
       <section>
-        <h2 className="mb-2.5 text-[12.5px] font-medium text-faint">Gates and receipts</h2>
-        <div className="card divide-y divide-line">
-          <div className="flex items-start gap-3 px-4 py-3">
-            <KeyRound size={13} className="mt-0.5 shrink-0 text-accent" />
-            <p className="text-[11.5px] leading-relaxed text-muted">
-              Your permission mode decides what runs. Table actions need both Captains.
-            </p>
-          </div>
-          <div className="flex items-start gap-3 px-4 py-3">
-            <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-positive" />
-            <p className="text-[11.5px] leading-relaxed text-muted">
-              Every finished step is attested in the local ledger.
-            </p>
-          </div>
-        </div>
+        <h2 className="mb-2.5 px-4 text-[12px] font-medium text-muted">The ladder</h2>
+        <SettingCard>
+          {AGENT_SEATS.map((seat) => {
+            const Icon = seat.icon
+            return (
+              <SettingRow
+                key={seat.name}
+                icon={<Icon size={14} />}
+                title={
+                  <span className="flex flex-wrap items-center gap-2">
+                    {seat.name}
+                    <span className="rounded-md border border-line bg-surface-2/60 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                      Internal
+                    </span>
+                  </span>
+                }
+                description={`${seat.role} · ${seat.detail}`}
+              />
+            )
+          })}
+        </SettingCard>
+      </section>
+
+      <section>
+        <h2 className="mb-2.5 px-4 text-[12px] font-medium text-muted">Gates and receipts</h2>
+        <SettingCard>
+          <SettingRow
+            icon={<KeyRound size={14} />}
+            title="Gates"
+            description={`Your permission mode decides what runs. Table actions need both ${agentName()}s.`}
+          >
+            <Button size="sm" variant="secondary" onClick={() => openSettings('permissions')}>
+              Open
+              <ChevronRight size={12} />
+            </Button>
+          </SettingRow>
+          <SettingRow
+            icon={<CheckCircle2 size={14} />}
+            title="Receipts"
+            description="Every finished step is attested in the local ledger."
+          >
+            <Button size="sm" variant="secondary" onClick={() => openSettings('audit')}>
+              Open
+              <ChevronRight size={12} />
+            </Button>
+          </SettingRow>
+        </SettingCard>
       </section>
     </div>
   )
@@ -2533,45 +2907,35 @@ function AgentTeamsPane() {
 
   return (
     <div className="space-y-9">
-      <div className="card relative overflow-hidden p-5">
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-32 opacity-50"
-          style={{
-            background:
-              'radial-gradient(ellipse 60% 100% at 12% 0%, var(--c-identity-a) 0%, transparent 72%)'
-          }}
-        />
-        <div className="relative flex flex-wrap items-start gap-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line bg-surface-2 text-identity-a">
-            <Users size={17} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-[13.5px] font-semibold text-ink">Two Captains, one Table</h2>
-            </div>
-            <p className="mt-1 max-w-[520px] text-[11.5px] leading-[1.7] text-muted">
-              Each side keeps its own engine, files and memory. The Table holds only what both bring.
-            </p>
-            <div className="mt-3.5 flex flex-wrap gap-2">
-              <Button size="sm" variant="primary" onClick={() => openSurface('table')}>
-                Open Table
-                <ArrowRight size={12} />
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => openSettings('mode-config')}
-              >
-                Modes
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <section>
+        <h2 className="mb-2.5 px-4 text-[12px] font-medium text-muted">The Table</h2>
+        <SettingCard>
+          <SettingRow
+            icon={<Users size={14} />}
+            title={`Two ${agentName()}s, one Table`}
+            description="Each side keeps its own engine, files and memory. The Table holds only what both bring."
+          >
+            <Button size="sm" variant="primary" onClick={() => openSurface('table')}>
+              Open Table
+              <ArrowRight size={12} />
+            </Button>
+          </SettingRow>
+          <SettingRow
+            icon={<SlidersHorizontal size={14} />}
+            title="Modes"
+            description={`Self runs alone. Collab seats both ${agentName()}s at the Table.`}
+          >
+            <Button size="sm" variant="secondary" onClick={() => openSettings('mode-config')}>
+              Open
+              <ChevronRight size={12} />
+            </Button>
+          </SettingRow>
+        </SettingCard>
+      </section>
 
       <section>
-        <h2 className="mb-2.5 text-[12.5px] font-medium text-faint">A joint action</h2>
-        <div className="card divide-y divide-line">
+        <h2 className="mb-2.5 px-4 text-[12px] font-medium text-muted">A joint action</h2>
+        <SettingCard>
           {[
             {
               title: 'Propose',
@@ -2579,39 +2943,40 @@ function AgentTeamsPane() {
             },
             {
               title: 'Review',
-              detail: 'The other Captain sees the proposal, never the private task behind it.'
+              detail: `The other ${agentName()} sees the proposal, never the private task behind it.`
             },
             {
               title: 'Two keys',
               detail: 'Both approvals start the step. Each side writes its own receipt.'
+            },
+            {
+              title: 'Work',
+              detail: 'Publishing starts the work on each desk as its own local task. Each side marks itself done.'
             }
           ].map((step, index) => (
-            <div key={step.title} className="flex items-start gap-3.5 px-5 py-4 first:pt-2 last:pb-2">
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line bg-canvas font-mono text-[9.5px] text-faint">
-                {index + 1}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[12.5px] font-medium text-ink">{step.title}</p>
-                <p className="mt-1 max-w-[600px] text-[11px] leading-[1.65] text-muted">
-                  {step.detail}
-                </p>
-              </div>
-            </div>
+            <SettingRow
+              key={step.title}
+              icon={
+                <span className="font-data text-[11px] text-faint">{String(index + 1)}</span>
+              }
+              title={step.title}
+              description={step.detail}
+            />
           ))}
-        </div>
+        </SettingCard>
       </section>
 
       <SettingsSection title="The boundary">
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.08em] text-positive uppercase">
-              <CheckCircle2 size={11} />
+            <p className="flex items-center gap-1.5 text-[12px] font-medium text-muted">
+              <CheckCircle2 size={12} className="text-positive" />
               Crosses
             </p>
             <ul className="mt-2 space-y-1.5">
               {['Task title and proposal', 'Accept or decline decisions', 'Ledger receipts', 'Presence at the Table'].map(
                 (line) => (
-                  <li key={line} className="flex items-start gap-2 text-[11.5px] text-muted">
+                  <li key={line} className="flex items-start gap-2 text-[12px] text-muted">
                     <span className="mt-[6px] h-1 w-1 shrink-0 rounded-full bg-positive/70" />
                     {line}
                   </li>
@@ -2620,14 +2985,14 @@ function AgentTeamsPane() {
             </ul>
           </div>
           <div>
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.08em] text-faint uppercase">
-              <Lock size={11} />
+            <p className="flex items-center gap-1.5 text-[12px] font-medium text-muted">
+              <Lock size={12} />
               Stays home
             </p>
             <ul className="mt-2 space-y-1.5">
               {['Your files and folders', 'Memory and instructions', 'Model keys', 'Private tasks'].map(
                 (line) => (
-                  <li key={line} className="flex items-start gap-2 text-[11.5px] text-muted">
+                  <li key={line} className="flex items-start gap-2 text-[12px] text-muted">
                     <span className="mt-[6px] h-1 w-1 shrink-0 rounded-full bg-line-strong" />
                     {line}
                   </li>
@@ -2637,10 +3002,6 @@ function AgentTeamsPane() {
           </div>
         </div>
       </SettingsSection>
-
-      <p className="px-1 text-[11px] text-faint">
-        A Table seats two Captains. Leaving it never moves either ledger.
-      </p>
     </div>
   )
 }
@@ -2694,70 +3055,60 @@ function AboutTab() {
               : info.platform === 'darwin'
                 ? 'macOS'
                 : info.platform
-        },
-        { label: 'Execution engine', value: 'Local agent loop · TypeScript' },
-        { label: 'Interface', value: 'Electron · React 19' },
-        { label: 'Storage', value: 'Local JSON · OS-encrypted keys' }
+        }
       ]
     : []
 
   return (
-    <div className="space-y-8">
-      <div className="card relative overflow-hidden p-6">
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-40 opacity-60"
-          style={{
-            background:
-              'radial-gradient(ellipse 60% 100% at 20% 0%, var(--c-accent-soft) 0%, transparent 75%)'
-          }}
-        />
-        <div className="relative flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-ink-button text-on-ink shadow-sm">
-            <Sparkles size={20} />
+    <div className="space-y-9">
+      <div className="card flex items-start gap-4 p-6">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-ink-button text-on-ink shadow-sm">
+          <BrandGlyph height={22} />
+        </div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="display text-[22px] leading-tight">SelfImpulse</h2>
+            {info ? (
+              <span className="rounded-md border border-line bg-surface-2/60 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                v{info.version}
+              </span>
+            ) : null}
           </div>
-          <div>
-            <h2 className="display text-[26px] leading-tight">SelfImpulse</h2>
-            <p className="mt-1 max-w-[520px] text-[12px] leading-relaxed text-muted">
-              {APP_TAGLINE} One Captain, one engine, your files on this machine.
-            </p>
-          </div>
+          <p className="mt-1 max-w-[520px] text-[12px] leading-relaxed text-muted">
+            {APP_TAGLINE} One {agentName()}, one engine, your files on this machine.
+          </p>
+          <p className="mt-1.5 font-mono text-[10px] text-faint">
+            {APP_SIGNATURE} · made by {APP_AUTHOR}
+          </p>
         </div>
       </div>
 
       <SettingsSection title="Details">
-        <div className="divide-y divide-line">
+        <SettingList>
           {rows.map((row) => (
-            <div key={row.label} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
-              <span className="text-[12px] text-muted">{row.label}</span>
-              <span className="text-[12px] font-medium text-ink">{row.value}</span>
-            </div>
+            <SettingRow key={row.label} title={row.label}>
+              <span className="font-mono text-[11.5px] text-muted">{row.value}</span>
+            </SettingRow>
           ))}
-          <div className="flex items-center justify-between gap-4 py-2.5 last:pb-0">
-            <span className="text-[12px] text-muted">Data folder</span>
-            <span className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate font-mono text-[10.5px] text-ink/80">
-                {info?.userDataPath ?? 'Locating…'}
-              </span>
-              <IconButton onClick={() => void copyPath()} aria-label="Copy data folder">
-                {copied ? <Check size={12} className="text-positive" /> : <Clipboard size={12} />}
-              </IconButton>
+          <SettingRow
+            title="Data folder"
+            description="Where every task, note and receipt lives."
+          >
+            <span
+              className="max-w-[240px] truncate font-mono text-[11px] text-muted"
+              title={info?.userDataPath ?? 'Locating…'}
+            >
+              {info?.userDataPath ?? 'Locating…'}
             </span>
-          </div>
-        </div>
-      </SettingsSection>
-
-      <SettingsSection title="Open source">
-        <p className="text-[11.5px] leading-relaxed text-muted">
-          Skills follow the agentskills.io format. The registry and channel contracts follow two
-          MIT-licensed upstream projects. The connector, registry and marketplace services are
-          third-party and remain subject to their own terms.
-        </p>
+            <IconButton onClick={() => void copyPath()} aria-label="Copy data folder">
+              {copied ? <Check size={12} className="text-positive" /> : <Clipboard size={12} />}
+            </IconButton>
+          </SettingRow>
+        </SettingList>
       </SettingsSection>
 
       <p className="px-1 text-[10.5px] leading-relaxed text-faint">
-        SelfImpulse is an independent, local-first project. It is not affiliated with any model
-        provider. Model names referenced in your own configuration remain the trademarks of their
-        respective owners. Only analyze software you are authorized to inspect.
+        A local-first app. Not affiliated with any model provider.
       </p>
     </div>
   )

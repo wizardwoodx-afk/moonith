@@ -4,6 +4,10 @@ export const IPC = {
   settingsSave: 'settings:save',
   providerTest: 'provider:test',
   providerFetchModels: 'provider:fetch-models',
+  impCodesAccess: 'impcodes:access',
+  impCodesImport: 'impcodes:import',
+  securityPosture: 'security:posture',
+  engineStatus: 'engine:status',
 
   tasksList: 'tasks:list',
   taskCreate: 'task:create',
@@ -14,10 +18,20 @@ export const IPC = {
   taskStop: 'task:stop',
   taskResume: 'task:resume',
   taskUpdate: 'task:update',
+  taskReact: 'task:react',
+  taskFeedback: 'task:feedback',
+  taskEditMessage: 'task:edit-message',
   taskAddFolder: 'task:add-folder',
   taskRemoveFolder: 'task:remove-folder',
+  taskChangesList: 'task:changes-list',
+  taskRevert: 'task:revert',
+  taskRedo: 'task:redo',
+  taskStepsList: 'task:steps-list',
   pickFolder: 'dialog:pick-folder',
   pickFiles: 'dialog:pick-files',
+  filesFromDrop: 'files:from-drop',
+  filesFromClipboard: 'files:from-clipboard',
+  screenCapture: 'screen:capture',
 
   approvalRespond: 'approval:respond',
   artifactOpen: 'artifact:open',
@@ -34,15 +48,31 @@ export const IPC = {
   mcpRemove: 'mcp:remove',
   mcpRestart: 'mcp:restart',
   mcpReaPreset: 'mcp:rea-preset',
+  mcpMarketSearch: 'mcp:market:search',
+  mcpMarketRead: 'mcp:market:read',
+  mcpMarketInstall: 'mcp:market:install',
 
   browserShow: 'browser:show',
 
-  skillsList: 'skills:list',
-  skillsSearch: 'skills:search',
+  librarySnapshot: 'library:snapshot',
+  libraryCollectionCreate: 'library:collection-create',
+  libraryPageCreate: 'library:page-create',
+  libraryPageUpdate: 'library:page-update',
+  libraryPageDelete: 'library:page-delete',
+
+  agentToolsList: 'agent:tools-list',
+  skillsList: 'skills:list',  skillsSearch: 'skills:search',
   skillsInstall: 'skills:install',
   skillsRead: 'skills:read',
   skillsCreate: 'skills:create',
   skillsRemove: 'skills:remove',
+
+  marketspaceList: 'marketspace:list',
+  marketspaceRead: 'marketspace:read',
+  marketspaceInstall: 'marketspace:install',
+  marketspaceCreate: 'marketspace:create',
+  marketspaceRemove: 'marketspace:remove',
+  marketspaceApply: 'marketspace:apply',
 
   memoryList: 'memory:list',
   memoryAdd: 'memory:add',
@@ -53,6 +83,8 @@ export const IPC = {
 
   connectorsState: 'connectors:state',
   connectorsSave: 'connectors:save',
+  connectorsConnect: 'connectors:connect',
+  connectorsDisconnect: 'connectors:disconnect',
 
   channelState: 'channels:state',
   channelUpsert: 'channels:upsert',
@@ -60,6 +92,9 @@ export const IPC = {
   channelRestart: 'channels:restart',
 
   subAgentsList: 'subagents:list',
+  subAgentsSpecialists: 'subagents:specialists',
+  atroposResolveAwakeable: 'atropos:awakeable:resolve',
+  atroposRejectAwakeable: 'atropos:awakeable:reject',
 
   tableGetState: 'table:get-state',
   tableHost: 'table:host',
@@ -69,6 +104,7 @@ export const IPC = {
   tableTurnKey: 'table:turn-key',
   tableWithdraw: 'table:withdraw',
   tablePublish: 'table:publish',
+  tableMarkDone: 'table:mark-done',
   tableLeave: 'table:leave',
 
   backendSettingsGet: 'backend:settings:get',
@@ -86,9 +122,6 @@ export const IPC = {
   backendGatewayStart: 'backend:gateway:start',
   backendGatewayStop: 'backend:gateway:stop',
   backendGatewayStatus: 'backend:gateway:status',
-  backendGatewayAgents: 'backend:gateway:agents',
-  backendGatewayBindings: 'backend:gateway:bindings',
-  backendGatewayAutomations: 'backend:gateway:automations',
   backendGatewayToken: 'backend:gateway:token',
   backendSubscriptionAccountStatus: 'backend:subscription:status',
   backendSubscriptionAccountModels: 'backend:subscription:models',
@@ -106,17 +139,49 @@ export const IPC = {
   backendExternalAgentStatus: 'backend:externalAgent:status',
   backendPermissionAnswer: 'backend:permission:answer',
 
-  selfImpulseState: 'selfimpulse:state',
-  selfImpulseSend: 'selfimpulse:send',
-  selfImpulseStop: 'selfimpulse:stop',
-  selfImpulseApprove: 'selfimpulse:approve',
-  selfImpulseThreadNew: 'selfimpulse:thread-new',
-  selfImpulseThreadSelect: 'selfimpulse:thread-select',
+  teamPlaybookList: 'team-playbook:list',
+  teamPlaybookGet: 'team-playbook:get',
+  teamPlaybookSave: 'team-playbook:save',
+  teamPlaybookDelete: 'team-playbook:delete',
+  teamPlaybookSnapshot: 'team-playbook:snapshot',
+  teamPlaybookInstantiate: 'team-playbook:instantiate',
+
+  proofOfWorkList: 'proof-of-work:list',
+  proofOfWorkExportCertificate: 'proof-of-work:export-certificate',
+  proofOfWorkVerifyCertificate: 'proof-of-work:verify-certificate',
+
+  passportList: 'passport:list',
+  passportGet: 'passport:get',
+  passportIssue: 'passport:issue',
+  passportRevoke: 'passport:revoke',
+  passportVerify: 'passport:verify',
+
+  mnemeQuery: 'mneme:query',
+  mnemeSummary: 'mneme:summary',
+  mnemeSync: 'mneme:sync',
+  kubernisInsights: 'kubernis:insights',
+
+  harmoniaList: 'harmonia:list',
+  harmoniaCreate: 'harmonia:create',
+  harmoniaDecide: 'harmonia:decide',
+
+  rookStatus: 'rook:status',
+  rookSetPermission: 'rook:set-permission',
+  rookListChangeRequests: 'rook:cr:list',
+  rookReviewChangeRequest: 'rook:cr:review',
+  rookApplyChangeRequest: 'rook:cr:apply',
+  rookListDeliverables: 'rook:deliverables:list',
+  rookListPendingGates: 'rook:gates:list',
+  rookResolveGate: 'rook:gates:resolve',
+  rookSynthesizeResearch: 'rook:research:synthesize',
+
+  coworkStatus: 'cowork:status',
+  coworkSearchSkills: 'cowork:skills:search',
 
   eventTask: 'event:task',
+  eventLibrary: 'event:library',
   eventApproval: 'event:approval',
-  eventBackend: 'event:backend',
-  eventSelfImpulse: 'event:selfimpulse'
+  eventBackend: 'event:backend'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
