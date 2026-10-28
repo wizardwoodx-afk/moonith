@@ -5,7 +5,7 @@
 
 export type RookPermissionMode = 'plan' | 'build' | 'yolo';
 
-export type RookActionModality = 'gui_vision' | 'code_terminal' | 'reasoning';
+export type RookActionModality = 'gui_vision' | 'code_terminal' | 'research_delivery' | 'reasoning';
 
 export interface BoundingBox2D {
   ymin: number;
@@ -63,6 +63,56 @@ export interface ShellExecutionResult {
   durationMs: number;
 }
 
+export interface ChangeRequest {
+  id: string;
+  title: string;
+  description: string;
+  targetBranch: string;
+  changedFiles: string[];
+  diffSummary: string;
+  riskAssessment: 'low' | 'medium' | 'high';
+  status: 'draft' | 'pending_review' | 'approved' | 'rejected' | 'applied';
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ResearchSource {
+  title: string;
+  url: string;
+  snippet: string;
+  confidence?: number;
+}
+
+export interface ResearchReport {
+  topic: string;
+  summary: string;
+  keyFindings: string[];
+  sources: ResearchSource[];
+  structuredData?: Record<string, unknown>;
+  generatedAt: number;
+}
+
+export interface InteractiveClarification {
+  id: string;
+  question: string;
+  context: string;
+  options?: string[];
+  status: 'pending' | 'resolved';
+  selectedOption?: string;
+  userAnswer?: string;
+  timestamp: number;
+}
+
+export interface DeliverablePackage {
+  id: string;
+  title: string;
+  type: 'code_patch' | 'research_report' | 'workflow_automation' | 'document';
+  content: string;
+  metadata?: Record<string, unknown>;
+  changeRequestId?: string;
+  timestamp: number;
+}
+
 export interface RookExecutionTurn {
   turnIndex: number;
   modality: RookActionModality;
@@ -81,5 +131,7 @@ export interface RookTaskResult {
   turns: RookExecutionTurn[];
   filesModified: string[];
   guiActionsExecuted: number;
+  deliverables?: DeliverablePackage[];
+  changeRequests?: ChangeRequest[];
   summary: string;
 }

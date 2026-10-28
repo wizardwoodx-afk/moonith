@@ -114,4 +114,60 @@ describe('ROOK Subsystem in SelfImpulse', () => {
     expect(shellTurn.output?.exitCode).toBe(0);
     expect(typeof shellTurn.output?.stdout).toBe('string');
   });
+
+  it('manages GitOps Change Requests lifecycle', () => {
+    const bridge = rookEngineBridge;
+    const cr = bridge.createChangeRequest({
+      title: 'Upgrade Vite config build target',
+      description: 'Switch esbuild target to es2022',
+      changedFiles: ['vite.config.ts'],
+      diffSummary: '+ target: es2022'
+    });
+
+    expect(cr.status).toBe('pending_review');
+    const kernel = bridge.getKernel();
+    const approved = kernel.worker.changeRequests.reviewChangeRequest(cr.id, 'approved');
+    expect(approved.status).toBe('approved');
+
+    const applied = kernel.worker.changeRequests.applyChangeRequest(cr.id);
+    expect(applied.status).toBe('applied');
+  });
+
+  it('synthesizes verified research reports with evidence citations', () => {
+    const bridge = rookEngineBridge;
+    const report = bridge.synthesizeResearch('Agentic Sandbox Security', [
+      {
+        title: 'Filesystem Sandboxing in Autonomous Agents',
+        url: 'https://security.local/sandboxing',
+        snippet: 'Workspace confinement prevents unauthorized path traversal.'
+      }
+    ]);
+
+    expect(report.topic).toBe('Agentic Sandbox Security');
+    expect(report.sources.length).toBe(1);
+    expect(report.keyFindings.length).toBeGreaterThan(0);
+  });
+
+  it('operates interactive gates and protects secrets through sandbox guard', () => {
+    const bridge = rookEngineBridge;
+    const gate = bridge.askClarification(
+      'Should we proceed with production release deployment?',
+      'Automated testing passed 100% of quality gates',
+      ['Deploy Now', 'Schedule Tomorrow', 'Abort']
+    );
+
+    expect(gate.status).toBe('pending');
+    expect(bridge.getStatus().pendingGatesCount).toBeGreaterThanOrEqual(1);
+
+    const kernel = bridge.getKernel();
+    kernel.worker.sandbox.storeCredential('production_api', 'sk-supersecret1234567890');
+    const deliv = bridge.registerDeliverable({
+      title: 'Release Manifest',
+      type: 'document',
+      content: 'Configured token sk-supersecret1234567890 for API calls.'
+    });
+
+    expect(deliv.content).not.toContain('sk-supersecret1234567890');
+    expect(deliv.content).toContain('[REDACTED_SECRET_PRODUCTION_API]');
+  });
 });

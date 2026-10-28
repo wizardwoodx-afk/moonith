@@ -197,9 +197,192 @@ export const rookPermissionModeTool: AgentTool = {
   }
 };
 
+export const rookCreateChangeRequestTool: AgentTool = {
+  name: 'rook_create_change_request',
+  title: 'Create GitOps Change Request',
+  description: 'Packages workspace modifications into a version-controlled Change Request with diff summaries and risk assessment for human review.',
+  sideEffect: 'write',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      title: { type: 'string', description: 'Brief descriptive title of the proposal' },
+      description: { type: 'string', description: 'Detailed rationale and impact' },
+      changedFiles: { type: 'array', items: { type: 'string' } },
+      diffSummary: { type: 'string', description: 'Key summary of modifications' },
+      targetBranch: { type: 'string', description: 'Target git branch (default: main)' }
+    },
+    required: ['title', 'description', 'changedFiles', 'diffSummary']
+  },
+  schema: z.object({
+    title: z.string(),
+    description: z.string(),
+    changedFiles: z.array(z.string()),
+    diffSummary: z.string(),
+    targetBranch: z.string().optional()
+  }),
+  execute: async (input: { title: string; description: string; changedFiles: string[]; diffSummary: string; targetBranch?: string }, ctx: ToolContext): Promise<ToolResult> => {
+    try {
+      const cr = globalRookKernel.worker.changeRequests.createChangeRequest(input);
+      return {
+        content: JSON.stringify({
+          status: 'success',
+          changeRequest: cr
+        }, null, 2)
+      };
+    } catch (err: unknown) {
+      return {
+        content: `Failed to create change request: ${err instanceof Error ? err.message : String(err)}`,
+        isError: true
+      };
+    }
+  }
+};
+
+export const rookSynthesizeResearchTool: AgentTool = {
+  name: 'rook_synthesize_research',
+  title: 'Synthesize Research Deliverable',
+  description: 'Synthesizes verified web/document research sources into an executive report with structured key findings and evidence citations.',
+  sideEffect: 'read',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      topic: { type: 'string', description: 'Subject or research topic' },
+      sources: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            url: { type: 'string' },
+            snippet: { type: 'string' }
+          },
+          required: ['title', 'url', 'snippet']
+        }
+      },
+      rawNotes: { type: 'array', items: { type: 'string' } }
+    },
+    required: ['topic', 'sources']
+  },
+  schema: z.object({
+    topic: z.string(),
+    sources: z.array(z.object({
+      title: z.string(),
+      url: z.string(),
+      snippet: z.string()
+    })),
+    rawNotes: z.array(z.string()).optional()
+  }),
+  execute: async (input: { topic: string; sources: Array<{ title: string; url: string; snippet: string }>; rawNotes?: string[] }, ctx: ToolContext): Promise<ToolResult> => {
+    try {
+      const report = globalRookKernel.worker.research.synthesizeReport(input);
+      const markdown = globalRookKernel.worker.research.formatMarkdownReport(report);
+      return {
+        content: JSON.stringify({
+          status: 'success',
+          report,
+          formattedMarkdown: markdown
+        }, null, 2)
+      };
+    } catch (err: unknown) {
+      return {
+        content: `Research synthesis failed: ${err instanceof Error ? err.message : String(err)}`,
+        isError: true
+      };
+    }
+  }
+};
+
+export const rookAskClarificationTool: AgentTool = {
+  name: 'rook_ask_clarification',
+  title: 'Human-in-the-Loop Clarification Gate',
+  description: 'Halts execution for human confirmation when encountering architectural forks, dangerous mutations, or ambiguous requirements.',
+  sideEffect: 'none',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      question: { type: 'string', description: 'Specific question for the user' },
+      context: { type: 'string', description: 'Context and reasons for pausing' },
+      options: { type: 'array', items: { type: 'string' }, description: 'Multiple choice choices if applicable' }
+    },
+    required: ['question', 'context']
+  },
+  schema: z.object({
+    question: z.string(),
+    context: z.string(),
+    options: z.array(z.string()).optional()
+  }),
+  execute: async (input: { question: string; context: string; options?: string[] }, ctx: ToolContext): Promise<ToolResult> => {
+    try {
+      const gate = globalRookKernel.worker.gate.createQuestionGate(input);
+      return {
+        content: JSON.stringify({
+          status: 'awaiting_human_response',
+          gate
+        }, null, 2)
+      };
+    } catch (err: unknown) {
+      return {
+        content: `Clarification gate error: ${err instanceof Error ? err.message : String(err)}`,
+        isError: true
+      };
+    }
+  }
+};
+
+export const rookPackageDeliverableTool: AgentTool = {
+  name: 'rook_package_deliverable',
+  title: 'Package Task Deliverable',
+  description: 'Registers a final task deliverable (code, report, automation) with automatic secret redaction and optional Change Request linkage.',
+  sideEffect: 'write',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      title: { type: 'string', description: 'Title of the deliverable' },
+      type: { type: 'string', enum: ['code_patch', 'research_report', 'workflow_automation', 'document'] },
+      content: { type: 'string', description: 'Deliverable payload or document' },
+      changeRequestId: { type: 'string' }
+    },
+    required: ['title', 'type', 'content']
+  },
+  schema: z.object({
+    title: z.string(),
+    type: z.enum(['code_patch', 'research_report', 'workflow_automation', 'document']),
+    content: z.string(),
+    changeRequestId: z.string().optional()
+  }),
+  execute: async (input: { title: string; type: 'code_patch' | 'research_report' | 'workflow_automation' | 'document'; content: string; changeRequestId?: string }, ctx: ToolContext): Promise<ToolResult> => {
+    try {
+      const deliv = globalRookKernel.worker.registerDeliverable(input);
+      return {
+        content: JSON.stringify({
+          status: 'success',
+          deliverable: deliv
+        }, null, 2)
+      };
+    } catch (err: unknown) {
+      return {
+        content: `Deliverable packaging failed: ${err instanceof Error ? err.message : String(err)}`,
+        isError: true
+      };
+    }
+  }
+};
+
 export const rookTools: AgentTool[] = [
   rookVisualGroundTool,
   rookGuiActuateTool,
   rookCodePatchTool,
-  rookPermissionModeTool
+  rookPermissionModeTool,
+  rookCreateChangeRequestTool,
+  rookSynthesizeResearchTool,
+  rookAskClarificationTool,
+  rookPackageDeliverableTool
 ];

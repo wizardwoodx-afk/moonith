@@ -31,7 +31,8 @@ export class ShellExecutor {
         {
           cwd: targetCwd,
           timeout,
-          maxBuffer: 10 * 1024 * 1024
+          maxBuffer: 10 * 1024 * 1024,
+          windowsHide: true
         },
         (error, stdout, stderr) => {
           const durationMs = Date.now() - startTime;

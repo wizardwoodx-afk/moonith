@@ -5,6 +5,7 @@ import { CodeFileEngine } from './fileEngine'
 import { ShellExecutor } from './shellExecutor'
 import { PermissionRegimeManager } from './permissionRegime'
 import { ContextCompactor } from './contextCompactor'
+import { DigitalWorkerRuntime } from './digitalWorker'
 import type {
   GuiActionRequest,
   CodeFileOperation,
@@ -29,19 +30,22 @@ export class RookKernel {
   public readonly shell: ShellExecutor;
   public readonly permissions: PermissionRegimeManager;
   public readonly compactor: ContextCompactor;
+  public readonly worker: DigitalWorkerRuntime;
   private turns: RookExecutionTurn[] = [];
 
   constructor(options: Partial<RookKernelOptions> = {}) {
+    const ws = options.workspacePath || process.cwd();
     this.grounding = new VisualGroundingEngine({
       width: options.displayWidth ?? 1920,
       height: options.displayHeight ?? 1080
     });
     this.actionSpace = new GuiActionSpace();
     this.sensor = new ScreenSensor(this.grounding);
-    this.fileEngine = new CodeFileEngine(options.workspacePath || process.cwd());
-    this.shell = new ShellExecutor(options.workspacePath || process.cwd());
+    this.fileEngine = new CodeFileEngine(ws);
+    this.shell = new ShellExecutor(ws);
     this.permissions = new PermissionRegimeManager(options.permissionMode || 'build');
     this.compactor = new ContextCompactor();
+    this.worker = new DigitalWorkerRuntime(ws);
   }
 
   public setPermissionMode(mode: RookPermissionMode): void {
@@ -121,6 +125,7 @@ export class RookKernel {
   public setWorkspace(workspaceRoot: string): void {
     this.fileEngine.setWorkspaceRoot(workspaceRoot);
     this.shell.setWorkspaceRoot(workspaceRoot);
+    this.worker.sandbox.setWorkspaceRoot(workspaceRoot);
   }
 
   public async executeCodeEdit(filePath: string, targetSubstring: string, replacement: string, thought = 'Patch source file'): Promise<RookExecutionTurn> {

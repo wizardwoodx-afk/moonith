@@ -17,7 +17,13 @@ import { archiveTools, listArchiveTool } from './archive'
 import { creativeStudioTools } from './creativeStudio'
 import { opendesignTools } from './opendesignTools'
 import { coworkTools, coworkSearchSkillsTool, coworkQuarantineCheckTool, coworkPerceiveDomTool } from './coworkTools'
-import { rookTools, rookVisualGroundTool, rookPermissionModeTool } from './rookTools'
+import { 
+  rookTools, 
+  rookVisualGroundTool, 
+  rookPermissionModeTool,
+  rookSynthesizeResearchTool,
+  rookAskClarificationTool
+} from './rookTools'
 
 export function getBuiltinTools(mode: TaskMode): AgentTool[] {
   if (mode === 'chat') {
@@ -51,7 +57,9 @@ export function getBuiltinTools(mode: TaskMode): AgentTool[] {
       coworkQuarantineCheckTool,
       coworkPerceiveDomTool,
       rookVisualGroundTool,
-      rookPermissionModeTool
+      rookPermissionModeTool,
+      rookSynthesizeResearchTool,
+      rookAskClarificationTool
     ]
   }
   return [
