@@ -10,7 +10,7 @@ import { getBuiltinTools } from './index'
 
 describe('Cowork Agent Tools in SelfImpulse', () => {
   const dummyCtx: any = {
-    task: { id: 't1', mode: 'task' },
+    task: { id: 't1', mode: 'cowork' },
     workspace: '/tmp',
     roots: ['/tmp'],
     allowShell: true,
@@ -23,7 +23,7 @@ describe('Cowork Agent Tools in SelfImpulse', () => {
   it('exports all 4 cowork tools and integrates into getBuiltinTools', () => {
     expect(coworkTools.length).toBe(4);
 
-    const taskTools = getBuiltinTools('task');
+    const taskTools = getBuiltinTools('cowork');
     expect(taskTools.some(t => t.name === 'cowork_kinetic_actuate')).toBe(true);
     expect(taskTools.some(t => t.name === 'cowork_perceive_dom')).toBe(true);
     expect(taskTools.some(t => t.name === 'cowork_search_skills')).toBe(true);

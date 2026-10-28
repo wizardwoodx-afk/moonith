@@ -212,7 +212,7 @@ export const coworkQuarantineCheckTool: AgentTool = {
   schema: z.object({
     modality: z.enum(['tool', 'kinetic', 'perception', 'surface', 'cognitive']),
     actionName: z.string(),
-    payload: z.record(z.unknown())
+    payload: z.record(z.string(), z.unknown())
   }),
   execute: async (input: { modality: any; actionName: string; payload: Record<string, unknown> }, ctx: ToolContext): Promise<ToolResult> => {
     const decision = globalCoworkKernel.policy.evaluateAction(input.modality, input.actionName, input.payload);
