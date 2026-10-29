@@ -5,6 +5,7 @@ import { DualLedgerOrchestrator } from './dualLedger'
 describe('RSIRALS Stratis Cyclical State Machine & Time-Travel (LangGraph Superpower)', () => {
   it('executes cycles with conditional routing until target condition is satisfied', async () => {
     interface CodeFixState {
+      [key: string]: unknown;
       code: string;
       testsPassing: boolean;
       attempts: number;

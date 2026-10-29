@@ -4,14 +4,18 @@
  */
 
 import { RsiralsEngine } from '../../selfimpulse/rsirals/rsiralsEngine';
-import type { AgentTool } from './types';
+import type { AgentTool, ToolContext, ToolResult } from './types';
 
 const rsirals = RsiralsEngine.getInstance();
 
 export const rsiralsQueryBeliefTool: AgentTool = {
   name: 'rsirals_query_belief',
+  title: 'RSIRALS Query Belief',
   description: 'Query SENTRIX belief state, verified facts, active uncertainties, and system knowledge bounds.',
-  parameters: {
+  sideEffect: 'read',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       dimension: {
@@ -20,22 +24,30 @@ export const rsiralsQueryBeliefTool: AgentTool = {
       }
     }
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const dimension = typeof args.dimension === 'string' ? args.dimension : undefined;
     const telemetry = rsirals.sentrix.getTelemetry();
-    return {
+    const data = {
       status: 'success',
       telemetry,
       query: dimension || 'all',
       inspectedAt: new Date().toISOString()
+    };
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
     };
   }
 };
 
 export const rsiralsEvaluateRiskTool: AgentTool = {
   name: 'rsirals_evaluate_risk',
+  title: 'RSIRALS Evaluate Risk',
   description: 'Evaluate action risk, side-effect classification, and idempotency lock via SENTRIX before execution.',
-  parameters: {
+  sideEffect: 'read',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       actionName: { type: 'string', description: 'Name of the action or tool to test' },
@@ -44,7 +56,7 @@ export const rsiralsEvaluateRiskTool: AgentTool = {
     },
     required: ['actionName']
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const actionName = String(args.actionName || 'unknown');
     const target = typeof args.target === 'string' ? args.target : undefined;
     const parameters = typeof args.parameters === 'object' && args.parameters !== null 
@@ -58,7 +70,7 @@ export const rsiralsEvaluateRiskTool: AgentTool = {
       parameters
     });
 
-    return {
+    const data = {
       status: 'evaluated',
       riskScore: beliefPacket.riskScore,
       actionClass: beliefPacket.actionClass,
@@ -66,13 +78,21 @@ export const rsiralsEvaluateRiskTool: AgentTool = {
       decisionReason: beliefPacket.decisionReason,
       idempotencyKey: beliefPacket.idempotencyKey
     };
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
+    };
   }
 };
 
 export const rsiralsSimulateActionTool: AgentTool = {
   name: 'rsirals_simulate_action',
+  title: 'RSIRALS Simulate Action',
   description: 'Perform a counterfactual simulation via VORCIS to predict outcome, side effects, and downside risk.',
-  parameters: {
+  sideEffect: 'none',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       actionName: { type: 'string', description: 'Action to simulate' },
@@ -80,7 +100,7 @@ export const rsiralsSimulateActionTool: AgentTool = {
     },
     required: ['actionName']
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const actionName = String(args.actionName);
     const parameters = typeof args.parameters === 'object' && args.parameters !== null 
       ? (args.parameters as Record<string, unknown>) 
@@ -92,7 +112,7 @@ export const rsiralsSimulateActionTool: AgentTool = {
       parameters
     });
 
-    return {
+    const data = {
       status: 'simulated',
       reportId: fastLoopResult.counterfactualReport.reportId,
       predictedOutcomes: fastLoopResult.counterfactualReport.predictedOutcomes,
@@ -101,13 +121,21 @@ export const rsiralsSimulateActionTool: AgentTool = {
       tokenBudget: fastLoopResult.computeEnvelope.tokenBudget,
       permitted: fastLoopResult.permitted
     };
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
+    };
   }
 };
 
 export const rsiralsDiagnoseFailureTool: AgentTool = {
   name: 'rsirals_diagnose_failure',
+  title: 'RSIRALS Diagnose Failure',
   description: 'Execute CORVEX scientific causal diagnosis on a failed command or operation to localize fault and get minimal intervention.',
-  parameters: {
+  sideEffect: 'read',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       errorMessage: { type: 'string', description: 'Exact error text or exception' },
@@ -116,7 +144,7 @@ export const rsiralsDiagnoseFailureTool: AgentTool = {
     },
     required: ['errorMessage', 'failingAction']
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const errorMessage = String(args.errorMessage);
     const failingAction = String(args.failingAction);
 
@@ -133,7 +161,7 @@ export const rsiralsDiagnoseFailureTool: AgentTool = {
       { errorMessage, failingAction }
     );
 
-    return {
+    const data = {
       status: 'diagnosed',
       graphId: causalGraph.graphId,
       minimalIntervention: causalGraph.minimalIntervention,
@@ -141,13 +169,21 @@ export const rsiralsDiagnoseFailureTool: AgentTool = {
       remediationAdvice: causalGraph.remediationAdvice,
       hypotheses: causalGraph.hypotheses
     };
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
+    };
   }
 };
 
 export const rsiralsInduceSkillTool: AgentTool = {
   name: 'rsirals_induce_skill',
+  title: 'RSIRALS Induce Skill',
   description: 'Induce, parameterize, and test a verified reusable skill via KAVYRA from a successful workflow.',
-  parameters: {
+  sideEffect: 'write',
+  risk: 'medium',
+  approval: 'policy',
+  inputSchema: {
     type: 'object',
     properties: {
       skillName: { type: 'string', description: 'Alphanumeric name for the new skill' },
@@ -158,7 +194,7 @@ export const rsiralsInduceSkillTool: AgentTool = {
     },
     required: ['skillName', 'description']
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const skillName = String(args.skillName);
     const description = String(args.description);
     const inputsSchema = typeof args.inputsSchema === 'object' && args.inputsSchema !== null
@@ -192,20 +228,28 @@ export const rsiralsInduceSkillTool: AgentTool = {
       ]
     });
 
-    return {
+    const data = {
       status: 'induced',
       skillId: candidate.id,
       signature: candidate.signature,
       transferMetrics: candidate.transferMetrics,
       lifecycleStatus: candidate.status
     };
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
+    };
   }
 };
 
 export const rsiralsPublishClaimTool: AgentTool = {
   name: 'rsirals_publish_claim',
+  title: 'RSIRALS Publish Claim',
   description: 'Publish a cryptographically signed epistemic claim via NEXALIS to share verified knowledge.',
-  parameters: {
+  sideEffect: 'network',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       topic: { type: 'string', description: 'Domain topic' },
@@ -214,7 +258,7 @@ export const rsiralsPublishClaimTool: AgentTool = {
     },
     required: ['topic', 'assertion', 'proof']
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const topic = String(args.topic);
     const assertion = String(args.assertion);
     const proof = String(args.proof);
@@ -228,20 +272,28 @@ export const rsiralsPublishClaimTool: AgentTool = {
       reproducibilityProof: proof
     });
 
-    return {
+    const data = {
       status: 'published',
       claimId: claim.claimId,
       payloadHash: claim.payloadHash,
       signature: claim.signature,
       validUntil: claim.validityRange.until
     };
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
+    };
   }
 };
 
 export const rsiralsAcquireTaskTool: AgentTool = {
   name: 'rsirals_acquire_task',
+  title: 'RSIRALS Acquire Task',
   description: 'Acquire a proactive task charter via VANTAGE with explicit SLA, blast radius cap, and rollback plan.',
-  parameters: {
+  sideEffect: 'none',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       goalSpec: { type: 'string', description: 'Goal specification' },
@@ -249,7 +301,7 @@ export const rsiralsAcquireTaskTool: AgentTool = {
     },
     required: ['goalSpec']
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const goalSpec = String(args.goalSpec);
     const successCriteria = Array.isArray(args.successCriteria) ? args.successCriteria.map(String) : ['Task completed without regression'];
 
@@ -258,7 +310,7 @@ export const rsiralsAcquireTaskTool: AgentTool = {
       successCriteria
     });
 
-    return {
+    const data = {
       status: 'acquired',
       taskId: charter.taskId,
       authTier: charter.authTier,
@@ -267,13 +319,21 @@ export const rsiralsAcquireTaskTool: AgentTool = {
       rollbackPlan: charter.rollbackPlan,
       informationGainRank: charter.informationGainRank
     };
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
+    };
   }
 };
 
 export const rsiralsRunWorkflowTool: AgentTool = {
   name: 'rsirals_run_workflow',
+  title: 'RSIRALS Run Workflow',
   description: 'Execute a deterministic multi-step DAG workflow via the STRATIS engine with branching, error retries, and state tracking.',
-  parameters: {
+  sideEffect: 'execute',
+  risk: 'medium',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       workflowName: { type: 'string', description: 'Name of the workflow to execute' },
@@ -294,7 +354,7 @@ export const rsiralsRunWorkflowTool: AgentTool = {
     },
     required: ['workflowName', 'steps']
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const workflowName = String(args.workflowName);
     const stepsInput = Array.isArray(args.steps) ? args.steps : [];
     const initialInput = typeof args.initialInput === 'object' && args.initialInput !== null
@@ -320,20 +380,28 @@ export const rsiralsRunWorkflowTool: AgentTool = {
     });
 
     const result = await rsirals.stratis.workflows.executeWorkflow(workflowId, initialInput);
-    return {
+    const data = {
       status: result.status,
       workflowId: result.workflowId,
       executionId: result.executionId,
       stepResults: result.stepResults,
       totalDurationMs: result.totalDurationMs
     };
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
+    };
   }
 };
 
 export const rsiralsEvaluateOutputTool: AgentTool = {
   name: 'rsirals_evaluate_output',
+  title: 'RSIRALS Evaluate Output',
   description: 'Continuous model-graded evaluation of an agent output or plan for faithfulness, hallucination risk, and prompt relevance.',
-  parameters: {
+  sideEffect: 'none',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       prompt: { type: 'string', description: 'The prompt or user request' },
@@ -343,7 +411,7 @@ export const rsiralsEvaluateOutputTool: AgentTool = {
     },
     required: ['prompt', 'output']
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const prompt = String(args.prompt);
     const output = String(args.output);
     const context = typeof args.context === 'string' ? args.context : undefined;
@@ -356,20 +424,28 @@ export const rsiralsEvaluateOutputTool: AgentTool = {
       groundTruth
     });
 
-    return {
+    const data = {
       status: 'evaluated',
       targetOutputId: report.targetOutputId,
       overallScore: report.overallScore,
       passed: report.passed,
       scores: report.scores
     };
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
+    };
   }
 };
 
 export const rsiralsSemanticSearchTool: AgentTool = {
   name: 'rsirals_semantic_search',
+  title: 'RSIRALS Semantic Search',
   description: 'Ingest and retrieve knowledge chunks via STRATIS Agentic Hybrid RAG with semantic density scoring.',
-  parameters: {
+  sideEffect: 'read',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       action: { type: 'string', enum: ['search', 'ingest'], description: 'Whether to ingest text or search indexed chunks' },
@@ -379,23 +455,27 @@ export const rsiralsSemanticSearchTool: AgentTool = {
     },
     required: ['action']
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const action = String(args.action);
     if (action === 'ingest') {
       const docId = String(args.documentId || `doc_${Date.now()}`);
       const content = String(args.content || '');
       const chunks = rsirals.stratis.rag.ingestDocument(docId, content);
-      return {
+      const data = {
         status: 'ingested',
         documentId: docId,
         chunksCreated: chunks.length,
         totalIndexed: rsirals.stratis.rag.getIndexedChunkCount()
       };
+      return {
+        content: JSON.stringify(data, null, 2),
+        ...data
+      };
     }
 
     const query = String(args.query || '');
     const results = rsirals.stratis.rag.search(query, 5);
-    return {
+    const data = {
       status: 'success',
       query,
       resultsCount: results.length,
@@ -407,13 +487,21 @@ export const rsiralsSemanticSearchTool: AgentTool = {
         textPreview: r.chunk.text.slice(0, 150)
       }))
     };
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
+    };
   }
 };
 
 export const rsiralsTimeTravelRewindTool: AgentTool = {
   name: 'rsirals_time_travel_rewind',
+  title: 'RSIRALS Time Travel Rewind',
   description: 'Rewinds to a past checkpoint snapshot and forks execution into a new timeline (LangGraph Time-Travel superpower).',
-  parameters: {
+  sideEffect: 'execute',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       checkpointId: { type: 'string', description: 'ID of the historical checkpoint to rewind to' },
@@ -421,35 +509,47 @@ export const rsiralsTimeTravelRewindTool: AgentTool = {
     },
     required: ['checkpointId']
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const checkpointId = String(args.checkpointId);
     const patchState = typeof args.patchState === 'object' && args.patchState !== null
       ? (args.patchState as Record<string, unknown>)
       : undefined;
 
     const forked = rsirals.stratis.checkpointer.timeTravelFork(checkpointId, patchState);
-    return {
+    const data = {
       status: 'rewound_and_forked',
       forkedThreadId: forked.forkedThreadId,
       restoredState: forked.restoredState,
       baseStepIndex: forked.baseStepIndex,
       fromNodeId: forked.fromNodeId
     };
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
+    };
   }
 };
 
 export const rsiralsDualLedgerStatusTool: AgentTool = {
   name: 'rsirals_dual_ledger_status',
+  title: 'RSIRALS Dual Ledger Status',
   description: 'Inspects the Magentic-One style Dual-Ledger: Outer Task Ledger (milestones, facts) and Inner Progress Ledger (current subtask, tool outputs).',
-  parameters: {
+  sideEffect: 'none',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {}
   },
-  execute: async () => {
+  execute: async (_args?: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const snapshot = rsirals.stratis.dualLedger.getSnapshot();
-    return {
+    const data = {
       status: 'success',
       ...snapshot
+    };
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
     };
   }
 };

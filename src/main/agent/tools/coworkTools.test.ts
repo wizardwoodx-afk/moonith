@@ -20,8 +20,8 @@ describe('Cowork Agent Tools in SelfImpulse', () => {
     toast: () => {}
   };
 
-  it('exports all 4 cowork tools and integrates into getBuiltinTools', () => {
-    expect(coworkTools.length).toBe(4);
+  it('exports all 9 cowork tools and integrates into getBuiltinTools', () => {
+    expect(coworkTools.length).toBe(9);
 
     const taskTools = getBuiltinTools('cowork');
     expect(taskTools.some(t => t.name === 'cowork_kinetic_actuate')).toBe(true);

@@ -1,5 +1,5 @@
 export const SURFACES = [
-  { id: 'chat', label: 'Chat' },
+  { id: 'chat', label: 'Self' },
   { id: 'company', label: 'Company' },
   { id: 'table', label: 'Table' },
   { id: 'library', label: 'Library' }

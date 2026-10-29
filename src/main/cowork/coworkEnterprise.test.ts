@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, it } from 'vitest'
 import { EnterprisePassportManager } from './enterprise/passportManager'
 import { BlastRadiusArbiter } from './enterprise/blastRadiusArbiter'
 import { VerifiableKernel } from './enterprise/verifiableKernel'

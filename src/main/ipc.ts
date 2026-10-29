@@ -746,6 +746,9 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.promeyListTriage, () =>
     promeyEngineBridge.getKernel().triage.listItems()
   )
+  ipcMain.handle(IPC.promeyIngestTriage, (_event, item) =>
+    promeyEngineBridge.triageStream(item)
+  )
   ipcMain.handle(IPC.promeyTriageItem, (_event, item) =>
     promeyEngineBridge.triageStream(item)
   )

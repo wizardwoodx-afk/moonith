@@ -2499,26 +2499,26 @@ function ModeConfigPane({ settings }: { settings: PublicSettings }) {
   const modes = [
     {
       name: 'Self',
-      tag: 'One machine',
+      tag: 'Autonomous Digital Twin',
       icon: BrandMark,
-      blurb: 'One person. Chat and Company, private to this laptop.',
+      blurb: 'Autonomous digital twin. Cyclical reasoning loops, automatic self-correction, milestone checkpoints.',
       points: [
-        `${agentName()} runs the loop; sub-agents and tools work under your gates.`,
-        'Your key turns every local gate.'
+        `${agentName()} runs end-to-end task loops and auto-recovers from failures.`,
+        'Time-travel checkpoints record milestones without micromanagement.'
       ],
-      actionLabel: 'Open Chat',
+      actionLabel: 'Open Self',
       onOpen: () => openSurface('chat')
     },
     {
-      name: 'Collab',
-      tag: 'Two machines',
+      name: 'Cowork',
+      tag: 'Interactive Digital Colleague',
       icon: Handshake,
-      blurb: `Two people, each running their own ${agentName()} and engine.`,
+      blurb: `Side-by-side interactive colleague with dual-ledger transparency and verified actions.`,
       points: [
-        `${agentName()}s meet as peers at the Table.`,
-        'Joint actions need both keys.'
+        `Maintains real-time Task and Progress ledgers with execution receipts.`,
+        'Continuous human-in-the-loop pairing across local tools and peer tables.'
       ],
-      actionLabel: 'Open Table',
+      actionLabel: 'Open Cowork',
       onOpen: () => openSurface('table')
     }
   ]

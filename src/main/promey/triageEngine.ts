@@ -24,12 +24,21 @@ export class PromeyTriageEngine {
     });
   }
 
-  public ingestItem(item: Omit<PromeyTriageItem, 'id' | 'receivedAt' | 'status'> & { status?: PromeyTriageItem['status'] }): PromeyTriageItem {
+  public ingestItem(
+    item: Omit<PromeyTriageItem, 'id' | 'receivedAt' | 'status' | 'urgency' | 'category'> & {
+      status?: PromeyTriageItem['status']
+      urgency?: PromeyTriageItem['urgency']
+      category?: PromeyTriageItem['category']
+      suggestedAction?: string
+    }
+  ): PromeyTriageItem {
     const id = `triage-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
     const fullItem: PromeyTriageItem = {
       id,
       receivedAt: new Date().toISOString(),
       status: item.status || 'action_required',
+      urgency: item.urgency || 'normal',
+      category: item.category || 'informational',
       ...item
     };
 

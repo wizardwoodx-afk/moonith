@@ -181,6 +181,7 @@ export const IPC = {
   promeyStatus: 'promey:status',
   promeyGenerateBrief: 'promey:brief:generate',
   promeyListTriage: 'promey:triage:list',
+  promeyIngestTriage: 'promey:triage:ingest',
   promeyTriageItem: 'promey:triage:add',
   promeyResolveTriage: 'promey:triage:resolve',
   promeyListApprovals: 'promey:approvals:list',

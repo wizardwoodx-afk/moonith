@@ -42,6 +42,13 @@ import {
   promeyRequestApprovalTool, 
   promeyScanDlpTool 
 } from './promeyTools'
+import {
+  erpnextTools,
+  erpnextQueryTool,
+  erpnextGetDocTool,
+  erpnextCreateDocTool,
+  erpnextRunReportTool
+} from './erpnextTools'
 
 export function getBuiltinTools(mode: TaskMode): AgentTool[] {
   if (mode === 'chat') {
@@ -93,7 +100,11 @@ export function getBuiltinTools(mode: TaskMode): AgentTool[] {
       promeyGenerateBriefTool,
       promeyTriageStreamTool,
       promeyRequestApprovalTool,
-      promeyScanDlpTool
+      promeyScanDlpTool,
+      erpnextQueryTool,
+      erpnextGetDocTool,
+      erpnextCreateDocTool,
+      erpnextRunReportTool
     ]
   }
   return [
@@ -116,7 +127,8 @@ export function getBuiltinTools(mode: TaskMode): AgentTool[] {
     ...coworkTools,
     ...rookTools,
     ...rsiralsTools,
-    ...promeyTools
+    ...promeyTools,
+    ...erpnextTools
   ]
 }
 
@@ -125,4 +137,5 @@ export { coworkTools } from './coworkTools'
 export { rookTools } from './rookTools'
 export { rsiralsTools } from './rsiralsTools'
 export { promeyTools } from './promeyTools'
+export { erpnextTools } from './erpnextTools'
 export type { AgentTool } from './types'

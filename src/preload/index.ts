@@ -310,6 +310,7 @@ const api: KnightApi = {
   promeyGenerateBrief: (userName?: string, workspaceName?: string) =>
     ipcRenderer.invoke(IPC.promeyGenerateBrief, userName, workspaceName),
   promeyListTriage: () => ipcRenderer.invoke(IPC.promeyListTriage),
+  promeyIngestTriage: (item: any) => ipcRenderer.invoke(IPC.promeyIngestTriage, item),
   promeyTriageItem: (item: any) => ipcRenderer.invoke(IPC.promeyTriageItem, item),
   promeyResolveTriage: (id: string, note?: string) =>
     ipcRenderer.invoke(IPC.promeyResolveTriage, id, note),

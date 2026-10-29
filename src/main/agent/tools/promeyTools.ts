@@ -4,25 +4,29 @@
  */
 
 import { promeyEngineBridge } from '../../engine/promeyBridge';
-import type { AgentTool } from './types';
+import type { AgentTool, ToolContext, ToolResult } from './types';
 
 export const promeyGenerateBriefTool: AgentTool = {
   name: 'promey_generate_brief',
+  title: 'Promey Generate Brief',
   description: 'Generate an executive proactive morning brief summarizing triage streams, pending approvals, and standing routines.',
-  parameters: {
+  sideEffect: 'none',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       userName: { type: 'string', description: 'Operator or user display name' },
       workspaceName: { type: 'string', description: 'Current workspace or project name' }
     }
   },
-  execute: async (args) => {
-    const userName = typeof args.userName === 'string' ? args.userName : undefined;
-    const workspaceName = typeof args.workspaceName === 'string' ? args.workspaceName : undefined;
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
+    const userName = typeof args?.userName === 'string' ? args.userName : undefined;
+    const workspaceName = typeof args?.workspaceName === 'string' ? args.workspaceName : undefined;
 
     const brief = promeyEngineBridge.generateMorningBrief(userName, workspaceName);
 
-    return {
+    const data = {
       status: 'generated',
       briefId: brief.briefId,
       date: brief.date,
@@ -31,13 +35,22 @@ export const promeyGenerateBriefTool: AgentTool = {
       highPriorityCount: brief.highPriorityItems.length,
       pendingApprovalsCount: brief.pendingApprovals.length
     };
+
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
+    };
   }
 };
 
 export const promeyTriageStreamTool: AgentTool = {
   name: 'promey_triage_stream',
+  title: 'Promey Triage Stream',
   description: 'Ingest and prioritize an incoming item or event into the Promey Smart Triage stream.',
-  parameters: {
+  sideEffect: 'write',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       source: { 
@@ -59,29 +72,38 @@ export const promeyTriageStreamTool: AgentTool = {
     },
     required: ['source', 'title', 'content']
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const item = promeyEngineBridge.triageStream({
-      source: (args.source as any) || 'custom',
-      title: String(args.title),
-      content: String(args.content),
-      urgency: (args.urgency as any) || 'normal',
-      category: (args.category as any) || 'action_required'
+      source: (args?.source as any) || 'custom',
+      title: String(args?.title || ''),
+      content: String(args?.content || ''),
+      urgency: (args?.urgency as any) || 'normal',
+      category: (args?.category as any) || 'action_required'
     });
 
-    return {
+    const data = {
       status: 'triaged',
       itemId: item.id,
       urgency: item.urgency,
       category: item.category,
       receivedAt: item.receivedAt
     };
+
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
+    };
   }
 };
 
 export const promeyRequestApprovalTool: AgentTool = {
   name: 'promey_request_approval',
+  title: 'Promey Request Approval',
   description: 'Request Human-in-the-Loop approval for a consequential action (Allow Once / Always Allow / Refuse).',
-  parameters: {
+  sideEffect: 'none',
+  risk: 'medium',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       actionType: { type: 'string', description: 'Type of action (e.g., deploy, external_email, delete_records)' },
@@ -97,31 +119,40 @@ export const promeyRequestApprovalTool: AgentTool = {
     },
     required: ['actionType', 'title', 'description', 'targetResource']
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const req = promeyEngineBridge.requestApproval({
-      actionType: String(args.actionType),
-      title: String(args.title),
-      description: String(args.description),
-      targetResource: String(args.targetResource),
-      consequenceLevel: (args.consequenceLevel as any) || 'medium',
-      parameters: typeof args.parameters === 'object' && args.parameters !== null 
+      actionType: String(args?.actionType || ''),
+      title: String(args?.title || ''),
+      description: String(args?.description || ''),
+      targetResource: String(args?.targetResource || ''),
+      consequenceLevel: (args?.consequenceLevel as any) || 'medium',
+      parameters: typeof args?.parameters === 'object' && args?.parameters !== null 
         ? (args.parameters as Record<string, unknown>) 
         : {}
     });
 
-    return {
+    const data = {
       status: req.autoApproved ? 'auto_approved' : (req.autoRefused ? 'auto_refused' : 'pending_user_decision'),
       approvalId: req.item.id,
       consequenceLevel: req.item.consequenceLevel,
       allowed: req.autoApproved
+    };
+
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
     };
   }
 };
 
 export const promeyMaskCredentialTool: AgentTool = {
   name: 'promey_mask_credentials',
+  title: 'Promey Mask Credentials',
   description: 'Mask sensitive passwords, secrets, or API tokens with opaque tokens so they never leak into model transcripts.',
-  parameters: {
+  sideEffect: 'none',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       secretValue: { type: 'string', description: 'The sensitive string to protect' },
@@ -129,46 +160,64 @@ export const promeyMaskCredentialTool: AgentTool = {
     },
     required: ['secretValue']
   },
-  execute: async (args) => {
-    const secretValue = String(args.secretValue);
-    const label = typeof args.label === 'string' ? args.label : 'secret';
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
+    const secretValue = String(args?.secretValue || '');
+    const label = typeof args?.label === 'string' ? args.label : 'secret';
     const maskedToken = promeyEngineBridge.maskSecret(secretValue, label);
 
-    return {
+    const data = {
       status: 'masked',
       maskedToken,
       safeForTranscript: true
+    };
+
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
     };
   }
 };
 
 export const promeyScanDlpTool: AgentTool = {
   name: 'promey_scan_dlp',
+  title: 'Promey Scan DLP',
   description: 'Scan outbound text for accidental API key, private key, or payment card leaks.',
-  parameters: {
+  sideEffect: 'none',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       text: { type: 'string', description: 'Text payload to scan before transmission' }
     },
     required: ['text']
   },
-  execute: async (args) => {
-    const text = String(args.text);
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
+    const text = String(args?.text || '');
     const result = promeyEngineBridge.sanitizeOutbound(text);
 
-    return {
+    const data = {
       status: 'scanned',
       sanitizedText: result.sanitizedText,
       redactedDlpCount: result.redactedDlpCount,
       leaksPrevented: result.leaksPrevented
+    };
+
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
     };
   }
 };
 
 export const promeyScheduleRoutineTool: AgentTool = {
   name: 'promey_schedule_routine',
+  title: 'Promey Schedule Routine',
   description: 'Register an autonomous standing instruction or background routine in Promey.',
-  parameters: {
+  sideEffect: 'write',
+  risk: 'medium',
+  approval: 'policy',
+  inputSchema: {
     type: 'object',
     properties: {
       name: { type: 'string', description: 'Name of the routine' },
@@ -177,27 +226,36 @@ export const promeyScheduleRoutineTool: AgentTool = {
     },
     required: ['name', 'cadence', 'standingPrompt']
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const routine = promeyEngineBridge.getKernel().routines.registerRoutine({
-      name: String(args.name),
-      cadence: String(args.cadence),
-      standingPrompt: String(args.standingPrompt)
+      name: String(args?.name || ''),
+      cadence: String(args?.cadence || 'daily_morning'),
+      standingPrompt: String(args?.standingPrompt || '')
     });
 
-    return {
+    const data = {
       status: 'scheduled',
       routineId: routine.id,
       name: routine.name,
       cadence: routine.cadence,
       active: routine.active
     };
+
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
+    };
   }
 };
 
 export const promeyStreamGenerativeUiTool: AgentTool = {
   name: 'promey_stream_generative_ui',
+  title: 'Promey Stream Generative UI',
   description: 'Emit an event-driven Generative UI widget (approval card, status pill, triage card) directly to the user interface.',
-  parameters: {
+  sideEffect: 'none',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
     type: 'object',
     properties: {
       type: { 
@@ -210,18 +268,23 @@ export const promeyStreamGenerativeUiTool: AgentTool = {
     },
     required: ['type', 'title', 'data']
   },
-  execute: async (args) => {
+  execute: async (args: any, _ctx?: ToolContext): Promise<ToolResult & Record<string, unknown>> => {
     const widget = promeyEngineBridge.getKernel().protocol.emitGenerativeUi({
-      type: (args.type as any) || 'status_pill',
-      title: String(args.title),
-      data: typeof args.data === 'object' && args.data !== null ? (args.data as Record<string, unknown>) : {}
+      type: (args?.type as any) || 'status_pill',
+      title: String(args?.title || ''),
+      data: typeof args?.data === 'object' && args?.data !== null ? (args.data as Record<string, unknown>) : {}
     });
 
-    return {
+    const data = {
       status: 'emitted',
       widgetId: widget.widgetId,
       type: widget.type,
       title: widget.title
+    };
+
+    return {
+      content: JSON.stringify(data, null, 2),
+      ...data
     };
   }
 };

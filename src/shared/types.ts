@@ -1543,6 +1543,7 @@ export interface KnightApi {
   promeyStatus: () => Promise<any>
   promeyGenerateBrief: (userName?: string, workspaceName?: string) => Promise<any>
   promeyListTriage: () => Promise<any[]>
+  promeyIngestTriage: (item: any) => Promise<any>
   promeyTriageItem: (item: any) => Promise<any>
   promeyResolveTriage: (id: string, note?: string) => Promise<boolean>
   promeyListApprovals: () => Promise<any[]>

@@ -174,7 +174,9 @@ export class SentrixController {
     this.totalRiskAccumulator += riskScore;
 
     let policyDecision: BeliefStatePacket['policyDecision'] = 'allow';
-    if (riskScore >= 0.85) {
+    if (riskScore >= 0.95) {
+      policyDecision = 'deny';
+    } else if (riskScore >= 0.85) {
       policyDecision = 'require_approval';
     } else if (riskScore >= 0.60) {
       policyDecision = 'sandbox';
@@ -182,8 +184,8 @@ export class SentrixController {
       policyDecision = 'probe';
     }
 
-    if (policyDecision !== 'allow' && policyDecision !== 'sandbox') {
-      if (policyDecision === 'deny') this.blockedCount++;
+    if (policyDecision === 'deny') {
+      this.blockedCount++;
     }
 
     // Register idempotency
