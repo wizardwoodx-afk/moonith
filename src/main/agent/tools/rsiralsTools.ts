@@ -410,6 +410,50 @@ export const rsiralsSemanticSearchTool: AgentTool = {
   }
 };
 
+export const rsiralsTimeTravelRewindTool: AgentTool = {
+  name: 'rsirals_time_travel_rewind',
+  description: 'Rewinds to a past checkpoint snapshot and forks execution into a new timeline (LangGraph Time-Travel superpower).',
+  parameters: {
+    type: 'object',
+    properties: {
+      checkpointId: { type: 'string', description: 'ID of the historical checkpoint to rewind to' },
+      patchState: { type: 'object', description: 'Optional modifications to apply to the restored state' }
+    },
+    required: ['checkpointId']
+  },
+  execute: async (args) => {
+    const checkpointId = String(args.checkpointId);
+    const patchState = typeof args.patchState === 'object' && args.patchState !== null
+      ? (args.patchState as Record<string, unknown>)
+      : undefined;
+
+    const forked = rsirals.stratis.checkpointer.timeTravelFork(checkpointId, patchState);
+    return {
+      status: 'rewound_and_forked',
+      forkedThreadId: forked.forkedThreadId,
+      restoredState: forked.restoredState,
+      baseStepIndex: forked.baseStepIndex,
+      fromNodeId: forked.fromNodeId
+    };
+  }
+};
+
+export const rsiralsDualLedgerStatusTool: AgentTool = {
+  name: 'rsirals_dual_ledger_status',
+  description: 'Inspects the Magentic-One style Dual-Ledger: Outer Task Ledger (milestones, facts) and Inner Progress Ledger (current subtask, tool outputs).',
+  parameters: {
+    type: 'object',
+    properties: {}
+  },
+  execute: async () => {
+    const snapshot = rsirals.stratis.dualLedger.getSnapshot();
+    return {
+      status: 'success',
+      ...snapshot
+    };
+  }
+};
+
 export const rsiralsTools: AgentTool[] = [
   rsiralsQueryBeliefTool,
   rsiralsEvaluateRiskTool,
@@ -420,5 +464,7 @@ export const rsiralsTools: AgentTool[] = [
   rsiralsAcquireTaskTool,
   rsiralsRunWorkflowTool,
   rsiralsEvaluateOutputTool,
-  rsiralsSemanticSearchTool
+  rsiralsSemanticSearchTool,
+  rsiralsTimeTravelRewindTool,
+  rsiralsDualLedgerStatusTool
 ];

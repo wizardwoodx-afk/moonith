@@ -60,7 +60,7 @@ export function CaptainComposer({
   onChooseWorkspace,
   onClearWorkspace,
   onSubmit,
-  placeholder = mode === 'cowork' ? 'Describe an outcome…' : 'Ask anything…',
+  placeholder = mode === 'cowork' ? 'Collaborate on a task or outcome…' : 'Hand off a goal to your digital self…',
   busy = false,
   running = false,
   autoFocus = false,
@@ -447,8 +447,8 @@ export function CaptainComposer({
               className="flex h-8 shrink-0 items-center gap-0.5 rounded-full border border-line bg-canvas/60 p-0.5"
               title={
                 mode === 'cowork'
-                  ? 'Cowork changes files. Switch to Assistant to read and answer only.'
-                  : 'Assistant reads and answers. Switch to Cowork to change files.'
+                  ? 'Cowork mode: Interactive colleague pairing with live dual-ledger and shared tools.'
+                  : 'Self mode: Autonomous digital twin running cyclical self-correcting loops to achieve outcomes.'
               }
             >
               {(['chat', 'cowork'] as TaskMode[]).map((value) => {
@@ -471,7 +471,7 @@ export function CaptainComposer({
                     )}
                   >
                     {value === 'cowork' ? <BrandMark size={10} /> : <Icon name="spark" size="xs" />}
-                    {value === 'chat' ? 'Assistant' : 'Cowork'}
+                    {value === 'chat' ? 'Self' : 'Cowork'}
                   </button>
                 )
               })}

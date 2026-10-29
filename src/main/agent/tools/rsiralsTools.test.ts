@@ -10,12 +10,14 @@ import {
   rsiralsRunWorkflowTool,
   rsiralsEvaluateOutputTool,
   rsiralsSemanticSearchTool,
+  rsiralsTimeTravelRewindTool,
+  rsiralsDualLedgerStatusTool,
   rsiralsTools 
 } from './rsiralsTools';
 
 describe('RSIRALS Native Agent Tools', () => {
-  it('exposes all 10 core native tools', () => {
-    expect(rsiralsTools.length).toBe(10);
+  it('exposes all 12 core native tools', () => {
+    expect(rsiralsTools.length).toBe(12);
   });
 
   it('queries SENTRIX belief state', async () => {
@@ -121,5 +123,26 @@ describe('RSIRALS Native Agent Tools', () => {
     });
     expect(search.status).toBe('success');
     expect(search.resultsCount).toBeGreaterThan(0);
+  });
+
+  it('inspects dual-ledger status and milestones', async () => {
+    const res = await rsiralsDualLedgerStatusTool.execute({});
+    expect(res.status).toBe('success');
+    expect(res.taskLedger).toBeDefined();
+    expect(res.progressLedger).toBeDefined();
+  });
+
+  it('performs time-travel forking from checkpoint', async () => {
+    const rsiralsInstance = (await import('../../selfimpulse/rsirals/rsiralsEngine')).RsiralsEngine.getInstance();
+    const chk = rsiralsInstance.stratis.checkpointer.saveCheckpoint('thread_test', 1, 'node_init', { stateVar: 100 });
+
+    const res = await rsiralsTimeTravelRewindTool.execute({
+      checkpointId: chk.checkpointId,
+      patchState: { stateVar: 200 }
+    });
+
+    expect(res.status).toBe('rewound_and_forked');
+    expect(res.forkedThreadId).toContain('fork_thread_test_');
+    expect((res.restoredState as any).stateVar).toBe(200);
   });
 });

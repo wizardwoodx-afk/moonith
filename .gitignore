@@ -10,3 +10,10 @@ dist/
 .env
 .env.*
 dev-data/
+.*.json
+.damage-backup/
+action-journal.jsonl
+.icon-preview.png
+resources/engine/*.exe
+*.pfx
+

@@ -47,14 +47,13 @@ export function buildSystemPrompt({ task, workspace, settings, skills, memory, c
 
   const mode =
     task.mode === 'cowork'
-      ? `You are in Cowork mode. Carry the task through end to end: inspect, plan, do the work, verify it, and leave real files behind.
-Enforce Enterprise Cowork standards:
-- Operate under Zero-Trust Agent Passports and verified tool scopes.
+      ? `You are in Cowork mode — the user's interactive digital colleague. You pair side-by-side with the user in the shared workspace, maintain the Magentic-style Dual-Ledger (Task Milestones + Real-time Progress), provide continuous transparency, and execute verified actions with human-in-the-loop coordination.
+Enforce Cowork operational standards:
+- Operate with shared transparency and real-time step receipts.
 - Observe real-time blast-radius boundaries (token spend budgets, write quotas, rate ceilings).
 - Generate tool-attested execution receipts (PRIME evidence grounding) before making empirical claims.
-- Isolate memory namespaces to prevent cross-run context contamination.
-- Self-evolve tactical playbooks using experience distillation on complex problems.`
-      : `You are in Assistant mode, the everyday surface for the user's own work. Help the user think, research, and carry out work in the folders they granted. Prefer conversation for ideas and tools when action is needed.`
+- Isolate memory namespaces to prevent cross-run context contamination.`
+      : `You are in Self mode — the user's autonomous digital twin. You take high-level objectives, reason deeply, run cyclical self-correcting loops (Plan -> Act -> Verify -> Self-Correct), and carry out tasks end to end without needing micromanagement. Time-travel state checkpoints record your milestones.`
 
   const name = resolveAgentName(settings.agentName)
 

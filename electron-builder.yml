@@ -7,6 +7,17 @@ directories:
 extraResources:
   - from: resources/icon.png
     to: icon.png
+  # The orbit glyph on its own. The tray and notifications draw at ~16px, where
+  # the full lockup's letterforms collapse into a smear.
+  - from: resources/tray.png
+    to: tray.png
+  # Execution engine (MIT, licence beside it) and the MCP bridge that routes its
+  # tool calls back into this process. Both live outside the asar because the
+  # engine is a separate executable and the bridge is spawned as its own node.
+  - from: resources/engine
+    to: engine
+  - from: resources/engine-bridge.cjs
+    to: engine-bridge.cjs
 files:
   - out/**/*
   - package.json
@@ -27,12 +38,25 @@ files:
   - '!node_modules/**/*.iife.js'
 asar: true
 npmRebuild: false
+# Fails the build if the bundled engine was modified or picked up our
+# certificate while packaging.
+afterPack: scripts/verify-engine-unsigned.mjs
 win:
   target:
     - target: nsis
       arch:
         - x64
   icon: resources/icon.ico
+  # cscLink is deliberately absent. The certificate is opened with a password
+  # that lives outside the repository, so scripts/dist.mjs adds the link only
+  # when that password is in the environment. Pointing at the PFX without the
+  # password makes electron-builder fail its integrity check and abort the
+  # package before the installer is written.
+  # electron-builder signs every .exe it copies into the package. The engine is
+  # a separate third-party MIT binary, so it ships exactly as its authors built
+  # it and never carries SelfImpulse's certificate.
+  signExts:
+    - '!opencode.exe'
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
