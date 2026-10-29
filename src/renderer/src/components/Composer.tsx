@@ -6,6 +6,7 @@ import { agentName } from '../lib/localProfile'
 import { toast } from 'sonner'
 import type { AttachmentRef, PermissionMode, TaskMode } from '@shared/types'
 import { useApp } from '../store'
+import { setModeTheme } from '../lib/themes'
 import { cn, errorMessage, folderName } from '../lib/utils'
 import { PERMISSION_CHOICES } from '../lib/composerChoices'
 import { IconButton, Popover, Segmented } from './ui'
@@ -273,7 +274,10 @@ export function Composer({
             <>
               <Segmented
                 value={mode}
-                onChange={onModeChange}
+                onChange={(nextMode) => {
+                  onModeChange(nextMode)
+                  setModeTheme(nextMode)
+                }}
                 size="sm"
                 options={[
                   {
@@ -281,10 +285,10 @@ export function Composer({
                     label: (
                       <>
                         <MessageCircle size={11} />
-                        Assistant
+                        Self
                       </>
                     ),
-                    hint: 'Research and answer without editing files'
+                    hint: 'Autonomous digital twin running cyclical self-correcting loops'
                   },
                   {
                     value: 'cowork',
@@ -294,7 +298,7 @@ export function Composer({
                         Cowork
                       </>
                     ),
-                    hint: 'Plan and complete work, creating real files'
+                    hint: 'Interactive digital colleague for pair execution and dual-ledger'
                   }
                 ]}
               />

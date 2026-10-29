@@ -767,15 +767,28 @@ export const ATELIER_THEME_IDS = THEMES.filter((theme) => theme.origin === 'atel
 )
 
 export const DEFAULT_THEME: ThemeId = 'moonlight'
+export const DEFAULT_SELF_THEME: ThemeId = 'moonlight'
+export const DEFAULT_COWORK_THEME: ThemeId = 'bee'
 const STORAGE_KEY = 'selfimpulse.theme'
+const STORAGE_KEY_SELF = 'selfimpulse.theme.self'
+const STORAGE_KEY_COWORK = 'selfimpulse.theme.cowork'
 const LEGACY_STORAGE_KEY = 'knight.theme'
 
 export function themeById(id: ThemeId): Theme {
   return THEMES.find((theme) => theme.id === id) ?? THEMES[0]
 }
 
-export function readStoredTheme(): ThemeId {
+export function readStoredTheme(forMode?: 'chat' | 'cowork'): ThemeId {
   try {
+    if (forMode === 'cowork') {
+      const stored = window.localStorage.getItem(STORAGE_KEY_COWORK) as ThemeId | null
+      if (stored && THEMES.some((theme) => theme.id === stored)) return stored
+      return DEFAULT_COWORK_THEME
+    }
+    if (forMode === 'chat') {
+      const stored = window.localStorage.getItem(STORAGE_KEY_SELF) as ThemeId | null
+      if (stored && THEMES.some((theme) => theme.id === stored)) return stored
+    }
     const stored = (window.localStorage.getItem(STORAGE_KEY) ??
       window.localStorage.getItem(LEGACY_STORAGE_KEY)) as ThemeId | null
     if (stored && THEMES.some((theme) => theme.id === stored)) return stored
@@ -818,15 +831,56 @@ export function initTheme(): void {
   paint(readStoredTheme(), false)
 }
 
-interface ThemeStore {
+export interface ThemeStore {
   themeId: ThemeId
-  setTheme: (id: ThemeId) => void
+  activeMode: 'chat' | 'cowork'
+  selfThemeId: ThemeId
+  coworkThemeId: ThemeId
+  setTheme: (id: ThemeId, forMode?: 'chat' | 'cowork') => void
+  setModeTheme: (mode: 'chat' | 'cowork') => void
 }
 
-export const useTheme = create<ThemeStore>((set) => ({
-  themeId: typeof document === 'undefined' ? DEFAULT_THEME : readStoredTheme(),
-  setTheme: (id) => {
-    applyTheme(id)
-    set({ themeId: id })
+export const useTheme = create<ThemeStore>((set, get) => {
+  const initialSelf = typeof document === 'undefined' ? DEFAULT_SELF_THEME : readStoredTheme('chat')
+  const initialCowork = typeof document === 'undefined' ? DEFAULT_COWORK_THEME : readStoredTheme('cowork')
+  const initial = typeof document === 'undefined' ? DEFAULT_THEME : readStoredTheme()
+
+  return {
+    themeId: initial,
+    activeMode: 'chat',
+    selfThemeId: initialSelf,
+    coworkThemeId: initialCowork,
+    setTheme: (id, forMode) => {
+      applyTheme(id, true)
+      const targetMode = forMode ?? (themeCollection(id) === 'teams' ? 'cowork' : get().activeMode)
+      if (targetMode === 'cowork') {
+        try {
+          window.localStorage.setItem(STORAGE_KEY_COWORK, id)
+        } catch {
+          /* storage is optional */
+        }
+        set({ themeId: id, coworkThemeId: id })
+      } else {
+        try {
+          window.localStorage.setItem(STORAGE_KEY_SELF, id)
+        } catch {
+          /* storage is optional */
+        }
+        set({ themeId: id, selfThemeId: id })
+      }
+    },
+    setModeTheme: (mode) => {
+      const current = get()
+      const targetTheme = mode === 'cowork' ? current.coworkThemeId : current.selfThemeId
+      if (current.activeMode === mode && current.themeId === targetTheme) {
+        return
+      }
+      applyTheme(targetTheme, true)
+      set({ themeId: targetTheme, activeMode: mode })
+    }
   }
-}))
+})
+
+export function setModeTheme(mode: 'chat' | 'cowork'): void {
+  useTheme.getState().setModeTheme(mode)
+}

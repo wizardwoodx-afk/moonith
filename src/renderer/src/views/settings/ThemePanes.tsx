@@ -220,17 +220,20 @@ export function MotionPane() {
 
 const COLLECTION_COPY: Record<ThemeCollection, { title: string; detail: string }> = {
   solo: {
-    title: 'Solo',
-    detail: 'Quiet neutrals, editorial papers, and spatial darks for individual focus.'
+    title: 'Self Mode (Solo)',
+    detail: 'Quiet neutrals, editorial papers, and spatial darks for autonomous digital twin Self mode.'
   },
   teams: {
-    title: 'Teams',
-    detail: 'Distinct operational hues and agent-friendly identities for collaborative work.'
+    title: 'Cowork Mode (Teams)',
+    detail: 'Distinct operational hues and collaborative identities for interactive Cowork mode.'
   }
 }
 
 export function ColorsPane() {
   const themeId = useTheme((state) => state.themeId)
+  const selfThemeId = useTheme((state) => state.selfThemeId)
+  const coworkThemeId = useTheme((state) => state.coworkThemeId)
+  const activeMode = useTheme((state) => state.activeMode)
   const [collection, setCollection] = useState<ThemeCollection>(() => themeCollection(themeId))
   const themes = THEMES.filter((theme) => themeCollection(theme.id) === collection)
 
@@ -238,7 +241,10 @@ export function ColorsPane() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3 px-1">
         <div>
-          <h2 className="text-[12px] font-medium text-muted">Color collections</h2>
+          <h2 className="text-[12px] font-medium text-muted">Mode Themes & Color Collections</h2>
+          <p className="mt-0.5 text-[11px] text-faint">
+            Separate themes active for <strong className="text-ink">Self</strong> ({THEMES.find(t => t.id === selfThemeId)?.label ?? selfThemeId}) and <strong className="text-ink">Cowork</strong> ({THEMES.find(t => t.id === coworkThemeId)?.label ?? coworkThemeId}). Shifts automatically with your active mode.
+          </p>
         </div>
         <NewCollectionBadge>{`${ATELIER_THEME_IDS.length} new`}</NewCollectionBadge>
       </div>

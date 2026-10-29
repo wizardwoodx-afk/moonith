@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import type { AttachmentRef, PermissionMode, TaskMode } from '@shared/types'
 import { useApp } from '../../store'
 import { cn, errorMessage, folderName } from '../../lib/utils'
+import { setModeTheme } from '../../lib/themes'
 import { PERMISSION_CHOICES, type ComposerModelState } from '../../lib/composerChoices'
 import { Popover } from '../../components/ui'
 import { ComposerAttachments, mergeAttachments } from '../../motion/ComposerAttachments'
@@ -458,6 +459,7 @@ export function CaptainComposer({
                     key={value}
                     onClick={() => {
                       onModeChange(value)
+                      setModeTheme(value)
                       setCoworkNoFolder(value === 'cowork' && !workspace)
                     }}
                     aria-pressed={active}

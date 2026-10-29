@@ -8,6 +8,7 @@ import { cn, plural, statusLabel, timeAgo } from '../lib/utils'
 import { Composer } from '../components/Composer'
 import { Button } from '../components/ui'
 import { TaskDeck } from '../motion/TaskDeck'
+import { setModeTheme } from '../lib/themes'
 
 const SUGGESTIONS = [
   {
@@ -143,7 +144,10 @@ export function Home() {
         <div className="mt-7">
           <Composer
             mode={mode}
-            onModeChange={setMode}
+            onModeChange={(nextMode) => {
+              setMode(nextMode)
+              setModeTheme(nextMode)
+            }}
             text={text}
             onTextChange={setText}
             attachments={attachments}

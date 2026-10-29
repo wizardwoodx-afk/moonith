@@ -77,6 +77,7 @@ interface AppState {
   }) => Promise<void>
   addFolderToCurrent: () => Promise<void>
   removeFolderFromCurrent: (folder: string) => Promise<void>
+  renameTask: (id: string, title: string) => Promise<void>
   deleteTask: (id: string) => Promise<void>
   saveSettings: (patch: SettingsPatch) => Promise<PublicSettings | null>
   respondApproval: (approved: boolean, always?: boolean) => Promise<void>
@@ -362,6 +363,21 @@ export const useApp = create<AppState>((set, get) => ({
     try {
       const updated = await window.knight.removeFolder(task.id, folder)
       set({ currentTask: updated })
+    } catch (error) {
+      toast.error(errorMessage(error))
+    }
+  },
+
+  renameTask: async (id, title) => {
+    const trimmed = title.trim()
+    if (!trimmed) return
+    try {
+      const updated = await window.knight.updateTask({ taskId: id, title: trimmed })
+      set((state) => ({
+        tasks: mergeSummary(state.tasks, updated),
+        currentTask: state.currentTask?.id === id ? updated : state.currentTask
+      }))
+      toast.success('Chat renamed.')
     } catch (error) {
       toast.error(errorMessage(error))
     }

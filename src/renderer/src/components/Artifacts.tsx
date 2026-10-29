@@ -333,7 +333,7 @@ export function ArtifactChip({
     <button
       onClick={() => setPreview(artifact)}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-1 text-[11px] text-muted hover:text-ink',
+        'inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-1 text-[11px] text-muted hover:text-ink transition-colors active:scale-95 cursor-pointer',
         className
       )}
       title={artifact.relPath}
@@ -342,6 +342,85 @@ export function ArtifactChip({
       <span className="max-w-[160px] truncate">{artifact.name}</span>
       <Icon name="arrowUpRight" size="xs" className="text-faint" />
     </button>
+  )
+}
+
+const KIND_COLOR_CLASS: Record<ArtifactKind, { bg: string; text: string; badge: string }> = {
+  document: { bg: 'bg-blue-500/10', text: 'text-blue-500', badge: 'bg-blue-500/15 text-blue-600 dark:text-blue-400' },
+  spreadsheet: { bg: 'bg-emerald-500/10', text: 'text-emerald-500', badge: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' },
+  presentation: { bg: 'bg-amber-500/10', text: 'text-amber-500', badge: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
+  pdf: { bg: 'bg-rose-500/10', text: 'text-rose-500', badge: 'bg-rose-500/15 text-rose-600 dark:text-rose-400' },
+  image: { bg: 'bg-purple-500/10', text: 'text-purple-500', badge: 'bg-purple-500/15 text-purple-600 dark:text-purple-400' },
+  code: { bg: 'bg-indigo-500/10', text: 'text-indigo-500', badge: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400' },
+  text: { bg: 'bg-slate-500/10', text: 'text-slate-500', badge: 'bg-slate-500/15 text-slate-600 dark:text-slate-400' },
+  other: { bg: 'bg-surface-2', text: 'text-muted', badge: 'bg-surface-3 text-muted' }
+}
+
+export function InlineArtifactCard({
+  artifact,
+  taskId,
+  className
+}: {
+  artifact: Artifact
+  taskId: string
+  className?: string
+}) {
+  const setPreview = useApp((state) => state.setPreview)
+  const colors = KIND_COLOR_CLASS[artifact.kind] ?? KIND_COLOR_CLASS.other
+
+  return (
+    <div
+      className={cn(
+        'group/card relative flex items-center gap-3 rounded-xl border border-line bg-surface/90 p-2.5 shadow-xs transition-all duration-150 hover:border-line-strong hover:shadow-sm max-w-md',
+        className
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => setPreview(artifact)}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left outline-none cursor-pointer"
+      >
+        <span
+          className={cn(
+            'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-transform group-hover/card:scale-105',
+            colors.bg,
+            colors.text
+          )}
+        >
+          <ArtifactGlyph kind={artifact.kind} size="lg" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-medium text-ink group-hover/card:text-accent transition-colors">
+            {artifact.name}
+          </span>
+          <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-faint">
+            <span className={cn('rounded px-1 py-px text-[9.5px] font-semibold uppercase', colors.badge)}>
+              {kindLabel(artifact.kind)}
+            </span>
+            {artifact.size ? <span>· {formatBytes(artifact.size)}</span> : null}
+          </span>
+        </span>
+      </button>
+
+      <div className="flex items-center gap-1 shrink-0">
+        <IconButton
+          onClick={() => revealArtifact(taskId, artifact)}
+          title="Show in folder"
+          aria-label={`Show ${artifact.name} in folder`}
+          className="h-7 w-7 text-faint hover:text-ink hover:bg-surface-2"
+        >
+          <Icon name="folderOpen" size="sm" />
+        </IconButton>
+        <IconButton
+          onClick={() => openArtifact(taskId, artifact)}
+          title="Open in default app"
+          aria-label={`Open ${artifact.name} in default app`}
+          className="h-7 w-7 text-faint hover:text-ink hover:bg-surface-2"
+        >
+          <Icon name="externalLink" size="sm" />
+        </IconButton>
+      </div>
+    </div>
   )
 }
 

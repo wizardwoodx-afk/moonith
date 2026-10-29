@@ -1340,6 +1340,10 @@ class AgentRuntime {
         : undefined
 
     const existing = task.artifacts.find((artifact) => artifact.relPath === relPath)
+    const resolvedMessageId =
+      messageId ||
+      [...task.messages].reverse().find((m) => m.role === 'assistant')?.id ||
+      existing?.messageId
     const artifact: Artifact = {
       id: existing?.id ?? newId('artifact'),
       name: basename(absPath),
@@ -1349,7 +1353,7 @@ class AgentRuntime {
       mimeType: mimeForPath(absPath),
       size,
       createdAt: existing?.createdAt ?? nowIso(),
-      messageId: messageId ?? existing?.messageId
+      messageId: resolvedMessageId
     }
     task.artifacts = task.artifacts.filter((item) => item.relPath !== relPath)
     task.artifacts.push(artifact)

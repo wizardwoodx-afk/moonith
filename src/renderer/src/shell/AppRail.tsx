@@ -2,13 +2,16 @@ import { useMemo, useRef, useState } from 'react'
 import {
   Building2,
   CalendarClock,
+  Check,
   Handshake,
   LibraryBig,
   MessageSquare,
+  Pencil,
   Plus,
   Search,
   Settings,
   Sun,
+  Trash2,
   X
 } from 'lucide-react'
 import { BrandGlyph, BrandWordmark } from '../components/BrandMarks'
@@ -18,6 +21,7 @@ import { useApp } from '../store'
 import { cn, taskGroup, timeAgo } from '../lib/utils'
 import { profileInitial, useLocalProfile } from '../lib/localProfile'
 import { startNewTask } from '../lib/navigation'
+import { confirmDialog } from '../components/Confirm'
 import { SURFACES, type Surface } from './surfaces'
 
 const ICONS: Record<Surface, typeof MessageSquare> = {
@@ -81,11 +85,16 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
   const openSchedules = useApp((state) => state.openSchedules)
   const openPromey = useApp((state) => state.openPromey)
   const openSettings = useApp((state) => state.openSettings)
+  const deleteTask = useApp((state) => state.deleteTask)
+  const renameTask = useApp((state) => state.renameTask)
   const profile = useLocalProfile()
   const searchRef = useRef<HTMLInputElement>(null)
+  const editInputRef = useRef<HTMLInputElement>(null)
 
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState('')
 
   const activeSurface = view.kind === 'surface' ? view.surface : null
 
@@ -336,8 +345,10 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
                   const showGroup =
                     !query.trim() &&
                     (index === 0 || taskGroup(recent[index - 1].updatedAt) !== group)
+                  const isEditing = editingTaskId === task.id
+
                   return (
-                    <div key={task.id}>
+                    <div key={task.id} className="group/item relative">
                       {showGroup ? (
                         <p
                           className={cn(
@@ -348,29 +359,112 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
                           {group}
                         </p>
                       ) : null}
-                      <button
-                        onClick={() => void openTask(task.id)}
-                        title={`${task.title} · ${timeAgo(task.updatedAt)}`}
-                        aria-current={active ? 'page' : undefined}
-                        style={{ animationDelay: `${Math.min(index, 8) * 18}ms` }}
-                        className={cn(
-                          'rail-in group flex h-[34px] w-full items-center gap-2.5 rounded-lg px-2.5 text-left transition-colors',
-                          active ? 'bg-surface-3/80' : 'hover:bg-surface-2/55'
-                        )}
-                      >
-                        <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', STATUS_DOT[task.status])} />
-                        <span
-                          className={cn(
-                            'min-w-0 flex-1 truncate text-[13px]',
-                            active ? 'font-medium text-ink' : 'text-ink/80 group-hover:text-ink'
-                          )}
+
+                      {isEditing ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault()
+                            if (editingTitle.trim()) {
+                              void renameTask(task.id, editingTitle.trim())
+                            }
+                            setEditingTaskId(null)
+                          }}
+                          className="flex h-[34px] w-full items-center gap-1.5 rounded-lg px-2 bg-surface-3/90 border border-line-strong"
                         >
-                          {task.title}
-                        </span>
-                        <span className="shrink-0 text-[10px] text-faint opacity-0 transition-opacity group-hover:opacity-100">
-                          {timeAgo(task.updatedAt)}
-                        </span>
-                      </button>
+                          <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', STATUS_DOT[task.status])} />
+                          <input
+                            ref={editInputRef}
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                e.stopPropagation()
+                                setEditingTaskId(null)
+                              }
+                            }}
+                            className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none"
+                            autoFocus
+                          />
+                          <button
+                            type="submit"
+                            title="Save title"
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-accent hover:bg-surface-2 transition-colors cursor-pointer"
+                          >
+                            <Check size={12} strokeWidth={2.2} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingTaskId(null)}
+                            title="Cancel rename"
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-faint hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer"
+                          >
+                            <X size={12} />
+                          </button>
+                        </form>
+                      ) : (
+                        <div className="relative">
+                          <button
+                            onClick={() => void openTask(task.id)}
+                            title={`${task.title} · ${timeAgo(task.updatedAt)}`}
+                            aria-current={active ? 'page' : undefined}
+                            style={{ animationDelay: `${Math.min(index, 8) * 18}ms` }}
+                            className={cn(
+                              'rail-in group flex h-[34px] w-full items-center gap-2.5 rounded-lg px-2.5 pr-14 text-left transition-colors',
+                              active ? 'bg-surface-3/80' : 'hover:bg-surface-2/55'
+                            )}
+                          >
+                            <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', STATUS_DOT[task.status])} />
+                            <span
+                              className={cn(
+                                'min-w-0 flex-1 truncate text-[13px]',
+                                active ? 'font-medium text-ink' : 'text-ink/80 group-hover:text-ink'
+                              )}
+                            >
+                              {task.title}
+                            </span>
+                            <span className="shrink-0 text-[10px] text-faint opacity-0 transition-opacity group-hover/item:opacity-0 group-hover:opacity-100">
+                              {timeAgo(task.updatedAt)}
+                            </span>
+                          </button>
+
+                          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 hidden group-hover/item:flex items-center gap-0.5 bg-surface/95 backdrop-blur-xs rounded-md px-1 py-0.5 shadow-xs border border-line/70">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setEditingTaskId(task.id)
+                                setEditingTitle(task.title)
+                                window.setTimeout(() => editInputRef.current?.select(), 20)
+                              }}
+                              title="Rename chat"
+                              aria-label={`Rename ${task.title}`}
+                              className="flex h-5 w-5 items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer"
+                            >
+                              <Pencil size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                const confirmed = await confirmDialog({
+                                  title: 'Delete this chat?',
+                                  body: `Are you sure you want to delete "${task.title}"? This cannot be undone.`,
+                                  confirmLabel: 'Delete chat',
+                                  danger: true
+                                })
+                                if (confirmed) {
+                                  await deleteTask(task.id)
+                                }
+                              }}
+                              title="Delete chat"
+                              aria-label={`Delete ${task.title}`}
+                              className="flex h-5 w-5 items-center justify-center rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )
                 })}

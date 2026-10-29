@@ -1,6 +1,7 @@
 import { agentName } from '../lib/localProfile'
 import { useEffect, useRef, useState } from 'react'
 import {
+  Check,
   Circle,
   Loader2,
   MessageCircle,
@@ -8,7 +9,8 @@ import {
   PanelRightOpen,
   Trash2,
   MonitorUp,
-  Pencil
+  Pencil,
+  X
 } from 'lucide-react'
 import { Icon } from '../components/icons'
 import { BrandMark } from '../components/BrandMarks'
@@ -26,12 +28,13 @@ import { CaptainComposer } from '../features/captain/CaptainComposer'
 import { Markdown } from '../components/Markdown'
 import { PlanCard } from '../components/PlanCard'
 import { WorkTrail } from '../components/WorkTrail'
-import { ArtifactChip, ArtifactPreview } from '../components/Artifacts'
+import { ArtifactChip, ArtifactPreview, InlineArtifactCard } from '../components/Artifacts'
 import { TaskPanel } from '../components/TaskPanel'
 import { Button, Elev, ElevShadow, IconButton, Popover } from '../components/ui'
 import { ReactionPicker } from '../motion/ReactionPicker'
 import { MessageFeedback } from '../components/MessageFeedback'
 import { ActionNodeCard } from '../motion/ActionNodeCard'
+import { setModeTheme } from '../lib/themes'
 
 const STATUS_STYLE: Record<TaskStatus, string> = {
   draft: 'border-line bg-surface-2 text-muted',
@@ -288,6 +291,18 @@ function TaskHeader({
     : settings?.providers.find((item) => item.id === settings?.defaultProviderId)
   const model = task.model || settings?.defaultModel || provider?.models[0]
   const running = task.status === 'running' || task.status === 'waiting'
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(task.title)
+
+  const handleSaveTitle = async () => {
+    const trimmed = titleDraft.trim()
+    if (!trimmed || trimmed === task.title) {
+      setIsEditingTitle(false)
+      return
+    }
+    await updateCurrent({ title: trimmed })
+    setIsEditingTitle(false)
+  }
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-canvas px-6">
@@ -296,9 +311,64 @@ function TaskHeader({
       </IconButton>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <h1 className="truncate text-[13px] font-semibold tracking-[-0.01em]" title={task.title}>
-            {task.title}
-          </h1>
+          {isEditingTitle ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                void handleSaveTitle()
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <input
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setTitleDraft(task.title)
+                    setIsEditingTitle(false)
+                  }
+                }}
+                className="h-7 rounded-md border border-line-strong bg-surface px-2 text-[13px] font-semibold text-ink outline-none"
+                autoFocus
+              />
+              <button
+                type="submit"
+                title="Save title"
+                className="flex h-6 w-6 items-center justify-center rounded text-accent hover:bg-surface-2 transition-colors cursor-pointer"
+              >
+                <Check size={13} strokeWidth={2.2} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTitleDraft(task.title)
+                  setIsEditingTitle(false)
+                }}
+                title="Cancel"
+                className="flex h-6 w-6 items-center justify-center rounded text-faint hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer"
+              >
+                <X size={13} />
+              </button>
+            </form>
+          ) : (
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h1 className="truncate text-[13px] font-semibold tracking-[-0.01em]" title={task.title}>
+                {task.title}
+              </h1>
+              <button
+                type="button"
+                onClick={() => {
+                  setTitleDraft(task.title)
+                  setIsEditingTitle(true)
+                }}
+                title="Rename chat"
+                aria-label="Rename chat"
+                className="flex h-5 w-5 items-center justify-center rounded text-faint hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer"
+              >
+                <Pencil size={11} />
+              </button>
+            </div>
+          )}
           <span
             role="status"
             className={cn(
@@ -313,7 +383,11 @@ function TaskHeader({
         <div className="mt-0.5 flex items-center gap-1.5 truncate text-[length:var(--text-micro)] text-faint">
           <button
             type="button"
-            onClick={() => void updateCurrent({ mode: task.mode === 'cowork' ? 'chat' : 'cowork' })}
+            onClick={() => {
+              const next = task.mode === 'cowork' ? 'chat' : 'cowork'
+              void updateCurrent({ mode: next })
+              setModeTheme(next)
+            }}
             title={`Switch to ${task.mode === 'cowork' ? 'Self' : 'Cowork'} mode`}
             className="inline-flex items-center gap-1 hover:text-ink transition-colors cursor-pointer rounded px-1 py-0.5 hover:bg-surface-2"
           >
@@ -408,6 +482,17 @@ function TaskHeader({
               className="menu-item"
               onClick={() => {
                 close()
+                setTitleDraft(task.title)
+                setIsEditingTitle(true)
+              }}
+            >
+              <Pencil size={13} />
+              Rename chat
+            </button>
+            <button
+              className="menu-item"
+              onClick={() => {
+                close()
                 void navigator.clipboard.writeText(task.id)
                 toast.success('Task ID copied.')
               }}
@@ -464,6 +549,12 @@ export function TaskView() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<string>('')
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+
+  useEffect(() => {
+    if (task?.mode) {
+      setModeTheme(task.mode === 'cowork' ? 'cowork' : 'chat')
+    }
+  }, [task?.id, task?.mode])
 
   const handleStartEdit = (msg: ChatMessage) => {
     setEditingMessageId(msg.id)
@@ -680,8 +771,32 @@ export function TaskView() {
                 if (message.role !== 'assistant') return null
 
                 const steps = task.steps.filter((step) => step.messageId === message.id)
-                const delivered = task.artifacts.filter((artifact) => artifact.messageId === message.id)
                 const isLast = index === visible.length - 1
+                const messageText = (message.content || '').toLowerCase()
+                const stepText = steps
+                  .map((s) => `${s.output ?? ''} ${JSON.stringify(s.args ?? '')}`)
+                  .join(' ')
+                  .toLowerCase()
+
+                const directArtifacts = task.artifacts.filter((artifact) => artifact.messageId === message.id)
+                const stepArtifacts = task.artifacts.filter((artifact) => {
+                  if (artifact.messageId === message.id) return false
+                  const name = artifact.name.toLowerCase()
+                  return stepText.includes(name) || stepText.includes(artifact.relPath.toLowerCase())
+                })
+                const mentionedArtifacts = task.artifacts.filter((artifact) => {
+                  if (artifact.messageId === message.id) return false
+                  const name = artifact.name.toLowerCase()
+                  return messageText.includes(name) || messageText.includes(artifact.relPath.toLowerCase())
+                })
+                const unanchored = isLast ? task.artifacts.filter((artifact) => !artifact.messageId) : []
+
+                const delivered = [
+                  ...directArtifacts,
+                  ...stepArtifacts,
+                  ...mentionedArtifacts,
+                  ...unanchored
+                ].filter((item, idx, arr) => arr.findIndex((x) => x.id === item.id) === idx)
                 const streaming =
                   isLast &&
                   running &&
@@ -740,10 +855,16 @@ export function TaskView() {
                         </div>
                       ) : null}
                       {delivered.length ? (
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          {delivered.map((artifact) => (
-                            <ArtifactChip key={artifact.id} artifact={artifact} taskId={task.id} />
-                          ))}
+                        <div className="mt-3.5 space-y-2">
+                          <p className="flex items-center gap-1.5 text-[length:var(--text-micro)] font-semibold tracking-[0.1em] text-faint uppercase">
+                            <Icon name="folderOpen" size="xs" />
+                            Deliverables & Documents
+                          </p>
+                          <div className="flex flex-col gap-2">
+                            {delivered.map((artifact) => (
+                              <InlineArtifactCard key={artifact.id} artifact={artifact} taskId={task.id} />
+                            ))}
+                          </div>
                         </div>
                       ) : null}
                       {!streaming ? (
@@ -762,8 +883,15 @@ export function TaskView() {
               })}
             </div>
 
-            {/* Files recorded before deliveries were anchored to a turn. */}
-            {!running && task.artifacts.some((artifact) => !artifact.messageId) ? (
+            {/* Fallback for any deliverables not rendered inside message turns */}
+            {!running &&
+            task.artifacts.some(
+              (artifact) =>
+                !visible.some((m) => {
+                  const mText = (m.content || '').toLowerCase()
+                  return m.id === artifact.messageId || mText.includes(artifact.name.toLowerCase())
+                })
+            ) ? (
               <div className={cn('mt-8 rounded-[var(--r-card)] bg-surface p-4', Elev.raised)}>
                 <p className="mb-2 flex items-center gap-1.5 text-[length:var(--text-micro)] font-semibold tracking-[0.13em] text-faint uppercase">
                   <Icon name="folderOpen" size="xs" />
