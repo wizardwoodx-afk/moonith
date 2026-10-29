@@ -3,6 +3,7 @@ import { isIP } from 'node:net'
 import { defineTool, toolResultError } from './types'
 import { truncate } from '../../util'
 import { safeEgressFetch } from '../../selfimpulse/security/egressNet'
+import { stealthSearchRouter } from '../../services/stealthBrowser'
 
 const MAX_REDIRECTS = 3
 
@@ -216,11 +217,24 @@ export const webSearchTool = defineTool({
   name: 'web_search',
   title: 'Search the web',
   description:
-    'Search the web using DuckDuckGo HTML results. Returns titles, URLs, and snippets. Use web_fetch or the browser tools to read a result.',
+    'Search the web using the always-on stealth browser engine (with Camoufox anti-detect headers and bot-evasion). Returns organic titles, clean URLs, and rich snippets. Use web_fetch or browser tools to read a result.',
   schema: z.object({ query: z.string().min(1) }),
   sideEffect: 'network',
   risk: 'low',
   execute: async (args) => {
+    try {
+      // 1. Direct route to always-on stealth browser search
+      const outcome = await stealthSearchRouter.search(args.query, 10)
+      if (outcome.results.length > 0) {
+        const formatted = outcome.results.map((r, i) => `${i + 1}. ${r.title}\n${r.url}\n${r.snippet}`).join('\n\n')
+        return {
+          content: `Results for “${args.query}” (${outcome.sourceEngine}, ${outcome.durationMs}ms):\n\n${formatted}`
+        }
+      }
+    } catch {
+      // Fallback to direct fetch path if stealth router encounters network exception
+    }
+
     try {
       const form = new URLSearchParams({ q: args.query })
       const response = await fetch(`https://html.duckduckgo.com/html/?${form.toString()}`, {

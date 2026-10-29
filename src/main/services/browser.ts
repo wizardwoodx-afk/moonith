@@ -7,6 +7,7 @@ import { getPaths } from '../paths'
 import { atomicWriteFileSync } from '../atomic'
 import { assertPublicHttpTarget, syncBlockedHostReason } from '../egressGuard'
 import { taskIdForBrowserScope } from '../selfimpulse/coworker/scope'
+import { camoufoxEngine } from './stealthBrowser/camoufoxEngine'
 
 interface BrowserEntry {
   win: BrowserWindow
@@ -109,6 +110,9 @@ class BrowserService {
   private configureSession(browserSession: Electron.Session): void {
     if (this.configuredSessions.has(browserSession)) return
     this.configuredSessions.add(browserSession)
+    browserSession.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0'
+    )
     browserSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
     browserSession.setPermissionCheckHandler(() => false)
     browserSession.on('will-download', (event) => event.preventDefault())
@@ -188,6 +192,9 @@ class BrowserService {
       }
     })
     this.guardNavigation(win, scope)
+    win.webContents.on('did-finish-load', () => {
+      win.webContents.executeJavaScript(camoufoxEngine.getStealthInjectionScript()).catch(() => undefined)
+    })
     win.on('closed', () => {
       const entry = this.entries.get(scope)
       if (entry?.win === win) this.entries.delete(scope)

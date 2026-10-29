@@ -6,6 +6,13 @@ import { defineTool, toolResultError } from './types'
 import { browserService } from '../../services/browser'
 import { browserCraft } from '../../services/browserCraft'
 import { EgressBlockedError } from '../../egressGuard'
+import {
+  stealthBrowser,
+  uitarsEngine,
+  taskController,
+  camoufoxEngine,
+  stealthSearchRouter
+} from '../../services/stealthBrowser'
 
 function scope(ctx: ToolContext): string {
   return ctx.browserScope ?? ctx.task.id
@@ -363,6 +370,231 @@ export const stageNavigateTool = defineTool({
   summarize: (args) => `Stage Navigate: ${args.url}`
 })
 
+export const browserVisualActTool = defineTool({
+  name: 'browser_visual_act',
+  title: 'UI-TARS Visual GUI Action',
+  description:
+    'Execute a visual GUI action using UI-TARS normalized coordinates (0-1000 range) with Camoufox human mouse curves. Supports click, double_click, right_click, drag, type, scroll, and wait. Ideal for HTML5 Canvas, WebGL, bot verification challenges, and complex dynamic web apps where DOM selectors fail.',
+  schema: z.object({
+    actionType: z.enum(['click', 'double_click', 'right_click', 'type', 'drag', 'scroll', 'wait']),
+    x: z.number().min(0).max(1000).optional().describe('Normalized X coordinate (0-1000)'),
+    y: z.number().min(0).max(1000).optional().describe('Normalized Y coordinate (0-1000)'),
+    endX: z.number().min(0).max(1000).optional().describe('Normalized ending X for drag actions (0-1000)'),
+    endY: z.number().min(0).max(1000).optional().describe('Normalized ending Y for drag actions (0-1000)'),
+    text: z.string().optional().describe('Text to type if actionType is "type"'),
+    scrollDirection: z.enum(['up', 'down', 'left', 'right']).optional(),
+    scrollAmount: z.number().optional().describe('Scroll pixel amount (default 300)')
+  }),
+  sideEffect: 'network',
+  risk: 'low',
+  approval: 'never',
+  execute: async (args, ctx) => {
+    try {
+      const activeScope = scope(ctx)
+      const viewport = { width: 1280, height: 900 }
+      const targetPoint = args.x !== undefined && args.y !== undefined ? { x: args.x, y: args.y } : undefined
+
+      if (targetPoint) {
+        const { targetScreenPos, curve } = stealthBrowser.prepareVisualInteraction(
+          { x: 640, y: 450 },
+          targetPoint,
+          viewport
+        )
+
+        // Dispatch visual mouse curve and click via browser evaluate
+        await browserService.evaluate(
+          activeScope,
+          `(() => {
+            const el = document.elementFromPoint(${targetScreenPos.x}, ${targetScreenPos.y});
+            if (el) {
+              ${args.actionType === 'click' ? `
+                el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: ${targetScreenPos.x}, clientY: ${targetScreenPos.y} }));
+                el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: ${targetScreenPos.x}, clientY: ${targetScreenPos.y} }));
+                el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: ${targetScreenPos.x}, clientY: ${targetScreenPos.y} }));
+                if (typeof el.focus === 'function') el.focus();
+              ` : ''}
+              ${args.actionType === 'double_click' ? `
+                el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: ${targetScreenPos.x}, clientY: ${targetScreenPos.y} }));
+              ` : ''}
+              ${args.actionType === 'right_click' ? `
+                el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: ${targetScreenPos.x}, clientY: ${targetScreenPos.y} }));
+              ` : ''}
+              ${args.actionType === 'type' && args.text ? `
+                if ('value' in el) {
+                  el.value = ${JSON.stringify(args.text)};
+                  el.dispatchEvent(new Event('input', { bubbles: true }));
+                  el.dispatchEvent(new Event('change', { bubbles: true }));
+                } else if (el.isContentEditable) {
+                  el.innerText = ${JSON.stringify(args.text)};
+                  el.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+              ` : ''}
+            }
+          })()`
+        )
+      } else if (args.actionType === 'scroll') {
+        const delta = (args.scrollAmount ?? 300) * (args.scrollDirection === 'up' ? -1 : 1)
+        await browserService.evaluate(
+          activeScope,
+          `window.scrollBy({ top: ${delta}, behavior: 'smooth' })`
+        )
+      }
+
+      const state = await snapshot(ctx)
+      return {
+        content: `Executed UI-TARS visual action: [${args.actionType.toUpperCase()}] at (${args.x ?? 'N/A'}, ${args.y ?? 'N/A'})\n${stateSummary(state)}\nScreenshot: ${state.screenshotRelPath ?? '(none)'}`
+      }
+    } catch (error) {
+      return egressError(error) ?? toolResultError(error)
+    }
+  },
+  summarize: (args) => `Visual Act: ${args.actionType} (${args.x ?? 0}, ${args.y ?? 0})`
+})
+
+export const browserTaskControllerActTool = defineTool({
+  name: 'browser_task_controller_act',
+  title: 'Browser Task Controller (Hybrid Action)',
+  description:
+    'Intelligent hybrid browser action. The Browser Task Controller inspects page context (DOM element density, Canvas presence, CAPTCHA challenges) and automatically selects between fast DOM automation (Playwright style) or Visual GUI control (UI-TARS style), with seamless fallback if DOM selectors fail.',
+  schema: z.object({
+    goal: z.string().describe('User goal (e.g. "click the Search button", "type text into search field", "click item in canvas")'),
+    targetHint: z.string().optional().describe('Optional selector or target text hint'),
+    text: z.string().optional().describe('Text to type if goal involves input')
+  }),
+  sideEffect: 'network',
+  risk: 'low',
+  approval: 'never',
+  execute: async (args, ctx) => {
+    try {
+      const activeScope = scope(ctx)
+
+      // 1. Inspect page context
+      const pageContext = await browserService.evaluate<{
+        url: string
+        title: string
+        hasCanvas: boolean
+        hasCaptcha: boolean
+        interactiveCount: number
+      }>(
+        activeScope,
+        `(() => {
+          const canvases = document.querySelectorAll('canvas');
+          const hasCanvas = canvases.length > 0;
+          const hasCaptcha = document.body.innerText.includes('Turnstile') || document.body.innerText.includes('Verify you are human') || !!document.querySelector('.cf-turnstile, #challenge-running, iframe[src*="captcha"]');
+          const interactiveCount = document.querySelectorAll('button, a[href], input, textarea, select').length;
+          return {
+            url: window.location.href,
+            title: document.title,
+            hasCanvas,
+            hasCaptcha,
+            interactiveCount
+          };
+        })()`
+      ).catch(() => ({
+        url: '',
+        title: '',
+        hasCanvas: false,
+        hasCaptcha: false,
+        interactiveCount: 10
+      }))
+
+      const decision = taskController.decideExecutionPath(
+        { goal: args.goal, targetHint: args.targetHint, actionType: args.text ? 'type' : 'click' },
+        {
+          url: pageContext.url,
+          title: pageContext.title,
+          viewport: { width: 1280, height: 900 },
+          hasCanvas: pageContext.hasCanvas,
+          hasCaptcha: pageContext.hasCaptcha,
+          interactiveElementCount: pageContext.interactiveCount,
+          domReady: true
+        }
+      )
+
+      // 2. Route according to decision
+      if (decision.mode === 'dom') {
+        try {
+          const outcome = await browserCraft.act(activeScope, args.text ? `type "${args.text}" into ${args.goal}` : args.goal)
+          if (outcome.success) {
+            const state = await snapshot(ctx)
+            return {
+              content: `[Controller: DOM Mode (${Math.round(decision.confidence * 100)}%)] ${outcome.action}\n${stateSummary(state)}\nScreenshot: ${state.screenshotRelPath ?? '(none)'}`
+            }
+          }
+        } catch (domErr) {
+          // Check fallback
+          if (!taskController.shouldFallbackToVision(domErr, { goal: args.goal })) {
+            throw domErr
+          }
+        }
+      }
+
+      // 3. Visual GUI path (Primary or Fallback)
+      const visualAction = taskController.createFallbackVisualAction(args.goal)
+      const targetPoint = visualAction.point ?? { x: 500, y: 500 }
+      const { targetScreenPos } = stealthBrowser.prepareVisualInteraction(
+        { x: 640, y: 450 },
+        targetPoint,
+        { width: 1280, height: 900 }
+      )
+
+      await browserService.evaluate(
+        activeScope,
+        `(() => {
+          const el = document.elementFromPoint(${targetScreenPos.x}, ${targetScreenPos.y});
+          if (el) {
+            el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: ${targetScreenPos.x}, clientY: ${targetScreenPos.y} }));
+            if (typeof el.focus === 'function') el.focus();
+            ${args.text ? `
+              if ('value' in el) {
+                el.value = ${JSON.stringify(args.text)};
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+            ` : ''}
+          }
+        })()`
+      )
+
+      const state = await snapshot(ctx)
+      return {
+        content: `[Controller: Visual GUI Mode (Reason: ${decision.reason})] Clicked visually at normalized point (${targetPoint.x}, ${targetPoint.y})\n${stateSummary(state)}\nScreenshot: ${state.screenshotRelPath ?? '(none)'}`
+      }
+    } catch (error) {
+      return egressError(error) ?? toolResultError(error)
+    }
+  },
+  summarize: (args) => `Task Controller: ${args.goal}`
+})
+
+export const browserStealthSearchTool = defineTool({
+  name: 'browser_stealth_search',
+  title: 'Stealth Browser Web Search',
+  description:
+    'Search the web using the always-on stealth browser engine with Camoufox bot evasion headers, bypasses automated request blocks, and extracts rich organic results.',
+  schema: z.object({
+    query: z.string().min(1).describe('The search query'),
+    limit: z.number().min(1).max(20).optional().describe('Maximum number of results to return (default 8)')
+  }),
+  sideEffect: 'network',
+  risk: 'low',
+  approval: 'never',
+  execute: async (args) => {
+    try {
+      const outcome = await stealthSearchRouter.search(args.query, args.limit ?? 8)
+      const list = outcome.results
+        .map((r, i) => `${i + 1}. ${r.title}\n${r.url}\n${r.snippet}`)
+        .join('\n\n')
+
+      return {
+        content: `Stealth Search Results for "${args.query}" (${outcome.sourceEngine}, ${outcome.durationMs}ms):\n\n${list}`
+      }
+    } catch (error) {
+      return toolResultError(error)
+    }
+  },
+  summarize: (args) => `Stealth Search: ${args.query}`
+})
+
 export const browserTools = [
   browserOpenTool,
   browserClickTool,
@@ -378,5 +610,8 @@ export const browserTools = [
   stageActTool,
   stageObserveTool,
   stageExtractTool,
-  stageNavigateTool
+  stageNavigateTool,
+  browserVisualActTool,
+  browserTaskControllerActTool,
+  browserStealthSearchTool
 ]
