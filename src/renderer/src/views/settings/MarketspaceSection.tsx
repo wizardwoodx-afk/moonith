@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { agentName } from '../../lib/localProfile'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotionConfig } from 'framer-motion'
-import { Check, Download, Eye, FilePlus2, Palette, Search, ShieldCheck, Trash2 } from 'lucide-react'
+import { Download, FilePlus2, Palette, Trash2 } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { toast } from 'sonner'
 import type { MarketspaceCreateInput, MarketspaceDetail, MarketspaceEntry } from '@shared/marketspace'
 import type { TaskSummary } from '@shared/types'
@@ -19,7 +20,7 @@ function TrustChip({ entry }: { entry: MarketspaceEntry }) {
       'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]',
       entry.trust === 'reviewed' ? 'border-positive/25 bg-positive/10 text-positive' : 'border-line bg-surface/60 text-muted'
     )}>
-      {entry.trust === 'reviewed' ? <ShieldCheck size={10} /> : <Palette size={10} />}
+      {entry.trust === 'reviewed' ? <Icon name="shield" size="xs" /> : <Palette size={10} />}
       {entry.trust === 'reviewed' ? 'Reviewed' : 'Local'}
     </span>
   )
@@ -144,7 +145,7 @@ export function MarketspaceSection({ actionHost }: { actionHost: HTMLElement | n
         : null}
       <div className="mb-4 flex gap-2">
         <div className="relative flex-1">
-          <Search size={13} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-faint" />
+          <Icon name="search" size="md" className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-faint" />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -188,8 +189,8 @@ export function MarketspaceSection({ actionHost }: { actionHost: HTMLElement | n
                   </div>
                 </div>
                 <div className="mt-3 flex items-center gap-1.5 border-t border-line/70 pt-2.5">
-                  <span className="mr-auto text-[10px] text-faint whitespace-nowrap">{entry.installed ? <><Check size={10} className="mr-1 inline text-positive" />Installed</> : 'Available'}</span>
-                  <Button size="sm" variant="ghost" loading={busy === `read:${entry.id}`} onClick={() => void inspect(entry.id)}><Eye size={12} /> Inspect</Button>
+                  <span className="mr-auto text-[10px] text-faint whitespace-nowrap">{entry.installed ? <><Icon name="confirm" size="xs" className="mr-1 inline text-positive" />Installed</> : 'Available'}</span>
+                  <Button size="sm" variant="ghost" loading={busy === `read:${entry.id}`} onClick={() => void inspect(entry.id)}><Icon name="eye" size="md" /> Inspect</Button>
                   {!entry.installed ? <Button size="sm" variant="secondary" loading={busy === `install:${entry.id}`} disabled={Boolean(busy)} onClick={() => void install(entry.id)}><Download size={12} /> Install</Button> : <IconButton aria-label={`Remove ${entry.name}`} className="hover:text-danger" onClick={() => setRemoveTarget(entry)}><Trash2 size={12} /></IconButton>}
                 </div>
               </motion.article>

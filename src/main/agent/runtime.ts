@@ -206,18 +206,19 @@ class AgentRuntime {
     incoming.push(userMessage)
     task.messages.push(...incoming)
 
-    if (active && !active.controller.signal.aborted && !active.stopped) {
-      for (const message of incoming) active.steering.enqueue(message)
-    } else {
-      if (active) this.runs.delete(task.id)
-      task.status = 'running'
-      task.error = undefined
-      task.completedAt = undefined
-    }
+    /* A message sent while work is running takes the wheel: the running turn
+     * stops and this one starts next, the same way editing a message stops the
+     * turn first. Queuing it instead left the user watching an answer they had
+     * already superseded. */
+    if (active && !active.controller.signal.aborted && !active.stopped) await this.stop(task.id)
+    this.runs.delete(task.id)
+    task.status = 'running'
+    task.error = undefined
+    task.completedAt = undefined
     await store.saveTask(task)
     this.publish(task)
 
-    if (!this.runs.has(task.id)) this.launch(task.id)
+    this.launch(task.id)
     return task
   }
 

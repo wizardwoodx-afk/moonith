@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Check, Copy } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { Icon } from './icons'
 
 function extractText(node: ReactNode): string {
   if (node == null || typeof node === 'boolean') return ''
@@ -30,7 +30,7 @@ function CodeBlock({ children }: { children?: ReactNode }) {
         className="absolute top-2 right-2 z-10 flex h-6 w-6 items-center justify-center rounded-md border border-white/15 bg-white/10 text-white/70 opacity-0 transition-opacity group-hover:opacity-100 hover:text-white"
         aria-label="Copy code"
       >
-        {copied ? <Check size={12} /> : <Copy size={12} />}
+        {copied ? <Icon name="confirm" size="sm" /> : <Icon name="copy" size="sm" />}
       </button>
       <pre>{children}</pre>
     </div>

@@ -1,8 +1,8 @@
 import { agentName } from '../lib/localProfile'
-import { AlertTriangle, ShieldCheck } from 'lucide-react'
 import { useApp } from '../store'
 import { cn } from '../lib/utils'
 import { Button, Modal } from './ui'
+import { Icon } from './icons'
 import { Markdown } from './Markdown'
 
 const RISK_LABEL = { low: 'Low risk', medium: 'Medium risk', high: 'High risk' } as const
@@ -28,7 +28,7 @@ export function ApprovalDialog() {
       open
       onClose={() => void respond(false)}
       width={pageReview || diffReview ? 'max-w-3xl' : 'max-w-lg'}
-      icon={<ShieldCheck size={17} />}
+      icon={<Icon name="shield" size="lg" />}
       title={pageReview ? 'Review page draft' : diffReview ? 'Review the change' : 'SelfImpulse needs your permission'}
       subtitle={
         pageReview
@@ -71,7 +71,7 @@ export function ApprovalDialog() {
               riskClass
             )}
           >
-            {approval.risk === 'high' ? <AlertTriangle size={10} /> : null}
+            {approval.risk === 'high' ? <Icon name="caution" size="xs" /> : null}
             {RISK_LABEL[approval.risk]}
           </span>
         </div>

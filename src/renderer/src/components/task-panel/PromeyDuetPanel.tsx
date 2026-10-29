@@ -3,19 +3,14 @@ import {
   Sun,
   Inbox,
   ShieldAlert,
-  Clock,
   CheckCircle2,
   XCircle,
-  Sparkles,
-  RefreshCw,
   Lock,
-  ChevronDown,
-  ChevronRight,
-  ShieldCheck,
   AlertTriangle
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '../../lib/utils'
+import { ICON_SIZES, Icon } from '../icons'
 
 export function PromeyDuetPanel() {
   const [status, setStatus] = useState<any>(null)
@@ -103,12 +98,12 @@ export function PromeyDuetPanel() {
       <div className="mb-4 flex items-center justify-between border-b border-line pb-3">
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/15 text-accent">
-            <Sun size={15} />
+            <Sun size={ICON_SIZES.md} />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
               <span className="font-semibold text-ink">Promey Duet</span>
-              <span className="rounded bg-accent/20 px-1.5 py-0.2 text-[9px] font-medium text-accent uppercase">
+              <span className="rounded bg-accent/20 px-1.5 py-0.2 text-[10px] font-medium text-accent uppercase">
                 Proactive
               </span>
             </div>
@@ -121,7 +116,7 @@ export function PromeyDuetPanel() {
             className="flex items-center gap-1.5 rounded-lg border border-line bg-panel-2/60 px-2.5 py-1 text-[10.5px] font-medium text-ink hover:bg-panel-3"
             title="Generate fresh morning brief"
           >
-            <Sparkles size={12} className="text-amber-500" />
+            <Icon name="spark" size="sm" className="text-amber-500" />
             Morning Brief
           </button>
           <button
@@ -129,7 +124,7 @@ export function PromeyDuetPanel() {
             className="rounded p-1 text-faint hover:text-ink"
             title="Refresh"
           >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="md" className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
@@ -137,19 +132,19 @@ export function PromeyDuetPanel() {
       {/* Metrics Row */}
       <div className="mb-4 grid grid-cols-4 gap-2">
         <div className="rounded-lg border border-line bg-canvas/40 p-2 text-center">
-          <span className="text-[9.5px] text-faint">Triage</span>
+          <span className="text-[10px] text-faint">Triage</span>
           <p className="mt-0.5 text-[14px] font-semibold text-ink">{triageItems.length}</p>
         </div>
         <div className="rounded-lg border border-line bg-canvas/40 p-2 text-center">
-          <span className="text-[9.5px] text-faint">Approvals</span>
+          <span className="text-[10px] text-faint">Approvals</span>
           <p className="mt-0.5 text-[14px] font-semibold text-amber-500">{pendingApprovals.length}</p>
         </div>
         <div className="rounded-lg border border-line bg-canvas/40 p-2 text-center">
-          <span className="text-[9.5px] text-faint">Routines</span>
+          <span className="text-[10px] text-faint">Routines</span>
           <p className="mt-0.5 text-[14px] font-semibold text-sky-500">{routines.filter((r) => r.active).length}</p>
         </div>
         <div className="rounded-lg border border-line bg-canvas/40 p-2 text-center">
-          <span className="text-[9.5px] text-faint">DLP Shield</span>
+          <span className="text-[10px] text-faint">DLP Shield</span>
           <p className="mt-0.5 text-[14px] font-semibold text-positive">
             {status?.privacy?.totalLeaksPrevented ?? 0}
           </p>
@@ -167,7 +162,7 @@ export function PromeyDuetPanel() {
               <Sun size={14} className="text-amber-500" />
               <span className="font-semibold text-ink">{brief.headline}</span>
             </div>
-            {briefOpen ? <ChevronDown size={14} className="text-faint" /> : <ChevronRight size={14} className="text-faint" />}
+            {briefOpen ? <Icon name="chevronDown" size="md" className="text-faint" /> : <Icon name="chevronRight" size="md" className="text-faint" />}
           </button>
 
           {briefOpen ? (
@@ -182,10 +177,10 @@ export function PromeyDuetPanel() {
       <div className="mb-4">
         <div className="mb-2 flex items-center justify-between">
           <span className="flex items-center gap-1.5 font-medium text-ink">
-            <ShieldAlert size={13} className="text-amber-500" />
+            <ShieldAlert size={ICON_SIZES.sm} className="text-amber-500" />
             Human-in-the-Loop Approvals ({pendingApprovals.length})
           </span>
-          <span className="text-[9.5px] text-faint">Allow Once · Always Allow · Refuse</span>
+          <span className="text-[10px] text-faint">Allow Once · Always Allow · Refuse</span>
         </div>
 
         {pendingApprovals.length === 0 ? (
@@ -200,32 +195,32 @@ export function PromeyDuetPanel() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-1.5">
-                      <span className="rounded bg-amber-500/20 px-1 py-0.2 text-[8.5px] font-bold text-amber-500 uppercase">
+                      <span className="rounded bg-amber-500/20 px-1 py-0.2 text-[10px] font-bold text-amber-500 uppercase">
                         {appr.consequenceLevel}
                       </span>
                       <span className="font-medium text-ink">{appr.title}</span>
                     </div>
                     <p className="mt-1 text-[10px] text-muted">{appr.description}</p>
-                    <p className="mt-0.5 font-mono text-[9px] text-faint">Target: {appr.targetResource}</p>
+                    <p className="mt-0.5 font-mono text-[10px] text-faint">Target: {appr.targetResource}</p>
                   </div>
                 </div>
 
                 <div className="mt-2.5 flex items-center justify-end gap-1.5 border-t border-amber-500/20 pt-2">
                   <button
                     onClick={() => handleApprovalDecision(appr.id, 'allow_once')}
-                    className="rounded bg-accent/20 px-2 py-0.5 text-[9.5px] font-medium text-accent hover:bg-accent/30"
+                    className="rounded bg-accent/20 px-2 py-0.5 text-[10px] font-medium text-accent hover:bg-accent/30"
                   >
                     Allow Once
                   </button>
                   <button
                     onClick={() => handleApprovalDecision(appr.id, 'always_allowed')}
-                    className="rounded bg-positive/20 px-2 py-0.5 text-[9.5px] font-medium text-positive hover:bg-positive/30"
+                    className="rounded bg-positive/20 px-2 py-0.5 text-[10px] font-medium text-positive hover:bg-positive/30"
                   >
                     Always Allow
                   </button>
                   <button
                     onClick={() => handleApprovalDecision(appr.id, 'refused')}
-                    className="rounded bg-danger/20 px-2 py-0.5 text-[9.5px] font-medium text-danger hover:bg-danger/30"
+                    className="rounded bg-danger/20 px-2 py-0.5 text-[10px] font-medium text-danger hover:bg-danger/30"
                   >
                     Refuse
                   </button>
@@ -240,7 +235,7 @@ export function PromeyDuetPanel() {
       <div className="mb-4">
         <div className="mb-2 flex items-center justify-between">
           <span className="flex items-center gap-1.5 font-medium text-ink">
-            <Inbox size={13} className="text-sky-500" />
+            <Inbox size={ICON_SIZES.sm} className="text-sky-500" />
             Smart Triage Stream ({triageItems.filter((i) => i.status !== 'resolved').length} active)
           </span>
         </div>
@@ -264,12 +259,12 @@ export function PromeyDuetPanel() {
                 <div className="flex items-start justify-between gap-1.5">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="rounded bg-line/60 px-1 py-0.2 text-[8.5px] text-faint uppercase">
+                      <span className="rounded bg-line/60 px-1 py-0.2 text-[10px] text-faint uppercase">
                         {item.source}
                       </span>
                       <span className="font-medium text-ink truncate">{item.title}</span>
                     </div>
-                    <p className="mt-1 text-[9.5px] text-muted">{item.content}</p>
+                    <p className="mt-1 text-[10px] text-muted">{item.content}</p>
                   </div>
                   {item.status !== 'resolved' ? (
                     <button
@@ -277,10 +272,10 @@ export function PromeyDuetPanel() {
                       className="shrink-0 text-faint hover:text-positive"
                       title="Mark resolved"
                     >
-                      <CheckCircle2 size={13} />
+                      <CheckCircle2 size={ICON_SIZES.sm} />
                     </button>
                   ) : (
-                    <span className="text-[8.5px] text-positive font-medium">Resolved</span>
+                    <span className="text-[10px] text-positive font-medium">Resolved</span>
                   )}
                 </div>
               </div>
@@ -293,7 +288,7 @@ export function PromeyDuetPanel() {
       <div className="mb-4">
         <div className="mb-2 flex items-center justify-between">
           <span className="flex items-center gap-1.5 font-medium text-ink">
-            <Clock size={13} className="text-purple-500" />
+            <Icon name="clock" size="sm" className="text-purple-500" />
             Standing Routines ({routines.length})
           </span>
         </div>
@@ -304,14 +299,14 @@ export function PromeyDuetPanel() {
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="font-medium text-ink text-[10px]">{r.name}</span>
-                  <span className="rounded bg-line/50 px-1 py-0.2 text-[8.5px] text-faint">{r.cadence}</span>
+                  <span className="rounded bg-line/50 px-1 py-0.2 text-[10px] text-faint">{r.cadence}</span>
                 </div>
-                <p className="mt-0.5 text-[9px] text-muted truncate max-w-[220px]">{r.standingPrompt}</p>
+                <p className="mt-0.5 text-[10px] text-muted truncate max-w-[220px]">{r.standingPrompt}</p>
               </div>
               <button
                 onClick={() => handleToggleRoutine(r.id, r.active)}
                 className={cn(
-                  'rounded px-1.5 py-0.5 text-[9px] font-semibold transition-colors',
+                  'rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors',
                   r.active ? 'bg-positive/20 text-positive' : 'bg-line/40 text-faint'
                 )}
               >
@@ -325,10 +320,10 @@ export function PromeyDuetPanel() {
       {/* Privacy Shield & Masking */}
       <div className="rounded-lg border border-line/60 bg-canvas/25 p-2.5 text-[10px]">
         <div className="flex items-center gap-1.5 font-medium text-ink">
-          <ShieldCheck size={13} className="text-positive" />
+          <Icon name="shield" size="sm" className="text-positive" />
           <span>Credential Masking & Outbound DLP</span>
         </div>
-        <p className="mt-1 text-[9.5px] text-muted leading-relaxed">
+        <p className="mt-1 text-[10px] text-muted leading-relaxed">
           Sensitive passwords and tokens are replaced with masked tokens before model transcripts see them. 
           Outbound messages are scanned to prevent private key and payment card leakage.
         </p>

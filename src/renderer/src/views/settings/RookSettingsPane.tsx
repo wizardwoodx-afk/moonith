@@ -1,22 +1,16 @@
 import { useEffect, useState } from 'react'
 import {
-  Cpu,
-  ShieldCheck,
   GitPullRequest,
-  Search,
-  Sparkles,
   KeyRound,
-  Check,
   Flame,
-  Wrench,
   BookOpen,
   Monitor,
   Package,
   Layers,
   CheckCircle2,
-  XCircle,
-  RefreshCw
+  XCircle
 } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { toast } from 'sonner'
 import { cn } from '../../lib/utils'
 
@@ -94,7 +88,7 @@ export function RookSettingsPane() {
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent">
-              <Cpu size={20} />
+              <Icon name="model" size="xl" />
             </span>
             <div>
               <h2 className="text-[16px] font-semibold text-ink">Autonomous worker</h2>
@@ -104,7 +98,7 @@ export function RookSettingsPane() {
             onClick={() => void loadData()}
             className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[11px] text-muted hover:text-ink transition-colors"
           >
-            <RefreshCw size={12} /> Refresh
+            <Icon name="refresh" size="sm" /> Refresh
           </button>
         </div>
 
@@ -166,7 +160,7 @@ export function RookSettingsPane() {
             )}
           >
             <div className="flex items-center gap-2 font-medium text-[12px] text-amber-400">
-              <Wrench size={14} /> Build
+              <Icon name="tool" size="md" /> Build
             </div>
             <p className="mt-1.5 text-[10.5px] text-faint leading-normal">
               Edits files freely; asks before running shell commands.
@@ -199,7 +193,7 @@ export function RookSettingsPane() {
         </div>
 
         <div className="relative pt-1">
-          <Search size={14} className="absolute left-3 top-4 text-faint" />
+          <Icon name="search" size="md" className="absolute left-3 top-4 text-faint" />
           <input
             type="text"
             value={skillQuery}
@@ -220,7 +214,7 @@ export function RookSettingsPane() {
               <div key={skill.id} className="rounded-xl border border-line bg-canvas/50 p-2.5 text-[11px]">
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-ink flex items-center gap-1.5">
-                    <Sparkles size={11} className="text-accent" /> {skill.name}
+                    <Icon name="spark" size="xs" className="text-accent" /> {skill.name}
                   </span>
                   <span className="text-[10px] text-faint font-mono">{skill.id}</span>
                 </div>
@@ -243,7 +237,7 @@ export function RookSettingsPane() {
       {/* 4. Sandboxed Credential Shield Tester */}
       <div className="rounded-2xl border border-line bg-surface/40 p-5 space-y-3">
         <div className="flex items-center gap-2">
-          <ShieldCheck size={16} className="text-accent" />
+          <Icon name="shield" size="lg" className="text-accent" />
           <h3 className="text-[13px] font-semibold text-ink">Secret redaction check</h3>
         </div>
 
@@ -264,7 +258,7 @@ export function RookSettingsPane() {
             </button>
             {redactedOutput && (
               <span className="text-[10.5px] text-positive flex items-center gap-1">
-                <Check size={11} /> Redacted Cleanly
+                <Icon name="confirm" size="xs" /> Redacted Cleanly
               </span>
             )}
           </div>

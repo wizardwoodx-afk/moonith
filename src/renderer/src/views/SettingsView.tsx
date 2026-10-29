@@ -85,6 +85,7 @@ import { BrandGlyph, BrandMark } from '../components/BrandMarks'
 import { confirmDialog } from '../components/Confirm'
 import { createPortal } from 'react-dom'
 import { Button, FieldGroup, IconButton, Modal, Spin, Toggle } from '../components/ui'
+import { Icon as Glyph } from '../components/icons'
 
 import { SettingsSection } from './settings/SettingsSection'
 import {
@@ -208,12 +209,13 @@ export function SettingsView() {
             onClick={() => openSurface('chat')}
             className="flex h-7 items-center gap-1.5 rounded-md px-1 text-[12.5px] text-muted transition-colors outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/30"
           >
-            <ArrowLeft size={13} />
+            <Glyph name="arrowLeft" size="md" />
             Back to app
           </button>
           <div className="relative mt-3">
-            <Search
-              size={13}
+            <Glyph
+              name="search"
+              size="md"
               className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-faint"
             />
             <input
@@ -239,7 +241,7 @@ export function SettingsView() {
                 aria-label="Clear search"
                 className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-faint hover:text-ink"
               >
-                <X size={11} />
+                <Glyph name="close" size="xs" />
               </button>
             ) : null}
           </div>
@@ -321,7 +323,7 @@ export function SettingsView() {
                     onClick={() => openSettings(parent)}
                     className="mb-4 flex items-center gap-1.5 text-[12.5px] text-faint transition-colors hover:text-ink"
                   >
-                    <ArrowLeft size={13} />
+                    <Glyph name="arrowLeft" size="md" />
                     {settingsPane(parent).label}
                   </button>
                 ) : null}
@@ -400,7 +402,7 @@ function SearchResults({
 }) {
   if (results.length === 0) {
     return (
-      <EmptyPanel icon={<Search size={18} />} title={`No setting matches “${query}”`}>
+      <EmptyPanel icon={<Glyph name="search" size="xl" />} title={`No setting matches “${query}”`}>
         Try “model”, “theme”, “permissions”, or “keys”.
       </EmptyPanel>
     )
@@ -428,7 +430,7 @@ function SearchResults({
             >
               <Button size="sm" variant="secondary" onClick={() => onOpen(item.id)}>
                 Open
-                <ChevronRight size={12} />
+                <Glyph name="chevronRight" size="md" />
               </Button>
             </SettingRow>
           )
@@ -455,7 +457,7 @@ function GeneralPane({ settings }: { settings: PublicSettings }) {
     <div className="space-y-9">
       {providers.length === 0 ? (
         <EmptyPanel
-          icon={<Cpu size={19} />}
+          icon={<Glyph name="model" size="xl" />}
           title={<>No model provider yet. Connect one to pick a default model.</>}
           action={
             <Button variant="primary" size="sm" onClick={() => openSettings('providers')}>
@@ -467,7 +469,7 @@ function GeneralPane({ settings }: { settings: PublicSettings }) {
         <SettingsSection title="Model defaults">
           <SettingList>
             <SettingRow
-              icon={<Plug size={14} />}
+              icon={<Glyph name="connector" size="md" />}
               title="Default provider"
             >
               <select
@@ -490,7 +492,7 @@ function GeneralPane({ settings }: { settings: PublicSettings }) {
               </select>
             </SettingRow>
             <SettingRow
-              icon={<Sparkles size={14} />}
+              icon={<Glyph name="spark" size="md" />}
               title="Default model"
             >
               <select
@@ -523,7 +525,7 @@ function GeneralPane({ settings }: { settings: PublicSettings }) {
       <SettingsSection title="Defaults">
         <SettingList>
           <SettingRow
-            icon={<ShieldCheck size={14} />}
+            icon={<Glyph name="shield" size="md" />}
             title="Permissions"
             description="What runs without asking. Shell commands always ask."
           >
@@ -545,7 +547,7 @@ function GeneralPane({ settings }: { settings: PublicSettings }) {
             </select>
           </SettingRow>
           <SettingRow
-            icon={<FileText size={14} />}
+            icon={<Glyph name="fileText" size="md" />}
             title="Memory"
             description={
               settings.customInstructions.trim()
@@ -558,7 +560,7 @@ function GeneralPane({ settings }: { settings: PublicSettings }) {
             </Button>
           </SettingRow>
           <SettingRow
-            icon={<Plug size={14} />}
+            icon={<Glyph name="connector" size="md" />}
             title="MCP servers"
             description={
               settings.mcpServers.length === 0
@@ -1119,7 +1121,7 @@ function ProvidersTab({
       <div className="space-y-2.5">
         {settings.providers.length === 0 ? (
           <EmptyPanel
-            icon={<Cpu size={19} />}
+            icon={<Glyph name="model" size="xl" />}
             title={<>No model provider yet.</>}
           >
             Select <ActionWord>Add provider</ActionWord> in the top right to get started.
@@ -2501,7 +2503,7 @@ function ModeConfigPane({ settings }: { settings: PublicSettings }) {
       icon: BrandMark,
       blurb: 'One person. Chat and Company, private to this laptop.',
       points: [
-        `${agentName()} → Envoy → Operator → Team.`,
+        `${agentName()} runs the loop; sub-agents and tools work under your gates.`,
         'Your key turns every local gate.'
       ],
       actionLabel: 'Open Chat',
@@ -2815,27 +2817,6 @@ function ShortcutsPane() {
   )
 }
 
-const AGENT_SEATS = [
-  {
-    name: 'Envoy',
-    role: 'Interpreter',
-    detail: `Reads the request, shapes the plan, and carries messages between ${agentName()} and Operator.`,
-    icon: Building2
-  },
-  {
-    name: 'Operator',
-    role: 'Executor',
-    detail: 'Turns one step of the plan into action, then returns the result up the ladder.',
-    icon: Cpu
-  },
-  {
-    name: 'Team',
-    role: 'Hands and tools',
-    detail: 'Files, shell and MCP tools, confined to the folders and gates the task allows.',
-    icon: Terminal
-  }
-]
-
 function AgentPane({ settings }: { settings: PublicSettings }) {
   const openSettings = useApp((state) => state.openSettings)
 
@@ -2851,7 +2832,7 @@ function AgentPane({ settings }: { settings: PublicSettings }) {
   return (
     <div className="space-y-9">
       <section>
-        <h2 className="mb-2.5 px-4 text-[12px] font-medium text-muted">The {agentName()}</h2>
+        <h2 className="mb-2.5 px-4 text-[12px] font-medium text-muted">{agentName()}</h2>
         <SettingCard>
           <SettingRow
             icon={<BrandMark size={14} />}
@@ -2876,30 +2857,6 @@ function AgentPane({ settings }: { settings: PublicSettings }) {
               <ChevronRight size={12} />
             </Button>
           </SettingRow>
-        </SettingCard>
-      </section>
-
-      <section>
-        <h2 className="mb-2.5 px-4 text-[12px] font-medium text-muted">The ladder</h2>
-        <SettingCard>
-          {AGENT_SEATS.map((seat) => {
-            const Icon = seat.icon
-            return (
-              <SettingRow
-                key={seat.name}
-                icon={<Icon size={14} />}
-                title={
-                  <span className="flex flex-wrap items-center gap-2">
-                    {seat.name}
-                    <span className="rounded-md border border-line bg-surface-2/60 px-1.5 py-0.5 text-[10px] font-medium text-muted">
-                      Internal
-                    </span>
-                  </span>
-                }
-                description={`${seat.role} · ${seat.detail}`}
-              />
-            )
-          })}
         </SettingCard>
       </section>
 
@@ -2943,8 +2900,8 @@ function AgentTeamsPane() {
         <SettingCard>
           <SettingRow
             icon={<Users size={14} />}
-            title={`Two ${agentName()}s, one Table`}
-            description="Each side keeps its own engine, files and memory. The Table holds only what both bring."
+            title="Table"
+            description="Two machines, one joint action."
           >
             <Button size="sm" variant="primary" onClick={() => openSurface('table')}>
               Open Table
@@ -2954,7 +2911,7 @@ function AgentTeamsPane() {
           <SettingRow
             icon={<SlidersHorizontal size={14} />}
             title="Modes"
-            description={`Self runs alone. Collab seats both ${agentName()}s at the Table.`}
+            description="Self or Collab."
           >
             <Button size="sm" variant="secondary" onClick={() => openSettings('mode-config')}>
               Open
@@ -2970,19 +2927,19 @@ function AgentTeamsPane() {
           {[
             {
               title: 'Propose',
-              detail: 'The step, its files, and the expected outcome.'
+              detail: 'Step, files, expected outcome.'
             },
             {
               title: 'Review',
-              detail: `The other ${agentName()} sees the proposal, never the private task behind it.`
+              detail: 'The other side sees the proposal only.'
             },
             {
               title: 'Two keys',
-              detail: 'Both approvals start the step. Each side writes its own receipt.'
+              detail: 'Both approvals start it. Each side keeps its own receipt.'
             },
             {
               title: 'Work',
-              detail: 'Publishing starts the work on each desk as its own local task. Each side marks itself done.'
+              detail: 'Runs as a local task on each machine.'
             }
           ].map((step, index) => (
             <SettingRow

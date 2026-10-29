@@ -40,12 +40,35 @@ export class CoworkEngineBridge {
     return this.kernel.executeStep(modality, actionName, payload);
   }
 
-  public getStatus(): { ready: boolean; activeSession: string; totalSkills: number } {
+  public getStatus(): {
+    ready: boolean;
+    activeSession: string;
+    totalSkills: number;
+    enterprise: {
+      activePassports: number;
+      blastRadius: ReturnType<CoworkKernel['enterprise']['blastRadius']['getBudgetStatus']>;
+      totalAttestedProofs: number;
+      memoryPartitions: number;
+      evolutionRules: number;
+    };
+  } {
+    const ent = this.kernel.enterprise.getSummary();
     return {
       ready: true,
       activeSession: this.kernel.getSessionId(),
-      totalSkills: this.registry.getTotalSkillCount()
+      totalSkills: this.registry.getTotalSkillCount(),
+      enterprise: {
+        activePassports: ent.activePassports,
+        blastRadius: ent.blastRadiusBudget,
+        totalAttestedProofs: ent.totalAttestedProofs,
+        memoryPartitions: ent.memoryPartitions,
+        evolutionRules: ent.evolutionRules
+      }
     };
+  }
+
+  public getEnterprise() {
+    return this.kernel.enterprise;
   }
 }
 

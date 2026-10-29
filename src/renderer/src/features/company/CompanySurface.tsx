@@ -1,17 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  Activity,
-  ArrowRight,
-  BadgeCheck,
-  Check,
-  ChevronRight,
-  FileText,
-  KeyRound,
-  ListChecks,
-  ShieldCheck,
-  Users,
-  X
-} from 'lucide-react'
+import { Activity, BadgeCheck, FileText, KeyRound, Users } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { toast } from 'sonner'
 import { Button } from '../../components/ui'
 import { StatusLight } from '../../motion/StatusLight'
@@ -82,7 +71,7 @@ function Workboard() {
       {groups.length === 0 ? (
         <div className="flex flex-col items-center px-5 py-12 text-center">
           <div className="flex h-10 w-10 items-center justify-center rounded-[var(--r-card)] border border-line bg-canvas text-faint">
-            <ListChecks size={17} />
+            <Icon name="plan" size="xl" />
           </div>
           <p className="mt-3 text-[12px] text-muted">Nothing running yet.</p>
         </div>
@@ -122,16 +111,17 @@ function Workboard() {
                     </span>
                     {task.artifactsCount > 0 ? (
                       <span className="flex shrink-0 items-center gap-1 whitespace-nowrap font-mono text-[10px] text-faint">
-                        <FileText size={9} />
+                        <Icon name="fileText" size="xs" />
                         {task.artifactsCount}
                       </span>
                     ) : null}
                     <span className="min-w-[96px] shrink-0 whitespace-nowrap text-right font-mono text-[10px] text-faint">
                       {timeAgo(task.updatedAt)}
                     </span>
-                    <ChevronRight
-                      size={11}
-                      className="shrink-0 text-faint opacity-0 transition-opacity group-hover:opacity-100"
+                    <Icon
+                      name="chevronRight"
+                      size="sm"
+                      className="text-faint opacity-0 transition-opacity group-hover:opacity-100"
                     />
                   </button>
                 ))}
@@ -194,7 +184,7 @@ function PlanCard({ tasks }: { tasks: Task[] }) {
                   )}
                 >
                   {item.status === 'done' ? (
-                    <Check size={8} strokeWidth={3} />
+                    <Icon name="confirm" size="xs" />
                   ) : (
                     <span
                       className={cn(
@@ -224,7 +214,7 @@ function PlanCard({ tasks }: { tasks: Task[] }) {
             className="mt-3 flex items-center gap-1 text-[10px] font-medium text-accent-ink hover:underline"
           >
             Open task
-            <ArrowRight size={10} />
+            <Icon name="arrowRight" size="xs" />
           </button>
         </>
       ) : (
@@ -257,7 +247,7 @@ function FilesCard({ artifacts }: { artifacts: ArtifactRow[] }) {
               className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-surface-2/50"
               title="Open file"
             >
-              <FileText size={12} className="shrink-0 text-accent" />
+              <Icon name="fileText" size="xs" className="text-accent" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-mono text-[10px] text-ink" title={artifact.name}>
                   {artifact.name}
@@ -293,7 +283,7 @@ function EngineCard() {
     <section className="card p-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <ShieldCheck size={13} className="text-accent" />
+          <Icon name="shield" size="md" className="text-accent" />
           <h2 className="text-[12.5px] font-semibold tracking-[-0.01em] text-ink">The engine</h2>
         </div>
         <span
@@ -304,7 +294,7 @@ function EngineCard() {
               : 'border-warn/30 bg-warn/10 text-warn'
           )}
         >
-          {engine.ready ? <BadgeCheck size={9} /> : <X size={9} />}
+          {engine.ready ? <BadgeCheck size={9} /> : <Icon name="close" size="xs" />}
           {engine.ready ? 'ready' : 'needs a model'}
         </span>
       </div>
@@ -343,7 +333,7 @@ function GatesCard() {
     <section className="card p-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <KeyRound size={13} className="text-accent" />
+          <Icon name="key" size="md" className="text-accent" />
           <h2 className="text-[12.5px] font-semibold tracking-[-0.01em] text-ink">Gates</h2>
         </div>
         {approval ? (
@@ -364,7 +354,7 @@ function GatesCard() {
           </p>
           <div className="mt-3 flex flex-wrap gap-1.5">
             <Button size="sm" variant="primary" onClick={() => void respondApproval(true)}>
-              <Check size={11} />
+              <Icon name="confirm" size="md" />
               Approve
             </Button>
             {approval.allowAlways ? (
@@ -381,7 +371,7 @@ function GatesCard() {
             className="mt-2 flex items-center gap-1 text-[10px] font-medium text-muted hover:text-ink"
           >
             Open task
-            <ArrowRight size={9} />
+            <Icon name="arrowRight" size="xs" />
           </button>
         </>
       ) : (
@@ -498,7 +488,7 @@ export function CompanySurface() {
             ) : null}
             <Button variant="primary" size="sm" onClick={() => openSurface('chat')}>
               Open chat
-              <ArrowRight size={12} />
+              <Icon name="arrowRight" size="md" />
             </Button>
           </div>
         </header>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ArrowRight, KeyRound, LockKeyhole, Radio, X } from 'lucide-react'
+import { KeyRound, Radio } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { Button, Spin } from '../../components/ui'
 import { cn } from '../../lib/utils'
 import { getLocalProfile } from '../../lib/localProfile'
@@ -82,7 +83,7 @@ export function PairingPanel() {
               className="rounded p-0.5 text-danger/70 hover:text-danger"
               aria-label="Dismiss"
             >
-              <X size={12} />
+              <Icon name="close" size="sm" />
             </button>
           </div>
         ) : null}
@@ -188,14 +189,14 @@ export function PairingPanel() {
               className="mt-4"
               disabled={busy || !readyCode || !joinName.trim()}
             >
-              {busy ? <Spin size={12} /> : <ArrowRight size={12} />}
+              {busy ? <Spin size={12} /> : <Icon name="arrowRight" size="md" />}
               Join
             </Button>
           </form>
         ) : null}
 
         <p className="mt-8 flex items-center justify-center gap-2 whitespace-nowrap text-[11px] text-faint">
-          <LockKeyhole size={11} className="shrink-0" />
+          <Icon name="lock" size="xs" />
           Stays on your local network.
         </p>
       </div>

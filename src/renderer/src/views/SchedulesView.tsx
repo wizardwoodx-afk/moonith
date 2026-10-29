@@ -1,20 +1,6 @@
 import { useEffect, useState } from 'react'
-import {
-  AlertTriangle,
-  ArrowUpRight,
-  CalendarClock,
-  Clock,
-  Folder,
-  FolderPlus,
-  Info,
-  Loader2,
-  Pencil,
-  Play,
-  Plus,
-  Sparkles,
-  Trash2,
-  X
-} from 'lucide-react'
+import { CalendarClock, FolderPlus, Loader2, Pencil, Trash2 } from 'lucide-react'
+import { Icon } from '../components/icons'
 import { toast } from 'sonner'
 import type {
   CreateScheduleInput,
@@ -217,14 +203,14 @@ export function SchedulesView() {
             Schedules
           </h1>
           <Button variant="primary" size="md" onClick={openCreate}>
-            <Plus size={14} />
+            <Icon name="add" size="md" />
             New schedule
           </Button>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2.5">
           <p className="flex items-center gap-1.5 text-[11px] text-muted">
-            <Info size={12} className="shrink-0" />
+            <Icon name="info" size="xs" />
             Fires while SelfImpulse is running.
           </p>
           {!hasProviders ? (
@@ -263,7 +249,7 @@ export function SchedulesView() {
                           : 'border-line bg-surface-2 text-faint'
                       )}
                     >
-                      <Clock size={17} />
+                      <Icon name="clock" size="xl" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -290,7 +276,7 @@ export function SchedulesView() {
                         </span>
                         {record.folders.length ? (
                           <span className="inline-flex max-w-[220px] items-center gap-1 rounded-md border border-line bg-canvas px-1.5 py-0.5">
-                            <Folder size={9} />
+                            <Icon name="folder" size="xs" />
                             <span className="truncate">
                               {folderName(record.folders[0])}
                               {record.folders.length > 1
@@ -313,7 +299,7 @@ export function SchedulesView() {
 
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-canvas/40 px-4 py-2">
                     <div className="flex items-center gap-2 text-[10.5px] text-faint">
-                      <Sparkles size={11} />
+                      <Icon name="spark" size="xs" />
                       {record.lastRunAt ? (
                         <span>
                           Last run {timeAgo(record.lastRunAt)}
@@ -323,7 +309,7 @@ export function SchedulesView() {
                               className="ml-1 inline-flex items-center gap-0.5 font-medium text-muted underline underline-offset-2 hover:text-ink"
                             >
                               Open task
-                              <ArrowUpRight size={9} />
+                              <Icon name="arrowUpRight" size="xs" />
                             </button>
                           ) : null}
                         </span>
@@ -339,7 +325,7 @@ export function SchedulesView() {
                         disabled={!hasProviders}
                         onClick={() => void runNow(record)}
                       >
-                        {!running ? <Play size={11} /> : null}
+                        {!running ? <Icon name="play" size="md" /> : null}
                         Run now
                       </Button>
                       <IconButton onClick={() => openEdit(record)} aria-label="Edit schedule">
@@ -557,7 +543,7 @@ function ScheduleModal({
           ) : (
             <div className="flex flex-col justify-end gap-0.5 pb-1">
               <p className="flex items-center gap-1.5 text-[11px] text-muted">
-                <Clock size={11} className="shrink-0" />
+                <Icon name="clock" size="xs" />
                 {describeCron(preset)}
               </p>
               <p className="pl-[18px] font-mono text-[10px] text-faint" title={`Cron expression · ${preset}`}>
@@ -647,14 +633,14 @@ function ScheduleModal({
                 className="inline-flex max-w-[280px] items-center gap-1.5 rounded-lg border border-line bg-canvas px-2 py-1 text-[11px] text-muted"
                 title={folder}
               >
-                <Folder size={11} className="shrink-0 text-accent" />
+                <Icon name="folder" size="xs" className="text-accent" />
                 <span className="truncate">{folderName(folder)}</span>
                 <button
                   onClick={() => setFolders((current) => current.filter((item) => item !== folder))}
                   className="text-faint hover:text-danger"
                   aria-label={`Remove ${folder}`}
                 >
-                  <X size={10} />
+                  <Icon name="close" size="xs" />
                 </button>
               </span>
             ))}
@@ -670,13 +656,13 @@ function ScheduleModal({
 
         {error ? (
           <div className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/5 px-3 py-2 text-[11.5px] leading-relaxed text-danger">
-            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+            <Icon name="caution" size="sm" className="mt-0.5" />
             <span>{error}</span>
           </div>
         ) : null}
 
         <div className="flex items-center gap-2 rounded-xl border border-line bg-canvas/50 px-3.5 py-2 text-[10.5px] text-faint">
-          <Info size={12} className="shrink-0" />
+          <Icon name="info" size="xs" />
           Each run creates a new task in Recents.
         </div>
       </div>

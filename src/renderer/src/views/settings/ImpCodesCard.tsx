@@ -9,7 +9,8 @@
  * reaches this component.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Cpu, KeyRound, Loader2, Plug, RefreshCw, Zap } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { toast } from 'sonner'
 import type { ImpCodesAccess } from '@shared/types'
 import { cn, errorMessage, plural } from '../../lib/utils'
@@ -85,7 +86,7 @@ export function ImpCodesCard() {
 
   const refreshButton = (
     <Button variant="secondary" size="sm" disabled={importing} onClick={() => void load()}>
-      <RefreshCw size={12} />
+      <Icon name="refresh" size="md" />
       Refresh
     </Button>
   )
@@ -104,9 +105,9 @@ export function ImpCodesCard() {
           {loading ? (
             <Loader2 size={16} className="animate-spin" aria-hidden />
           ) : failure ? (
-            <AlertTriangle size={16} className="text-danger" aria-hidden />
+            <Icon name="caution" size="xl" className="text-danger" />
           ) : (
-            <Cpu size={17} aria-hidden />
+            <Icon name="model" size="xl" />
           )}
         </div>
 
@@ -144,16 +145,16 @@ export function ImpCodesCard() {
 
               <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-faint">
                 <span className="flex items-center gap-1">
-                  <Zap size={11} aria-hidden />
+                  <Icon name="quick" size="xs" />
                   {plural(providerCount, 'provider')}
                 </span>
                 <span className="flex items-center gap-1">
-                  <Plug size={11} aria-hidden />
+                  <Icon name="connector" size="xs" />
                   {plural(serverCount, 'tool server')}
                 </span>
                 {keyCount > 0 ? (
                   <span className="flex items-center gap-1">
-                    <KeyRound size={11} aria-hidden />
+                    <Icon name="key" size="xs" />
                     {plural(keyCount, 'key')} found
                   </span>
                 ) : null}
@@ -186,7 +187,7 @@ export function ImpCodesCard() {
                       className="run-in inline-flex items-center gap-1 rounded-md border border-line bg-surface-2/70 px-1.5 py-0.5 text-[10px] text-muted"
                       style={{ animationDelay: `${Math.min(index, 6) * 20}ms` }}
                     >
-                      <Plug size={9} aria-hidden />
+                      <Icon name="connector" size="xs" />
                       {server.name}
                     </span>
                   ))}
@@ -216,7 +217,7 @@ export function ImpCodesCard() {
           <span className="flex items-center gap-1.5 text-[10.5px] text-faint">
             {available ? (
               <>
-                <KeyRound size={11} aria-hidden />
+                <Icon name="key" size="xs" />
                 The key goes straight into the OS keychain and never reaches this screen.
               </>
             ) : failure ? (
@@ -232,7 +233,7 @@ export function ImpCodesCard() {
                 aria-label="Refresh engine access"
                 disabled={importing}
               >
-                <RefreshCw size={13} />
+                <Icon name="refresh" size="md" />
               </IconButton>
             ) : (
               <>
@@ -243,7 +244,7 @@ export function ImpCodesCard() {
                     loading={importing}
                     onClick={() => void importAccess()}
                   >
-                    <Zap size={12} />
+                    <Icon name="quick" size="md" />
                     Import access
                   </Button>
                 ) : null}

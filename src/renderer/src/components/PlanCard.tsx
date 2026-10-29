@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, ChevronDown, Circle } from 'lucide-react'
+import { Circle } from 'lucide-react'
 import type { PlanItem } from '@shared/types'
 import { cn } from '../lib/utils'
+import { ICON_SIZES, Icon } from './icons'
 import { AnimatedCheck } from '../motion/AnimatedCheck'
 import { TaskOrb } from '../motion/TaskOrb'
 
@@ -27,7 +28,11 @@ export function PlanCard({ plan, live }: { plan: PlanItem[]; live: boolean }) {
             done === plan.length ? 'bg-positive/10 text-positive' : 'bg-accent-soft text-accent-ink'
           )}
         >
-          {done === plan.length ? <AnimatedCheck size={13} /> : <Check size={13} strokeWidth={2.2} />}
+          {done === plan.length ? (
+            <AnimatedCheck size={ICON_SIZES.md} />
+          ) : (
+            <Icon name="confirm" size="md" />
+          )}
         </motion.div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -44,7 +49,7 @@ export function PlanCard({ plan, live }: { plan: PlanItem[]; live: boolean }) {
           </div>
         </div>
         <motion.span animate={{ rotate: collapsed ? -90 : 0 }}>
-          <ChevronDown size={14} className="text-faint" />
+          <Icon name="chevronDown" size="md" className="text-faint" />
         </motion.span>
       </button>
       <AnimatePresence initial={false}>
@@ -73,9 +78,9 @@ export function PlanCard({ plan, live }: { plan: PlanItem[]; live: boolean }) {
                     {item.status === 'done' ? (
                       <AnimatedCheck size={12} className="text-positive" />
                     ) : item.status === 'active' ? (
-                      live ? <TaskOrb state="solving" label="Current plan step" /> : <Circle size={8} className="fill-accent text-accent" />
+                      live ? <TaskOrb state="solving" label="Current plan step" /> : <Circle size={ICON_SIZES.xs} className="fill-accent text-accent" />
                     ) : (
-                      <Circle size={9} className="text-faint/70" />
+                      <Circle size={ICON_SIZES.xs} className="text-faint/70" />
                     )}
                   </span>
                   <motion.span

@@ -1,18 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import type { LucideIcon } from 'lucide-react'
 import {
-  ArrowUpRight,
   Code2,
-  ExternalLink,
-  File,
   FileImage,
   FileSpreadsheet,
-  FileText,
-  FolderOpen,
   Globe,
   ImageOff,
   MonitorUp,
-  Presentation,
-  Sparkles
+  Presentation
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Artifact, ArtifactKind, Task } from '@shared/types'
@@ -26,21 +21,34 @@ import {
   shortDate
 } from '../lib/utils'
 import { Button, IconButton, Modal } from './ui'
+import { ICON_SIZES, Icon, type IconName, type IconSize } from './icons'
 
-const KIND_ICON: Record<ArtifactKind, typeof File> = {
-  document: FileText,
+const KIND_ICON: Record<ArtifactKind, IconName | LucideIcon> = {
+  document: 'fileText',
   spreadsheet: FileSpreadsheet,
   presentation: Presentation,
-  pdf: FileText,
+  pdf: 'fileText',
   image: FileImage,
-  text: FileText,
+  text: 'fileText',
   code: Code2,
-  other: File
+  other: 'file'
 }
 
-function ArtifactGlyph({ kind, className }: { kind: ArtifactKind; className?: string }) {
-  const Icon = KIND_ICON[kind] ?? File
-  return <Icon className={className} />
+function ArtifactGlyph({
+  kind,
+  size = 'sm',
+  className
+}: {
+  kind: ArtifactKind
+  size?: IconSize
+  className?: string
+}) {
+  const Glyph = KIND_ICON[kind] ?? 'file'
+  return typeof Glyph === 'string' ? (
+    <Icon name={Glyph} size={size} className={className} />
+  ) : (
+    <Glyph size={ICON_SIZES[size]} className={className} />
+  )
 }
 
 function openArtifact(taskId: string, artifact: Artifact): void {
@@ -63,7 +71,7 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
         {task.artifacts.length === 0 && !task.browser ? (
           <div className="mt-8 flex flex-col items-center rounded-xl border border-dashed border-line px-5 py-9 text-center">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent-ink">
-              <Sparkles size={18} />
+              <Icon name="spark" size="xl" />
             </div>
             <p className="mt-3 text-[12.5px] font-medium">No files yet</p>
           </div>
@@ -84,7 +92,7 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
                   className="flex w-full items-center gap-3 rounded-lg p-2 pr-14 text-left"
                 >
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-accent-ink">
-                    <ArtifactGlyph kind={artifact.kind} className="h-[17px] w-[17px]" />
+                    <ArtifactGlyph kind={artifact.kind} size="lg" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[12.5px] font-medium text-ink">
@@ -102,7 +110,7 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
                     aria-label={`Show ${artifact.name} in folder`}
                     className="h-7 w-7"
                   >
-                    <FolderOpen size={13} />
+                    <Icon name="folderOpen" size="md" />
                   </IconButton>
                   <IconButton
                     onClick={() => openArtifact(task.id, artifact)}
@@ -110,7 +118,7 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
                     aria-label={`Open ${artifact.name} in the default app`}
                     className="h-7 w-7"
                   >
-                    <ExternalLink size={13} />
+                    <Icon name="externalLink" size="md" />
                   </IconButton>
                 </div>
               </div>
@@ -150,7 +158,7 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
                 </button>
               ) : (
                 <div className="flex h-28 items-center justify-center text-faint">
-                  <Globe size={22} />
+                  <Globe size={ICON_SIZES.xl} />
                 </div>
               )}
               <div className="p-2.5">
@@ -166,7 +174,7 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
                     })
                   }
                 >
-                  <MonitorUp size={13} />
+                  <MonitorUp size={ICON_SIZES.md} />
                   Open browser window
                 </Button>
               </div>
@@ -261,7 +269,7 @@ function PreviewBody({ artifact, taskId }: { artifact: Artifact; taskId: string 
   return (
     <div className="flex h-[52vh] flex-col items-center justify-center gap-3 px-6 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-2 text-faint">
-        <ImageOff size={20} />
+        <ImageOff size={ICON_SIZES.xl} />
       </div>
       <div>
         <p className="text-[13px] font-medium">No preview available</p>
@@ -284,11 +292,11 @@ export function ArtifactPreview() {
         size="sm"
         onClick={() => revealArtifact(task.id, artifact)}
       >
-        <FolderOpen size={13} />
+        <Icon name="folderOpen" size="md" />
         Show in folder
       </Button>
       <Button variant="primary" size="sm" onClick={() => openArtifact(task.id, artifact)}>
-        <ExternalLink size={13} />
+        <Icon name="externalLink" size="md" />
         Open file
       </Button>
     </>
@@ -300,7 +308,7 @@ export function ArtifactPreview() {
       onClose={() => setPreview(null)}
       title={artifact.name}
       subtitle={`${kindLabel(artifact.kind)}${artifact.size ? ` · ${formatBytes(artifact.size)}` : ''} · ${shortDate(artifact.createdAt)}`}
-      icon={<ArtifactGlyph kind={artifact.kind} className="h-4 w-4" />}
+      icon={<ArtifactGlyph kind={artifact.kind} size="lg" />}
       width="max-w-5xl"
       bodyClassName="p-0 bg-canvas-deep/40"
       footer={actions}
@@ -330,9 +338,9 @@ export function ArtifactChip({
       )}
       title={artifact.relPath}
     >
-      <ArtifactGlyph kind={artifact.kind} className="h-3 w-3 text-accent" />
+      <ArtifactGlyph kind={artifact.kind} size="sm" className="text-accent" />
       <span className="max-w-[160px] truncate">{artifact.name}</span>
-      <ArrowUpRight size={10} className="text-faint" />
+      <Icon name="arrowUpRight" size="xs" className="text-faint" />
     </button>
   )
 }

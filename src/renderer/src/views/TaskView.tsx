@@ -1,23 +1,16 @@
 import { agentName } from '../lib/localProfile'
 import { useEffect, useRef, useState } from 'react'
 import {
-  AlertCircle,
-  ArrowLeft,
   Circle,
-  FolderOpen,
   Loader2,
   MessageCircle,
   MoreHorizontal,
   PanelRightOpen,
-  Pause,
-  Play,
   Trash2,
-  Check,
-  Copy,
   MonitorUp,
-  Pencil,
-  ShieldCheck
+  Pencil
 } from 'lucide-react'
+import { Icon } from '../components/icons'
 import { BrandMark } from '../components/BrandMarks'
 import { confirmDialog } from '../components/Confirm'
 import { TaskChanges } from '../components/TaskChanges'
@@ -52,9 +45,9 @@ const STATUS_STYLE: Record<TaskStatus, string> = {
 function StatusIcon({ status }: { status: TaskStatus }) {
   if (status === 'running') return <Loader2 size={10} className="animate-spin" />
   if (status === 'waiting') return <Circle size={7} className="fill-current" />
-  if (status === 'paused') return <Pause size={9} />
-  if (status === 'done') return <Check size={10} />
-  if (status === 'error') return <AlertCircle size={10} />
+  if (status === 'paused') return <Icon name="pause" size="xs" />
+  if (status === 'done') return <Icon name="confirm" size="xs" />
+  if (status === 'error') return <Icon name="alert" size="xs" />
   return <Circle size={7} />
 }
 
@@ -71,7 +64,7 @@ function AttachmentChips({ message }: { message: ChatMessage }) {
           )}
           title={file.path}
         >
-          <FolderOpen size={11} className="shrink-0 text-accent" />
+          <Icon name="folderOpen" size="xs" className="text-accent" />
           <span className="min-w-0 truncate">{file.name}</span>
           {file.size ? <span className="text-faint">{formatBytes(file.size)}</span> : null}
         </span>
@@ -201,7 +194,7 @@ function TaskErrorBanner({
       )}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <AlertCircle size={13} className="shrink-0 text-danger" />
+        <Icon name="alert" size="md" className="text-danger" />
         <p className="min-w-0 flex-1 text-[12px] leading-relaxed text-danger">{sentence}</p>
         {raw ? (
           <button
@@ -258,7 +251,7 @@ function CopyMessage({ text }: { text: string }) {
       aria-label="Copy this reply"
       className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-faint transition-colors hover:bg-surface-2 hover:text-ink"
     >
-      {copied ? <Check size={11} /> : <Copy size={11} />}
+      {copied ? <Icon name="confirm" size="xs" /> : <Icon name="copy" size="xs" />}
       <span>{copied ? 'Copied' : 'Copy'}</span>
     </button>
   )
@@ -299,7 +292,7 @@ function TaskHeader({
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-canvas px-6">
       <IconButton onClick={goHome} aria-label="Back to home">
-        <ArrowLeft size={14} />
+        <Icon name="arrowLeft" size="md" />
       </IconButton>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -333,7 +326,7 @@ function TaskHeader({
           <span className="min-w-0 truncate" title={model || 'No model'}>{model || 'No model'}</span>
           <span>·</span>
           <span className="inline-flex items-center gap-1">
-            <ShieldCheck size={10} />
+            <Icon name="shield" size="xs" />
             {AGENT_ROLE_LABELS[task.agentRole ?? 'executor']}
           </span>
           <span>·</span>
@@ -345,12 +338,12 @@ function TaskHeader({
 
       {running ? (
         <Button variant="secondary" size="sm" onClick={() => void stopCurrent()}>
-          <Pause size={12} />
+          <Icon name="pause" size="md" />
           Stop
         </Button>
       ) : task.status === 'paused' || task.status === 'error' ? (
         <Button variant="primary" size="sm" onClick={() => void resumeCurrent()}>
-          <Play size={12} />
+          <Icon name="play" size="md" />
           Resume
         </Button>
       ) : null}
@@ -559,7 +552,9 @@ export function TaskView() {
         >
           <div className="mx-auto w-full max-w-[860px] px-8 pt-6 pb-8">
             <ActionNodeCard task={task} />
-            <PlanCard plan={task.plan} live={running} />
+            {/* The plan is the work surface, so it belongs to Cowork. A Chat task
+                stays a conversation. */}
+            {task.mode === 'cowork' ? <PlanCard plan={task.plan} live={running} /> : null}
 
             {visible.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -740,7 +735,7 @@ export function TaskView() {
                             'border border-danger/30'
                           )}
                         >
-                          <AlertCircle size={13} className="shrink-0" />
+                          <Icon name="alert" size="md" />
                           Response interrupted
                         </div>
                       ) : null}
@@ -771,7 +766,7 @@ export function TaskView() {
             {!running && task.artifacts.some((artifact) => !artifact.messageId) ? (
               <div className={cn('mt-8 rounded-[var(--r-card)] bg-surface p-4', Elev.raised)}>
                 <p className="mb-2 flex items-center gap-1.5 text-[length:var(--text-micro)] font-semibold tracking-[0.13em] text-faint uppercase">
-                  <FolderOpen size={11} />
+                  <Icon name="folderOpen" size="xs" />
                   Delivered files
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -790,7 +785,7 @@ export function TaskView() {
 
             {!running && task.status === 'done' ? (
               <div className="mt-6 flex items-center justify-center gap-1.5 text-[length:var(--text-micro)] text-faint">
-                <Check size={11} className="text-positive" />
+                <Icon name="confirm" size="xs" className="text-positive" />
                 Finished {timeAgo(task.completedAt ?? task.updatedAt)}
                 {task.usage ? (
                   <>
@@ -815,7 +810,7 @@ export function TaskView() {
 
             {task.status === 'paused' ? (
               <div className={cn('mb-3 flex items-center gap-2 rounded-[var(--r-card)] bg-surface px-4 py-3', Elev.raised)}>
-                <Pause size={12} className="text-muted" />
+                <Icon name="pause" size="md" className="text-muted" />
                 <p className="flex-1 text-[12px] text-muted">Paused</p>
                 <button
                   onClick={() => void resumeCurrent()}
@@ -846,6 +841,7 @@ export function TaskView() {
               attachments={attachments}
               onAttachmentsChange={setAttachments}
               permissionMode={task.permissionMode}
+              mode={task.mode}
               onPermissionChange={(mode) => void updateCurrent({ permissionMode: mode })}
               model={composerModel}
               onModelChange={(next) =>

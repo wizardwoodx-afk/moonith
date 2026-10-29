@@ -3,24 +3,19 @@ import {
   Sun,
   Inbox,
   ShieldAlert,
-  Clock,
   CheckCircle2,
   XCircle,
-  Sparkles,
-  RefreshCw,
   Lock,
   ChevronDown,
   ChevronRight,
-  ShieldCheck,
   AlertTriangle,
   Play,
   Flame,
-  Check,
-  Send,
   Sliders,
   Eye,
   FileText
 } from 'lucide-react'
+import { Icon } from '../components/icons'
 import { toast } from 'sonner'
 import { cn } from '../lib/utils'
 import { Button, IconButton } from '../components/ui'
@@ -151,11 +146,11 @@ export function PromeyView() {
 
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" onClick={() => void refreshAll()}>
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+              <Icon name="refresh" size="md" className={loading ? 'animate-spin' : ''} />
               Refresh
             </Button>
             <Button variant="primary" size="sm" onClick={handleGenerateBrief}>
-              <Sparkles size={13} />
+              <Icon name="spark" size="md" />
               Synthesize Morning Brief
             </Button>
           </div>
@@ -205,7 +200,7 @@ export function PromeyView() {
           <div className="card rounded-xl border border-line/80 bg-surface/80 p-3.5 shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-medium text-muted">DLP Shield Guard</span>
-              <ShieldCheck size={15} className="text-positive" />
+              <Icon name="shield" size="md" className="text-positive" />
             </div>
             <div className="mt-2 text-[18px] font-semibold text-positive">Enforced</div>
             <div className="mt-1 text-[11px] text-faint">Outbound secret & credential redaction</div>
@@ -259,7 +254,7 @@ export function PromeyView() {
                 : 'border-transparent text-muted hover:text-ink'
             )}
           >
-            <Clock size={14} />
+            <Icon name="clock" size="md" />
             Standing Routines ({routines.length})
           </button>
         </div>
@@ -286,7 +281,7 @@ export function PromeyView() {
                       </p>
                     </div>
                     <Button variant="secondary" size="sm" onClick={handleGenerateBrief}>
-                      <RefreshCw size={12} />
+                      <Icon name="refresh" size="md" />
                       Regenerate
                     </Button>
                   </div>
@@ -373,7 +368,7 @@ export function PromeyView() {
                             key={i}
                             className="flex items-center gap-2 rounded-lg border border-line/60 bg-surface-2/40 px-3 py-1.5 text-[11.5px]"
                           >
-                            <Clock size={12} className="text-accent" />
+                            <Icon name="clock" size="sm" className="text-accent" />
                             <span className="font-medium">{r.name}</span>
                             <span className="text-faint">({r.frequency})</span>
                           </div>
@@ -392,7 +387,7 @@ export function PromeyView() {
                     Promey can review your active streams, schedules, tasks, and system state to synthesize an executive priority plan.
                   </p>
                   <Button variant="primary" className="mt-5" onClick={handleGenerateBrief}>
-                    <Sparkles size={14} />
+                    <Icon name="spark" size="md" />
                     Synthesize Today's Morning Brief
                   </Button>
                 </div>
@@ -414,7 +409,7 @@ export function PromeyView() {
                   className="flex-1 bg-transparent px-3 text-[12.5px] outline-none text-ink placeholder:text-faint"
                 />
                 <Button variant="secondary" size="sm" onClick={handleSimulateInbound}>
-                  <Send size={12} />
+                  <Icon name="send" size="md" />
                   Ingest Stream
                 </Button>
               </div>
@@ -461,7 +456,7 @@ export function PromeyView() {
                             size="sm"
                             onClick={() => handleResolveTriage(item.id)}
                           >
-                            <Check size={12} />
+                            <Icon name="confirm" size="md" />
                             Resolve
                           </Button>
                         ) : (
@@ -488,7 +483,7 @@ export function PromeyView() {
               {pendingApprovals.length === 0 ? (
                 <div className="card rounded-2xl border border-line bg-surface p-12 text-center">
                   <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-positive/10 text-positive">
-                    <ShieldCheck size={24} />
+                    <Icon name="shield" size="xl" />
                   </div>
                   <h3 className="mt-3 text-[15px] font-semibold">Zero Pending Approvals</h3>
                   <p className="mt-1 text-[12px] text-faint">
@@ -540,7 +535,7 @@ export function PromeyView() {
                           size="sm"
                           onClick={() => handleApprovalDecision(appr.id, 'always_allowed')}
                         >
-                          <Sparkles size={13} />
+                          <Icon name="spark" size="md" />
                           Always Allow
                         </Button>
                       </div>

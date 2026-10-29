@@ -2,32 +2,22 @@ import { agentName } from '../../lib/localProfile'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
-  ArrowRight,
   BadgeCheck,
   BookmarkCheck,
   BookOpen,
-  Check,
-  Copy,
   Download,
   FileCheck2,
-  KeyRound,
-  LockKeyhole,
   PenLine,
-  Play,
-  Plus,
   Radio,
   ScrollText,
-  Send,
   ShieldAlert,
-  ShieldCheck,
-  Sparkles,
   Trash2,
   Undo2,
   Users2,
   Wifi,
-  WifiOff,
-  X
+  WifiOff
 } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { Button } from '../../components/ui'
 import { confirmDialog } from '../../components/Confirm'
 import { cn, timeAgo } from '../../lib/utils'
@@ -148,7 +138,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
       aria-label={label}
       title={label}
     >
-      {copied ? <Check size={11} className="text-positive" /> : <Copy size={11} />}
+      {copied ? <Icon name="confirm" size="xs" className="text-positive" /> : <Icon name="copy" size="xs" />}
     </button>
   )
 }
@@ -420,14 +410,14 @@ function ProposalMessage({
                   {seat === me ? ' (you)' : ''}
                   {published ? (
                     finished ? (
-                      <Check size={9} />
+                      <Icon name="confirm" size="xs" />
                     ) : (
                       <Activity size={9} />
                     )
                   ) : turned ? (
-                    <KeyRound size={9} />
+                    <Icon name="key" size="xs" />
                   ) : (
-                    <LockKeyhole size={9} />
+                    <Icon name="lock" size="xs" />
                   )}
                 </span>
               )
@@ -437,7 +427,7 @@ function ProposalMessage({
           {pending ? (
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               <Button size="sm" variant="primary" disabled={busy || ownKey} onClick={onTurnKey}>
-                <KeyRound size={11} />
+                <Icon name="key" size="md" />
                 {ownKey ? 'Your key is on' : 'Turn your key'}
               </Button>
               {ownKey && waitingFor.length ? (
@@ -470,7 +460,7 @@ function ProposalMessage({
               </p>
               <Button size="sm" variant="accent" disabled={busy} onClick={onPublish}>
                 Publish to the table
-                <ArrowRight size={11} />
+                <Icon name="arrowRight" size="md" />
               </Button>
             </div>
           ) : null}
@@ -506,7 +496,7 @@ function ProposalMessage({
                 )}
                 {taskId ? (
                   <Button size="sm" variant="ghost" onClick={onOpenTask}>
-                    <ArrowRight size={11} />
+                    <Icon name="arrowRight" size="md" />
                     Open the work
                   </Button>
                 ) : null}
@@ -628,7 +618,7 @@ function PlaybooksSection({
       {/* Save Current Session Card */}
       <section className="rounded-2xl border border-accent/25 bg-accent-soft/10 p-5">
         <div className="flex items-center gap-2.5">
-          <Sparkles className="text-accent-ink" size={18} />
+          <Icon name="spark" size="lg" className="text-accent-ink" />
           <div>
             <h2 className="text-[13.5px] font-semibold text-ink">Save session as playbook</h2>
           </div>
@@ -705,7 +695,7 @@ function PlaybooksSection({
                       onClick={() => handleRun(pb.id)}
                       disabled={instantiating === pb.id}
                     >
-                      <Play size={11} className="mr-1" />
+                      <Icon name="play" size="md" className="mr-1" />
                       {instantiating === pb.id ? 'Starting…' : 'Run playbook'}
                     </Button>
                     <button
@@ -787,7 +777,7 @@ function ProofOfWorkSection({ state }: { state: TableState }) {
       <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-positive/30 bg-positive/10 p-5">
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-positive/30 bg-surface text-positive">
-            <ShieldCheck size={20} />
+            <Icon name="shield" size="xl" />
           </span>
           <div>
             <h2 className="text-[14px] font-semibold text-ink">Proof of work</h2>
@@ -1010,7 +1000,7 @@ export function SharedTable() {
               activeTab === 'proofs' ? 'bg-canvas text-ink shadow-sm' : 'text-muted hover:text-ink'
             )}
           >
-            <ShieldCheck size={11} />
+            <Icon name="shield" size="xs" />
             Proof of Work
           </button>
           <button
@@ -1021,7 +1011,7 @@ export function SharedTable() {
               activeTab === 'harmonia' ? 'bg-canvas text-ink shadow-sm' : 'text-muted hover:text-ink'
             )}
           >
-            <Sparkles size={11} />
+            <Icon name="spark" size="xs" />
             Harmonia Decisions
           </button>
           <button
@@ -1078,7 +1068,7 @@ export function SharedTable() {
             className="rounded p-0.5 text-danger/70 hover:text-danger"
             aria-label="Dismiss"
           >
-            <X size={12} />
+            <Icon name="close" size="xs" />
           </button>
         </div>
       ) : null}
@@ -1175,7 +1165,7 @@ export function SharedTable() {
             <div className="mx-auto w-full max-w-[760px]">
               {openAction ? (
                 <div className="flex items-center gap-2 rounded-[var(--r-composer)] border border-line bg-canvas/50 px-3.5 py-2.5">
-                  <KeyRound size={12} className="shrink-0 text-faint" />
+                  <Icon name="key" size="xs" className="text-faint" />
                   <p className="min-w-0 flex-1 break-words text-[10.5px] leading-relaxed text-muted">
                     One joint action at a time. Finish or withdraw “{openAction.title}” first.
                   </p>
@@ -1188,7 +1178,7 @@ export function SharedTable() {
                   }}
                   className="composer-shell relative z-[1] flex items-end gap-2.5 px-3.5 py-2.5"
                 >
-                  <Plus size={15} className="mb-1 shrink-0 text-accent" />
+                  <Icon name="add" size="md" className="mb-1 text-accent" />
                   <div className="min-w-0 flex-1 space-y-1">
                     <label className="sr-only" htmlFor="table-proposal-title">
                       Joint action
@@ -1226,7 +1216,7 @@ export function SharedTable() {
                     disabled={busy || !title.trim() || !summary.trim()}
                     aria-label="Put it on the table"
                   >
-                    <Send size={13} />
+                    <Icon name="send" size="md" />
                   </Button>
                 </form>
               )}

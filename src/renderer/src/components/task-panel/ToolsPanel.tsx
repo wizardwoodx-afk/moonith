@@ -139,7 +139,7 @@ function McpCard({
                         <code className="min-w-0 flex-1 truncate text-[10px] text-ink" title={tool.name}>{tool.name}</code>
                         <span className="shrink-0 whitespace-nowrap text-[10px] text-faint">{exposed ? 'Available' : 'Not available'}</span>
                       </div>
-                      {tool.description ? <p className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-faint">{tool.description}</p> : null}
+                      {tool.description ? <p className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-faint" title={tool.description}>{tool.description}</p> : null}
                     </div>
                   )
                 })}
@@ -234,7 +234,7 @@ export function ToolsPanel({ capabilities }: { capabilities: TaskCapabilities })
                     <span className="min-w-0 truncate text-[11px] font-medium text-ink" title={skill.name}>{skill.name}</span>
                     <span className="ml-auto shrink-0 text-[10px] text-faint">{skill.source === 'local' ? 'Local' : skill.registry === 'marketplace' ? 'Marketplace' : 'Registry'}</span>
                   </span>
-                  <span className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-muted">{skill.description}</span>
+                  <span className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-muted" title={skill.description}>{skill.description}</span>
                   <span className="mt-1 block text-[10px] text-faint">{skill.files} file{skill.files === 1 ? '' : 's'}</span>
                 </span>
               </motion.button>
@@ -269,7 +269,7 @@ export function ToolsPanel({ capabilities }: { capabilities: TaskCapabilities })
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[11px] font-medium text-ink">{tool.title}</span>
-                  <span className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-muted">
+                  <span className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-muted" title={tool.description}>
                     {tool.description}
                   </span>
                 </span>

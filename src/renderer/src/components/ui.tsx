@@ -8,8 +8,9 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Loader2, X } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { Icon } from './icons'
 
 type ButtonVariant = 'primary' | 'accent' | 'secondary' | 'ghost' | 'soft' | 'danger'
 type ButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'icon'
@@ -367,7 +368,7 @@ export function Modal({
                   ) : null}
                 </div>
                 <IconButton onClick={onClose} aria-label="Close">
-                  <X size={15} />
+                  <Icon name="close" size="lg" />
                 </IconButton>
               </div>
             )}

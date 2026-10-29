@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, CircleCheck, CircleX, Clock } from 'lucide-react'
+import { CircleCheck, CircleX } from 'lucide-react'
 import type { StepRecord, TaskStatus } from '@shared/types'
 import { deriveAgentActivity } from '../lib/agentActivity'
 import { useMotion } from '../lib/motion'
+import { ICON_SIZES, Icon } from './icons'
 import { AgentActivity } from '../motion/AgentActivity'
 import { createBatchOrder, DURATION, EASE_ENTER, EASE_EXIT } from '../motion/timing'
 import { useApp } from '../store'
 
 function StepMark({ step }: { step: StepRecord }) {
-  if (step.status === 'running') return <Clock size={12} className="text-faint" />
-  if (step.status === 'waiting') return <Clock size={12} className="text-warn" />
-  if (step.status === 'ok') return <CircleCheck size={13} className="text-positive" />
-  return <CircleX size={13} className="text-danger" />
+  if (step.status === 'running') return <Icon name="clock" size="sm" className="text-faint" />
+  if (step.status === 'waiting') return <Icon name="clock" size="sm" className="text-warn" />
+  if (step.status === 'ok') return <CircleCheck size={ICON_SIZES.sm} className="text-positive" />
+  return <CircleX size={ICON_SIZES.sm} className="text-danger" />
 }
 
 /* The row height is fixed, so both marks can sit in the same slot and trade
@@ -120,7 +121,7 @@ export function WorkTrail({ thinking, steps, live, taskId, taskStatus, respondin
             animate={{ rotate: open ? 0 : -90 }}
             transition={{ duration: reduced ? 0 : DURATION.enter, ease: EASE_ENTER }}
           >
-            <ChevronDown size={12} />
+            <Icon name="chevronDown" size="sm" />
           </motion.span>
         </button>
         <AgentActivity activity={activity} />
@@ -163,7 +164,7 @@ export function WorkTrail({ thinking, steps, live, taskId, taskStatus, respondin
                     aria-expanded={thoughtOpen}
                     className="flex w-full items-center gap-2 text-left"
                   >
-                    <Clock size={12} className="text-faint" aria-hidden="true" />
+                    <Icon name="clock" size="sm" className="text-faint" />
                     <span className="shrink-0 text-[12px] font-semibold text-ink">Reasoning</span>
                     <span className="shrink-0 text-[12px] text-faint">·</span>
                     <span className="min-w-0 flex-1 truncate text-[11.5px] text-faint">

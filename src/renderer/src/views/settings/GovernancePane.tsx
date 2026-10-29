@@ -12,7 +12,8 @@
  */
 import { agentName } from '../../lib/localProfile'
 import { useCallback, useEffect, useState } from 'react'
-import { OctagonX, RefreshCw, Scale, ShieldOff } from 'lucide-react'
+import { OctagonX, Scale, ShieldOff } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import type {
   GovernanceRecordView,
   GovernanceSummaryView,
@@ -280,7 +281,7 @@ export function GovernancePane() {
                 <>
                   {!gateKnown ? (
                     <Button variant="secondary" onClick={() => void load()}>
-                      <RefreshCw size={13} /> Read again
+                      <Icon name="refresh" size="md" /> Read again
                     </Button>
                   ) : null}
                   <Button variant="danger" loading={busy} onClick={() => setAskEngage(true)}>
@@ -298,7 +299,7 @@ export function GovernancePane() {
             <div className="flex items-center justify-between">
               <p className="text-[12px] font-medium text-ink">Recent decisions</p>
               <Button variant="ghost" size="sm" onClick={() => void load()}>
-                <RefreshCw size={12} /> Refresh
+                <Icon name="refresh" size="md" /> Refresh
               </Button>
             </div>
             <RowList>

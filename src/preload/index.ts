@@ -324,6 +324,11 @@ const api: KnightApi = {
   /* ── Cowork: Subsystem & Lobe Skills ─────────────────────────────────────── */
   coworkStatus: () => ipcRenderer.invoke(IPC.coworkStatus),
   coworkSearchSkills: (query: string) => ipcRenderer.invoke(IPC.coworkSearchSkills, query),
+  coworkEnterpriseSummary: () => ipcRenderer.invoke(IPC.coworkEnterpriseSummary),
+  coworkIssuePassport: (principal: string) => ipcRenderer.invoke(IPC.coworkIssuePassport, principal),
+  coworkGetBlastRadius: () => ipcRenderer.invoke(IPC.coworkGetBlastRadius),
+  coworkListProofs: () => ipcRenderer.invoke(IPC.coworkListProofs),
+  coworkListRules: () => ipcRenderer.invoke(IPC.coworkListRules),
 
   backend: {
     settings: () => ipcRenderer.invoke(IPC.backendSettingsGet),

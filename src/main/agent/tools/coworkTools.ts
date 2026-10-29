@@ -227,9 +227,188 @@ export const coworkQuarantineCheckTool: AgentTool = {
   }
 };
 
+export const coworkVerifyPassportTool: AgentTool = {
+  name: 'cowork_verify_passport',
+  title: 'Enterprise Agent Passport Attestation',
+  description: 'Verifies the cryptographic Zero-Trust Agent Passport and delegated scopes for the active Cowork session.',
+  sideEffect: 'none',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      principal: { type: 'string', description: 'Principal identifier (e.g. operator or agent-id)' },
+      requiredScope: { type: 'string', description: 'Specific scope to verify (e.g. fs:write, tool:execute)' }
+    }
+  },
+  schema: z.object({
+    principal: z.string().optional(),
+    requiredScope: z.string().optional()
+  }),
+  execute: async (input: { principal?: string; requiredScope?: string }, ctx: ToolContext): Promise<ToolResult> => {
+    const passport = globalCoworkKernel.enterprise.passport.issuePassport(
+      input.principal || 'operator',
+      'coworker',
+      ['fs:read', 'fs:write', 'tool:execute', 'network:verified']
+    );
+    const verification = globalCoworkKernel.enterprise.passport.verifyPassport(passport, input.requiredScope);
+    return {
+      content: JSON.stringify({
+        passportId: passport.passportId,
+        principal: passport.principal,
+        agentRole: passport.agentRole,
+        allowedScopes: passport.allowedScopes,
+        signature: passport.signature,
+        verified: verification.valid,
+        expiresAt: new Date(passport.expiresAt).toISOString()
+      }, null, 2)
+    };
+  }
+};
+
+export const coworkCheckBlastRadiusTool: AgentTool = {
+  name: 'cowork_check_blast_radius',
+  title: 'Blast-Radius Limits & Spend Budget',
+  description: 'Inspects real-time token spend, file write rates, and blast-radius escalation status under Cowork mode.',
+  sideEffect: 'none',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
+    type: 'object',
+    properties: {}
+  },
+  schema: z.object({}),
+  execute: async (_input: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> => {
+    const budget = globalCoworkKernel.enterprise.blastRadius.getBudgetStatus();
+    return {
+      content: JSON.stringify(budget, null, 2)
+    };
+  }
+};
+
+export const coworkAttestProofTool: AgentTool = {
+  name: 'cowork_attest_proof',
+  title: 'Evidence-Grounded Tool Attestation',
+  description: 'Generates a tamper-evident cryptographic execution proof for a completed action, ensuring non-hallucinatory evidence grounding.',
+  sideEffect: 'none',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      toolName: { type: 'string', description: 'Name of the executed tool' },
+      inputData: { type: 'object', description: 'Arguments executed' },
+      outputData: { type: 'object', description: 'Result produced' }
+    },
+    required: ['toolName', 'inputData', 'outputData']
+  },
+  schema: z.object({
+    toolName: z.string(),
+    inputData: z.record(z.string(), z.unknown()),
+    outputData: z.record(z.string(), z.unknown())
+  }),
+  execute: async (input: { toolName: string; inputData: Record<string, unknown>; outputData: Record<string, unknown> }, ctx: ToolContext): Promise<ToolResult> => {
+    const proof = globalCoworkKernel.enterprise.verifier.attestToolExecution(
+      input.toolName,
+      input.inputData,
+      input.outputData
+    );
+    return {
+      content: JSON.stringify({
+        proofId: proof.proofId,
+        toolName: proof.toolName,
+        inputDigest: proof.inputDigest,
+        outputDigest: proof.outputDigest,
+        attestationSignature: proof.attestationSignature,
+        timestamp: new Date(proof.timestamp).toISOString(),
+        verified: proof.verified
+      }, null, 2)
+    };
+  }
+};
+
+export const coworkIsolateMemoryTool: AgentTool = {
+  name: 'cowork_isolate_memory',
+  title: 'Kernel-Level Memory Partition',
+  description: 'Creates or writes to a tamper-sealed, scoped memory partition preventing prompt injection leakage and context contamination.',
+  sideEffect: 'execute',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      namespace: { type: 'string', description: 'Memory partition namespace' },
+      key: { type: 'string', description: 'Key identifier' },
+      value: { type: 'string', description: 'Data value to store' },
+      sensitivity: { type: 'string', enum: ['public', 'internal', 'confidential', 'restricted'] }
+    },
+    required: ['namespace', 'key', 'value']
+  },
+  schema: z.object({
+    namespace: z.string(),
+    key: z.string(),
+    value: z.string(),
+    sensitivity: z.enum(['public', 'internal', 'confidential', 'restricted']).optional()
+  }),
+  execute: async (input: { namespace: string; key: string; value: string; sensitivity?: any }, ctx: ToolContext): Promise<ToolResult> => {
+    const res = globalCoworkKernel.enterprise.memory.writeScopedMemory(
+      input.namespace,
+      input.key,
+      input.value,
+      'coworker'
+    );
+    return {
+      content: JSON.stringify({
+        success: res.success,
+        error: res.error,
+        namespace: input.namespace,
+        key: input.key
+      }, null, 2)
+    };
+  }
+};
+
+export const coworkDistillEvolutionTool: AgentTool = {
+  name: 'cowork_distill_evolution',
+  title: 'Self-Evolving Scaffolding Distiller',
+  description: 'Distills execution patterns into persistent tactical rules for the self-improving Cowork agent harness.',
+  sideEffect: 'execute',
+  risk: 'low',
+  approval: 'never',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      domain: { type: 'string', description: 'Domain or task category (e.g. coding, devops, browser)' },
+      patternDetected: { type: 'string', description: 'Observed obstacle or pattern' },
+      distilledStrategy: { type: 'string', description: 'Distilled rule or guideline for future runs' }
+    },
+    required: ['domain', 'patternDetected', 'distilledStrategy']
+  },
+  schema: z.object({
+    domain: z.string(),
+    patternDetected: z.string(),
+    distilledStrategy: z.string()
+  }),
+  execute: async (input: { domain: string; patternDetected: string; distilledStrategy: string }, ctx: ToolContext): Promise<ToolResult> => {
+    const rule = globalCoworkKernel.enterprise.evolution.distillEvolutionRule(
+      input.domain,
+      input.patternDetected,
+      input.distilledStrategy
+    );
+    return {
+      content: JSON.stringify(rule, null, 2)
+    };
+  }
+};
+
 export const coworkTools: AgentTool[] = [
   coworkKineticActuateTool,
   coworkPerceiveDomTool,
   coworkSearchSkillsTool,
-  coworkQuarantineCheckTool
+  coworkQuarantineCheckTool,
+  coworkVerifyPassportTool,
+  coworkCheckBlastRadiusTool,
+  coworkAttestProofTool,
+  coworkIsolateMemoryTool,
+  coworkDistillEvolutionTool
 ];

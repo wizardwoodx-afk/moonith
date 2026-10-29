@@ -1,8 +1,9 @@
-import { ArrowRight, Check, FolderOpen, KeyRound, Laptop, Sparkles } from 'lucide-react'
+import { Laptop } from 'lucide-react'
 import { useState } from 'react'
 import { useApp } from '../store'
 import { saveLocalProfile, useLocalProfile } from '../lib/localProfile'
 import { Button, Modal } from './ui'
+import { ICON_SIZES, Icon } from './icons'
 
 export function Onboarding() {
   const settings = useApp((state) => state.settings)
@@ -26,7 +27,7 @@ export function Onboarding() {
         <div className="pointer-events-none absolute -top-24 -right-20 h-64 w-64 rounded-full bg-accent-soft/80 blur-3xl" />
         <div className="relative">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ink-button text-on-ink shadow-sm">
-            <Sparkles size={19} />
+            <Icon name="spark" size="xl" />
           </div>
           <h1 className="display mt-5 text-[30px] leading-[1.1] font-normal text-ink">
             A quieter way to get
@@ -39,28 +40,32 @@ export function Onboarding() {
           </p>
 
           <div className="mt-6 space-y-2.5">
-            {[
+            {([
               {
                 icon: Laptop,
                 title: 'Runs locally',
                 text: 'Tasks, files, and encrypted API keys stay on this machine.'
               },
               {
-                icon: FolderOpen,
+                icon: 'folderOpen',
                 title: 'Works in your folders',
                 text: 'You choose exactly which folders SelfImpulse can touch.'
               },
               {
-                icon: KeyRound,
+                icon: 'key',
                 title: 'Your keys, your models',
                 text: 'Any chat-completion endpoint.'
               }
-            ].map((item) => {
-              const Icon = item.icon
+            ] as const).map((item) => {
+              const Glyph = item.icon
               return (
                 <div key={item.title} className="flex items-start gap-3">
                   <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-line bg-canvas text-muted">
-                    <Icon size={13} />
+                    {typeof Glyph === 'string' ? (
+                      <Icon name={Glyph} size="md" />
+                    ) : (
+                      <Glyph size={ICON_SIZES.md} />
+                    )}
                   </div>
                   <div>
                     <p className="text-[12.5px] font-medium">{item.title}</p>
@@ -96,7 +101,7 @@ export function Onboarding() {
             <div className="mt-6 flex items-center gap-2">
               <Button type="submit" variant="primary" size="lg">
                 Connect a model
-                <ArrowRight size={14} />
+                <Icon name="arrowRight" size="md" />
               </Button>
               <Button type="button" variant="ghost" size="lg" onClick={() => finish(null)}>
                 Explore first
@@ -104,7 +109,7 @@ export function Onboarding() {
             </div>
           </form>
           <p className="mt-3 flex items-center gap-1.5 text-[10.5px] text-faint">
-            <Check size={11} />
+            <Icon name="confirm" size="xs" />
             Next, add your API key. You can change all of this later in Settings.
           </p>
         </div>

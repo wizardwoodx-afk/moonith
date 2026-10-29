@@ -1552,8 +1552,13 @@ export interface KnightApi {
   promeySanitize: (text: string) => Promise<any>
 
   /* ── Cowork: Subsystem & Lobe Skills ─────────────────────────────────────── */
-  coworkStatus: () => Promise<{ ready: boolean; activeSession: string; totalSkills: number }>
+  coworkStatus: () => Promise<any>
   coworkSearchSkills: (query: string) => Promise<any[]>
+  coworkEnterpriseSummary: () => Promise<any>
+  coworkIssuePassport: (principal: string) => Promise<any>
+  coworkGetBlastRadius: () => Promise<any>
+  coworkListProofs: () => Promise<any[]>
+  coworkListRules: () => Promise<any[]>
 
   backend: BackendApi
 }

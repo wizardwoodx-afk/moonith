@@ -1,20 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { agentName } from '../../lib/localProfile'
 import { AnimatePresence, motion } from 'framer-motion'
-import {
-  BookOpen,
-  Check,
-  ChevronRight,
-  FileText,
-  FolderPlus,
-  LibraryBig,
-  MessageSquare,
-  Plus,
-  RefreshCw,
-  Search,
-  Trash2,
-  X
-} from 'lucide-react'
+import { BookOpen, FolderPlus, LibraryBig, MessageSquare, Trash2 } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { toast } from 'sonner'
 import type { LibraryCollection, LibraryPage, LibrarySnapshot } from '@shared/library'
 import { Button, IconButton, Modal, Segmented, Spin } from '../../components/ui'
@@ -345,10 +333,10 @@ export function LibraryView() {
                   className="h-7 min-w-0 flex-1 bg-transparent px-1.5 text-[11.5px] outline-none placeholder:text-faint"
                 />
                 <IconButton aria-label="Save collection" className="h-6 w-6" onClick={() => void createCollection()}>
-                  <Check size={12} />
+                  <Icon name="confirm" size="md" />
                 </IconButton>
                 <IconButton aria-label="Cancel collection" className="h-6 w-6" onClick={() => setAddingCollection(false)}>
-                  <X size={12} />
+                  <Icon name="close" size="md" />
                 </IconButton>
               </div>
             </motion.div>
@@ -386,7 +374,7 @@ export function LibraryView() {
 
         <div className="px-3 py-2">
           <div className="relative">
-            <Search size={12} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-faint" />
+            <Icon name="search" size="sm" className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-faint" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -416,8 +404,12 @@ export function LibraryView() {
                     selectedId === page.id ? 'bg-surface-3/90' : 'hover:bg-surface-2/60'
                   )}
                 >
-                  {depth > 0 ? <ChevronRight size={10} className="shrink-0 text-faint" /> : null}
-                  <FileText size={12} className={cn('shrink-0', selectedId === page.id ? 'text-accent' : 'text-faint')} />
+                  {depth > 0 ? <Icon name="chevronRight" size="sm" className="text-faint" /> : null}
+                  <Icon
+                    name="fileText"
+                    size="sm"
+                    className={selectedId === page.id ? 'text-accent' : 'text-faint'}
+                  />
                   <span className="min-w-0 flex-1">
                     <span
                       className={cn(
@@ -450,7 +442,7 @@ export function LibraryView() {
               <LiveNumber value={pages.length} /> {pages.length === 1 ? 'page' : 'pages'}
             </span>
             <Button variant="secondary" size="sm" onClick={() => void createPage()} loading={creating}>
-              <Plus size={13} /> New page
+              <Icon name="add" size="md" /> New page
             </Button>
           </div>
         </header>
@@ -461,7 +453,7 @@ export function LibraryView() {
               {error}
             </span>
             <IconButton aria-label="Retry loading Library" className="h-6 w-6" onClick={() => void refresh()}>
-              <RefreshCw size={12} />
+              <Icon name="refresh" size="md" />
             </IconButton>
           </div>
         ) : null}

@@ -146,7 +146,6 @@ export function CaptainWelcome({
             onChooseWorkspace={onChooseWorkspace}
             onClearWorkspace={onClearWorkspace}
             onSubmit={onSend}
-            placeholder={`Ask ${name}…`}
             busy={busy}
             autoFocus
           />

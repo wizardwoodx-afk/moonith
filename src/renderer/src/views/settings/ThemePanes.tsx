@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, ChevronRight, Moon, SwatchBook } from 'lucide-react'
+import { Moon, SwatchBook } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { useApp } from '../../store'
 import {
   ATELIER_THEME_IDS,
@@ -87,7 +88,7 @@ function ThemeCard({ theme }: { theme: Theme }) {
         <span className="ml-auto flex h-[18px] w-[18px] items-center justify-center">
           {active ? (
             <span className="flex h-[16px] w-[16px] items-center justify-center rounded-full bg-accent text-on-ink">
-              <Check size={10} strokeWidth={2.6} />
+              <Icon name="confirm" size="xs" />
             </span>
           ) : (
             <span className="h-1.5 w-1.5 rounded-full bg-line-strong transition-colors group-hover:bg-faint" />
@@ -153,9 +154,10 @@ function PreviewRow({
           />
         ))}
       </span>
-      <ChevronRight
-        size={14}
-        className="shrink-0 text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-muted"
+      <Icon
+        name="chevronRight"
+        size="md"
+        className="text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-muted"
       />
     </button>
   )
@@ -207,7 +209,7 @@ export function MotionPane() {
                   : 'border-line bg-surface-2/60 text-transparent hover:border-line-strong'
               )}
             >
-              <Check size={12} strokeWidth={2.6} />
+              <Icon name="confirm" size="sm" />
             </button>
           </SettingRow>
         ))}
@@ -330,7 +332,7 @@ export function MoonPane() {
           >
             {active ? (
               <>
-                <Check size={12} />
+                <Icon name="confirm" size="sm" />
                 Moon is on
               </>
             ) : (

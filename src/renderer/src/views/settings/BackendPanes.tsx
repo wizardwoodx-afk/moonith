@@ -1,18 +1,7 @@
 import { agentName } from '../../lib/localProfile'
 import { useCallback, useEffect, useState } from 'react'
-import {
-  Activity,
-  Check,
-  Copy,
-  Files,
-  Inbox,
-  KeyRound,
-  Monitor,
-  Power,
-  Radio,
-  RefreshCw,
-  Sparkles
-} from 'lucide-react'
+import { Activity, Files, Inbox, Monitor, Power, Radio } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { toast } from 'sonner'
 import type {
   BackendGatewayState,
@@ -100,12 +89,12 @@ export function GatewayPane() {
             ) : null}
           </SettingRow>
           <SettingRow
-            icon={<KeyRound size={14} />}
+            icon={<Icon name="key" size="md" />}
             title="Access token"
             description="Shown once — copy it now; it is not stored in plain text."
           >
             <Button variant="secondary" size="sm" onClick={() => void revealToken()}>
-              <Copy size={12} />
+              <Icon name="copy" size="md" />
               Copy token
             </Button>
           </SettingRow>
@@ -207,7 +196,7 @@ export function WorkFilesPane() {
             </Button>
           ) : (
             <Button variant="primary" size="sm" disabled={busy} onClick={() => void begin()}>
-              {busy ? <Spin size={12} /> : <RefreshCw size={13} />}
+              {busy ? <Spin size={12} /> : <Icon name="refresh" size="md" />}
               Connect
             </Button>
           )
@@ -246,7 +235,7 @@ export function WorkFilesPane() {
               disabled={busy}
               onClick={() => void complete()}
             >
-              {busy ? <Spin size={12} /> : <Check size={13} />}
+              {busy ? <Spin size={12} /> : <Icon name="confirm" size="md" />}
               I finished signing in
             </Button>
           </div>
@@ -353,7 +342,7 @@ export function DesktopPane() {
       >
         <SettingList>
           <SettingRow
-            icon={<Sparkles size={14} />}
+            icon={<Icon name="spark" size="md" />}
             title="Grounded actions"
             description={`Point the ${agentName()} at real UI elements instead of guessing coordinates.`}
           >

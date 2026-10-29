@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import {
   ShieldAlert,
-  ShieldCheck,
-  AlertTriangle,
   Lock,
   Cpu,
   Power,
@@ -14,6 +12,7 @@ import {
   Layers,
   Award
 } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { Button } from '../../components/ui'
 import { cn, plural } from '../../lib/utils'
 
@@ -78,7 +77,7 @@ export function TrustDashboard() {
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-4">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-ink flex items-center gap-2">
-            <ShieldCheck size={18} className="text-emerald-400" />
+            <Icon name="shield" size="lg" className="text-emerald-400" />
             Trust &amp; Autonomy
           </h2>
         </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { Button } from '../../components/ui'
 import { BrandGlyph } from '../../components/BrandMarks'
 import { hasNamedAgent, saveLocalProfile, useLocalProfile } from '../../lib/localProfile'
@@ -106,7 +106,7 @@ export function NameYourAgent() {
           aria-label="Dismiss"
           className="-mr-1 mt-0.5 shrink-0 rounded p-1 text-faint transition-colors hover:text-ink"
         >
-          <X size={13} />
+          <Icon name="close" size="md" />
         </button>
       </div>
     </section>

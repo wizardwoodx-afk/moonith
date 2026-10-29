@@ -1,22 +1,8 @@
 import { agentName } from '../../lib/localProfile'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import {
-  AlertTriangle,
-  Bot,
-  Boxes,
-  Check,
-  Copy,
-  Globe2,
-  MessageCircle,
-  Plug,
-  Plus,
-  RefreshCw,
-  Search,
-  Sparkles,
-  Trash2,
-  Webhook
-} from 'lucide-react'
+import { Globe2, MessageCircle, Trash2, Webhook } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { toast } from 'sonner'
 import type {
   ChannelRecord,
@@ -81,7 +67,7 @@ function Chip({
 function ErrorBanner({ message }: { message: string }) {
   return (
     <div className="flex items-start gap-2.5 rounded-xl border border-danger/25 bg-danger/10 px-3.5 py-3">
-      <AlertTriangle size={14} className="mt-0.5 shrink-0 text-danger" />
+      <Icon name="caution" size="sm" className="mt-0.5 text-danger" />
       <p className="text-[11.5px] leading-relaxed text-danger">{message}</p>
     </div>
   )
@@ -231,7 +217,7 @@ export function SkillsPane({ actionHost }: { actionHost: HTMLElement | null }) {
       {actionHost
         ? createPortal(
             <Button size="sm" variant="primary" onClick={() => setCreating(true)}>
-              <Plus size={13} /> New skill
+              <Icon name="add" size="md" /> New skill
             </Button>,
             actionHost
           )
@@ -253,7 +239,7 @@ export function SkillsPane({ actionHost }: { actionHost: HTMLElement | null }) {
         />
         {tab === 'installed' ? null : (
           <Button size="sm" variant="secondary" loading={searching} onClick={() => void runSearch(query)}>
-            <Search size={13} /> Search
+            <Icon name="search" size="md" /> Search
           </Button>
         )}
       </div>
@@ -265,11 +251,11 @@ export function SkillsPane({ actionHost }: { actionHost: HTMLElement | null }) {
           </div>
         ) : skills.length === 0 ? (
           <EmptyPanel
-            icon={<Sparkles size={18} />}
+            icon={<Icon name="spark" size="xl" />}
             title={<>No skills installed yet.</>}
             action={
               <Button size="sm" variant="secondary" onClick={() => setTab('catalog')}>
-                <Boxes size={13} /> Browse the catalog
+                <Icon name="builtin" size="md" /> Browse the catalog
               </Button>
             }
           >
@@ -281,7 +267,7 @@ export function SkillsPane({ actionHost }: { actionHost: HTMLElement | null }) {
             {skills.map((skill) => (
               <SettingRow
                 key={skill.id}
-                icon={<Sparkles size={14} />}
+                icon={<Icon name="spark" size="md" />}
                 tone="accent"
                 title={
                   <span className="flex flex-wrap items-center gap-2">
@@ -310,10 +296,7 @@ export function SkillsPane({ actionHost }: { actionHost: HTMLElement | null }) {
       ) : (
         <div className="space-y-4">
           <div className="relative">
-            <Search
-              size={13}
-              className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-faint"
-            />
+            <Icon name="search" size="md" className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-faint" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -336,7 +319,7 @@ export function SkillsPane({ actionHost }: { actionHost: HTMLElement | null }) {
             <div className="space-y-3">
               <ErrorBanner message={catalogError} />
               <Button size="sm" variant="secondary" onClick={() => void runSearch(query)}>
-                <RefreshCw size={12} /> Try again
+                <Icon name="refresh" size="md" /> Try again
               </Button>
             </div>
           ) : results === null ? (
@@ -348,7 +331,7 @@ export function SkillsPane({ actionHost }: { actionHost: HTMLElement | null }) {
               {results.map((result) => (
                 <SettingRow
                   key={result.ref}
-                  icon={<Boxes size={14} />}
+                  icon={<Icon name="builtin" size="md" />}
                   title={
                     <span className="flex flex-wrap items-center gap-2">
                       {result.name}
@@ -606,7 +589,7 @@ export function ConnectorsPane() {
       >
         <SettingList>
           <SettingRow
-            icon={<Plug size={14} />}
+            icon={<Icon name="connector" size="md" />}
             title="Connector key"
             description={
               state?.configured ? 'A key is saved on this device.' : 'Add a key to list toolkits.'
@@ -623,7 +606,7 @@ export function ConnectorsPane() {
         <div className="space-y-3">
           <ErrorBanner message="Connector status could not be loaded. Check the connection and try again." />
           <Button size="sm" variant="secondary" loading={refreshing} onClick={() => void load(true)}>
-            <RefreshCw size={12} /> Try again
+            <Icon name="refresh" size="md" /> Try again
           </Button>
         </div>
       )}
@@ -631,7 +614,7 @@ export function ConnectorsPane() {
       {state && !state.configured ? (
         <SettingsSection title="Toolkits">
           <EmptyPanel
-            icon={<Plug size={18} />}
+            icon={<Icon name="connector" size="xl" />}
             title="No key saved, so there is nothing to list."
             className="pt-10 pb-8"
           >
@@ -646,15 +629,12 @@ export function ConnectorsPane() {
           
           action={
             <Button size="sm" variant="ghost" loading={refreshing} onClick={() => void load(true)}>
-              <RefreshCw size={12} /> Refresh
+              <Icon name="refresh" size="md" /> Refresh
             </Button>
           }
         >
           <div className="relative">
-            <Search
-              size={13}
-              className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-faint"
-            />
+            <Icon name="search" size="md" className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-faint" />
             <input
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
@@ -885,7 +865,7 @@ export function ChannelsPane({ actionHost }: { actionHost: HTMLElement | null })
       {actionHost
         ? createPortal(
             <Button size="sm" variant="primary" onClick={() => openNew('webhook')}>
-              <Plus size={12.5} /> Add channel
+              <Icon name="add" size="md" /> Add channel
             </Button>,
             actionHost
           )
@@ -946,9 +926,9 @@ export function ChannelsPane({ actionHost }: { actionHost: HTMLElement | null })
                             onClick={() => void copy(channel.webhookPath ?? '', `${channel.id}-url`)}
                           >
                             {copied === `${channel.id}-url` ? (
-                              <Check size={12} className="text-positive" />
+                              <Icon name="confirm" size="md" className="text-positive" />
                             ) : (
-                              <Copy size={12} />
+                              <Icon name="copy" size="md" />
                             )}
                           </IconButton>
                         </div>
@@ -967,9 +947,9 @@ export function ChannelsPane({ actionHost }: { actionHost: HTMLElement | null })
                               }
                             >
                               {copied === `${channel.id}-token` ? (
-                                <Check size={12} className="text-positive" />
+                                <Icon name="confirm" size="md" className="text-positive" />
                               ) : (
-                                <Copy size={12} />
+                                <Icon name="copy" size="md" />
                               )}
                             </IconButton>
                           </div>
@@ -1038,7 +1018,7 @@ export function ChannelsPane({ actionHost }: { actionHost: HTMLElement | null })
               <p className="text-[12px] font-medium text-ink">Local webhook</p>
               <p className="text-[10.5px] text-muted">Loopback only · token protected</p>
             </div>
-            <Plus size={13} className="ml-auto text-faint" />
+            <Icon name="add" size="md" className="ml-auto text-faint" />
           </button>
           <button
             onClick={() => openNew('telegram')}
@@ -1051,7 +1031,7 @@ export function ChannelsPane({ actionHost }: { actionHost: HTMLElement | null })
               <p className="text-[12px] font-medium text-ink">Chat bot</p>
               <p className="text-[10.5px] text-muted">Long polling · no public URL</p>
             </div>
-            <Plus size={13} className="ml-auto text-faint" />
+            <Icon name="add" size="md" className="ml-auto text-faint" />
           </button>
         </div>
       </div>
@@ -1228,7 +1208,7 @@ export function SubAgentsPane() {
         
         action={
           <Button size="sm" variant="ghost" onClick={() => void window.knight.listSubAgents().then(setRuns)}>
-            <RefreshCw size={12} /> Refresh
+            <Icon name="refresh" size="md" /> Refresh
           </Button>
         }
       >
@@ -1252,7 +1232,7 @@ export function SubAgentsPane() {
         ) : ordered.length === 0 ? (
           <div className="mt-4">
             <EmptyPanel
-              icon={<Bot size={18} />}
+              icon={<Icon name="crew" size="xl" />}
               title={<>No team runs yet.</>}
             />
           </div>
@@ -1265,7 +1245,7 @@ export function SubAgentsPane() {
                   <div key={run.id}>
                     <div className="flex items-start gap-3 px-4 py-3.5">
                       <SettingTile tone="accent">
-                        <Bot size={14} />
+                        <Icon name="crew" size="md" />
                       </SettingTile>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">

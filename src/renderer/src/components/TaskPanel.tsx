@@ -1,19 +1,12 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import {
-  Activity,
-  Bot,
-  Cpu,
-  FolderOpen,
-  PanelRightClose,
-  RefreshCw,
-  Wrench,
-  Sun
-} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { Activity, PanelRightClose, Sun } from 'lucide-react'
 import type { Task } from '@shared/types'
 import { useApp } from '../store'
 import { cn } from '../lib/utils'
 import { IconButton } from './ui'
+import { ICON_SIZES, Icon, type IconName } from './icons'
 import { ArtifactPanelBody } from './Artifacts'
 import { CrewPanel } from './task-panel/CrewRuns'
 import { NowPanel } from './task-panel/NowPanel'
@@ -25,14 +18,14 @@ import { useTaskCapabilities } from './task-panel/useTaskCapabilities'
 
 type PanelTab = 'now' | 'crew' | 'tools' | 'files' | 'rook' | 'promey'
 
-const TABS = [
+const TABS: readonly { id: PanelTab; label: string; icon: IconName | LucideIcon }[] = [
   { id: 'now', label: 'Now', icon: Activity },
-  { id: 'crew', label: 'Team', icon: Bot },
-  { id: 'tools', label: 'Tools', icon: Wrench },
-  { id: 'files', label: 'Files', icon: FolderOpen },
-  { id: 'rook', label: 'Worker', icon: Cpu },
+  { id: 'crew', label: 'Team', icon: 'crew' },
+  { id: 'tools', label: 'Tools', icon: 'tool' },
+  { id: 'files', label: 'Files', icon: 'folderOpen' },
+  { id: 'rook', label: 'Worker', icon: 'model' },
   { id: 'promey', label: 'Promey', icon: Sun }
-] as const
+]
 
 const FOOTER: Record<PanelTab, string | null> = {
   now: null,
@@ -67,7 +60,7 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
     <aside aria-label="Task workspace" className="panel-in flex h-full w-[380px] max-w-[92vw] shrink-0 flex-col border-l border-line bg-canvas-deep/65">
       <div className="flex h-[54px] shrink-0 items-center gap-2.5 border-b border-line px-3">
         <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-surface text-accent">
-          <Activity size={13} />
+          <Activity size={ICON_SIZES.md} />
         </span>
         <div className="min-w-0">
           <h2 className="text-[12px] font-semibold tracking-[-0.01em] text-ink">Task workspace</h2>
@@ -79,7 +72,7 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
             title="Refresh Team, skills, and MCP"
             disabled={capabilities.refreshing}
           >
-            <RefreshCw size={13} className={capabilities.refreshing ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="md" className={capabilities.refreshing ? 'animate-spin' : ''} />
           </IconButton>
           <IconButton onClick={onClose} aria-label="Close workspace panel">
             <PanelRightClose size={14} />
@@ -89,9 +82,9 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
 
       {/* A count inside the tab slot wrapped 'Tools 4' mid-label, so the number
           rides on the accessible name and the label stays on one line. */}
-      <div className="grid shrink-0 grid-cols-5 border-b border-line px-2" role="tablist" aria-label="Task workspace sections">
+      <div className="scroll-thin flex shrink-0 overflow-x-auto border-b border-line px-2" role="tablist" aria-label="Task workspace sections">
         {TABS.map((item) => {
-          const Icon = item.icon
+          const Glyph = item.icon
           const active = tab === item.id
           const count = countFor(item.id)
           return (
@@ -103,11 +96,15 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
               title={count === null ? item.label : `${item.label} · ${count}`}
               onClick={() => setTab(item.id)}
               className={cn(
-                'relative flex h-11 items-center justify-center gap-1.5 whitespace-nowrap text-[10px] font-medium transition-colors outline-none focus-visible:bg-surface-2/50',
+                'relative flex h-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap px-2 text-[10px] font-medium transition-colors outline-none focus-visible:bg-surface-2/50',
                 active ? 'text-ink' : 'text-faint hover:text-muted'
               )}
             >
-              <Icon size={11} className="shrink-0" />
+              {typeof Glyph === 'string' ? (
+                <Icon name={Glyph} size="xs" className="shrink-0" />
+              ) : (
+                <Glyph size={ICON_SIZES.xs} className="shrink-0" />
+              )}
               {item.label}
               {active ? <motion.span layoutId="task-workspace-tab" className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-accent" transition={{ type: 'spring', stiffness: 420, damping: 32 }} /> : null}
             </button>

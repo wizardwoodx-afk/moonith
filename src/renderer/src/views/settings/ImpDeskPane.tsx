@@ -8,15 +8,8 @@
  * save something.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  AlertTriangle,
-  ArrowUpRight,
-  Cpu,
-  Radio,
-  RefreshCw,
-  ShieldCheck,
-  Wrench
-} from 'lucide-react'
+import { ArrowUpRight, Cpu, Radio, Wrench } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import type { PublicSettings, SecurityPosture, SecurityPostureItem } from '@shared/types'
 import { useApp } from '../../store'
 import { cn, errorMessage } from '../../lib/utils'
@@ -189,12 +182,7 @@ export function ImpDeskPane({ settings }: { settings: PublicSettings }) {
               aria-hidden
               className="breathing absolute inset-2 rounded-full bg-accent-soft/70 blur-[6px]"
             />
-            <ShieldCheck
-              aria-hidden
-              size={22}
-              strokeWidth={1.5}
-              className="relative text-accent-ink"
-            />
+            <Icon name="shield" size="xl" className="relative text-accent-ink" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold tracking-[0.16em] text-faint uppercase">
@@ -222,14 +210,14 @@ export function ImpDeskPane({ settings }: { settings: PublicSettings }) {
             title="Refresh"
             className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-surface-2/60 text-muted transition-colors duration-150 ease-out hover:border-line-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
           >
-            <RefreshCw aria-hidden size={12.5} className={cn(loading && 'animate-spin')} />
+            <Icon name="refresh" size="md" className={cn(loading && 'animate-spin')} />
           </button>
         </div>
 
         <div className="card overflow-hidden" aria-busy={loading}>
           {error ? (
             <div className="flex items-start gap-2.5 border-b border-line px-4 py-3">
-              <AlertTriangle aria-hidden size={13} className="mt-0.5 shrink-0 text-warn" />
+              <Icon name="caution" size="sm" className="mt-0.5 text-warn" />
               <div className="min-w-0">
                 <p className="text-[11.5px] leading-[1.55] text-muted">
                   {items.length > 0

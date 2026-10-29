@@ -6,16 +6,13 @@ import {
   HelpCircle,
   Package,
   Layers,
-  Copy,
-  Check,
-  Cpu,
   Monitor,
   Flame,
-  Wrench,
   BookOpen
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '../../lib/utils'
+import { ICON_SIZES, Icon } from '../icons'
 
 const MODE_LABEL = { plan: 'Plan', build: 'Build', yolo: 'Full access' } as const
 
@@ -137,7 +134,7 @@ export function RookWorkerPanel() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/15 text-accent">
-              <Cpu size={13} />
+              <Icon name="model" size="sm" />
             </span>
             <h3 className="text-[11.5px] font-semibold text-ink">Autonomous worker</h3>
           </div>
@@ -184,7 +181,7 @@ export function RookWorkerPanel() {
                   : 'text-muted hover:text-ink'
               )}
             >
-              <Wrench size={11} /> Build
+              <Icon name="tool" size="xs" /> Build
             </button>
             <button
               onClick={() => void handleSetPermission('yolo')}
@@ -209,7 +206,7 @@ export function RookWorkerPanel() {
       {pendingGates.length > 0 && (
         <section className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
           <div className="mb-2 flex items-center gap-1.5 text-amber-400">
-            <HelpCircle size={13} />
+            <HelpCircle size={ICON_SIZES.sm} />
             <span className="text-[11px] font-semibold">Your answer needed</span>
           </div>
           {pendingGates.map((gate) => (
@@ -238,7 +235,7 @@ export function RookWorkerPanel() {
       <section>
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
-            <GitPullRequest size={13} className="shrink-0 text-accent" />
+            <GitPullRequest size={ICON_SIZES.sm} className="shrink-0 text-accent" />
             <h4 className="truncate text-[11px] font-semibold uppercase tracking-wider text-ink">Change requests</h4>
           </div>
           <span className="shrink-0 whitespace-nowrap rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-muted">
@@ -281,13 +278,13 @@ export function RookWorkerPanel() {
                       onClick={() => void handleReviewCr(cr.id, 'approved')}
                       className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-positive/15 px-2 py-0.5 text-[10px] font-medium text-positive hover:bg-positive/25 transition-colors"
                     >
-                      <CheckCircle2 size={10} /> Approve
+                      <CheckCircle2 size={ICON_SIZES.xs} /> Approve
                     </button>
                     <button
                       onClick={() => void handleReviewCr(cr.id, 'rejected')}
                       className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-danger/15 px-2 py-0.5 text-[10px] font-medium text-danger hover:bg-danger/25 transition-colors"
                     >
-                      <XCircle size={10} /> Reject
+                      <XCircle size={ICON_SIZES.xs} /> Reject
                     </button>
                   </div>
                 )}
@@ -298,7 +295,7 @@ export function RookWorkerPanel() {
                       onClick={() => void handleApplyCr(cr.id)}
                       className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-accent/20 px-2 py-0.5 text-[10px] font-medium text-accent hover:bg-accent/30 transition-colors"
                     >
-                      <Layers size={10} /> Apply to workspace
+                      <Layers size={ICON_SIZES.xs} /> Apply to workspace
                     </button>
                   </div>
                 )}
@@ -312,7 +309,7 @@ export function RookWorkerPanel() {
       <section>
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
-            <Package size={13} className="shrink-0 text-accent" />
+            <Package size={ICON_SIZES.sm} className="shrink-0 text-accent" />
             <h4 className="truncate text-[11px] font-semibold uppercase tracking-wider text-ink">Deliverables</h4>
           </div>
           <span className="shrink-0 whitespace-nowrap rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-muted">
@@ -336,7 +333,11 @@ export function RookWorkerPanel() {
                     className="flex shrink-0 items-center gap-1 whitespace-nowrap text-[10px] text-faint hover:text-ink transition-colors"
                     title="Copy deliverable content"
                   >
-                    {copiedId === deliv.id ? <Check size={11} className="text-positive" /> : <Copy size={11} />}
+                    {copiedId === deliv.id ? (
+                      <Icon name="confirm" size="xs" className="text-positive" />
+                    ) : (
+                      <Icon name="copy" size="xs" />
+                    )}
                     {copiedId === deliv.id ? 'Copied' : 'Copy'}
                   </button>
                 </div>

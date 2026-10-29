@@ -191,6 +191,11 @@ export const IPC = {
 
   coworkStatus: 'cowork:status',
   coworkSearchSkills: 'cowork:skills:search',
+  coworkEnterpriseSummary: 'cowork:enterprise:summary',
+  coworkIssuePassport: 'cowork:enterprise:passport:issue',
+  coworkGetBlastRadius: 'cowork:enterprise:blast-radius',
+  coworkListProofs: 'cowork:enterprise:proofs:list',
+  coworkListRules: 'cowork:enterprise:rules:list',
 
   eventTask: 'event:task',
   eventLibrary: 'event:library',

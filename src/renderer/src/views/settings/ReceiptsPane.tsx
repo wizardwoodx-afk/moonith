@@ -9,7 +9,8 @@
  * the file as written, with nothing from the minting path held back.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, ScrollText, ShieldCheck, Stamp } from 'lucide-react'
+import { ScrollText, Stamp } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import type { ReceiptSummaryView, ReceiptVerifyView, ReceiptView } from '@shared/types'
 import { Button, Spin } from '../../components/ui'
 import { agentName } from '../../lib/localProfile'
@@ -155,10 +156,10 @@ export function ReceiptsPane() {
 
         <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
           <Button variant="primary" loading={verifying} onClick={() => void verify()}>
-            <ShieldCheck size={13} /> Verify the receipt chain
+            <Icon name="shield" size="md" /> Verify the receipt chain
           </Button>
           <Button variant="ghost" onClick={() => void load()}>
-            <RefreshCw size={13} /> Refresh
+            <Icon name="refresh" size="md" /> Refresh
           </Button>
         </div>
 

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import {
   Check,
   X,
-  Sparkles,
   GitCommit,
   Lightbulb,
   FileCode,
@@ -12,6 +11,7 @@ import {
   ExternalLink,
   MessageSquare
 } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { Button } from '../../components/ui'
 import { cn, timeAgo } from '../../lib/utils'
 import type {
@@ -109,7 +109,7 @@ export function HarmoniaFeed() {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-base font-semibold tracking-tight text-ink flex items-center gap-2">
-              <Sparkles size={18} className="text-amber-400" />
+              <Icon name="spark" size="lg" className="text-amber-400" />
               Harmonia Executive Decision Feed
             </h2>
             {pendingCount > 0 && (
@@ -161,7 +161,7 @@ export function HarmoniaFeed() {
       <div className="flex-1 overflow-y-auto space-y-4 pr-1">
         {cards.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line p-12 text-center">
-            <Sparkles size={32} className="text-muted mb-3 opacity-60" />
+            <Icon name="spark" size="xl" className="mb-3 text-muted opacity-60" />
             <h3 className="text-sm font-medium text-ink">Feed is clear</h3>
             <p className="mt-1 text-xs text-muted max-w-sm">
               No decision cards matching the filter. Background agents will publish cards here as soon as

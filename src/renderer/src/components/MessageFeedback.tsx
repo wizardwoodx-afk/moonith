@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ThumbsDown, ThumbsUp, X } from 'lucide-react'
+import { ThumbsDown, ThumbsUp } from 'lucide-react'
 import type { MessageVote } from '@shared/types'
 import { cn } from '../lib/utils'
+import { Icon } from './icons'
 
 /**
  * Thumbs on an assistant turn. The outline glyph is the resting state and the
@@ -132,7 +133,7 @@ export function MessageFeedback({
                   onClick={closeAsk}
                   className="-mr-1 -mt-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-faint hover:bg-surface-2 hover:text-ink"
                 >
-                  <X size={13} />
+                  <Icon name="close" size="md" />
                 </button>
               </div>
               <p className="mt-1 text-[11px] leading-relaxed text-muted">

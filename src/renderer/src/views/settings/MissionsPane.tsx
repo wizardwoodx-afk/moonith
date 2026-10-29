@@ -8,7 +8,8 @@
  * see what already happened, and what is parked waiting for you.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, FolderSearch, Hourglass, Play, RefreshCw, Timer, XCircle } from 'lucide-react'
+import { CheckCircle2, FolderSearch, Hourglass, Timer, XCircle } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import type { MissionStatusView, MissionStepView, MissionSummaryView } from '@shared/types'
 import { Button, Spin } from '../../components/ui'
 import { errorMessage } from '../../lib/utils'
@@ -270,7 +271,7 @@ export function MissionsPane() {
             <FolderSearch size={13} /> Scan a repository
           </Button>
           <Button variant="ghost" onClick={() => void load()}>
-            <RefreshCw size={13} /> Refresh
+            <Icon name="refresh" size="md" /> Refresh
           </Button>
         </div>
 
@@ -382,7 +383,7 @@ export function MissionsPane() {
                           loading={busyId === mission.missionId}
                           onClick={() => resume(mission.missionId)}
                         >
-                          <Play size={12} /> Resume
+                          <Icon name="play" size="md" /> Resume
                         </Button>
                       ) : null}
                       {[

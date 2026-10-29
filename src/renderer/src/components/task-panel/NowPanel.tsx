@@ -77,7 +77,7 @@ export function NowPanel({
   const metrics: { label: string; value: string | number; detail: string; icon: IconName; tab: 'crew' | 'tools' | 'files' }[] = [
     { label: 'Team', value: `${live}/${runs.length}`, detail: `${live} running`, icon: 'crew', tab: 'crew' },
     { label: 'Skills', value: capabilities.loading ? '…' : capabilitiesUnavailable ? '—' : capabilities.skills.length, detail: 'installed', icon: 'spark', tab: 'tools' },
-    { label: 'MCP', value: capabilities.loading ? '…' : capabilitiesUnavailable ? '—' : `${ready}/${capabilities.configs.length}`, detail: `${exposedTools} tools available`, icon: 'connector', tab: 'tools' },
+    { label: 'MCP', value: capabilities.loading ? '…' : capabilitiesUnavailable ? '—' : `${ready}/${capabilities.configs.length}`, detail: `${exposedTools} tools`, icon: 'connector', tab: 'tools' },
     { label: 'Files', value: task.artifacts.length, detail: 'created', icon: 'output', tab: 'files' }
   ]
 
@@ -127,6 +127,13 @@ export function NowPanel({
             </div>
           </div>
         ) : null}
+
+        {task.mode === 'cowork' ? (
+          <div className="mt-2.5 flex items-center justify-between rounded-lg border border-accent/25 bg-accent-soft/30 px-2.5 py-1 text-[10.5px]">
+            <span className="font-semibold text-accent-ink">Enterprise Cowork</span>
+            <span className="text-faint">Zero-Trust Passport & Attestation Active</span>
+          </div>
+        ) : null}
       </motion.section>
 
       <div className="mt-2.5 grid grid-cols-4 gap-1.5">
@@ -140,7 +147,7 @@ export function NowPanel({
             <Icon name={metric.icon} size="xs" className="text-faint" />
             <span className="mt-1.5 block font-mono text-[13px] font-medium text-ink">{metric.value}</span>
             <span className="mt-0.5 block text-[10px] font-medium text-muted">{metric.label}</span>
-            <span className="mt-0.5 block truncate text-[10px] text-faint">{metric.detail}</span>
+            <span className="mt-0.5 block truncate text-[10px] text-faint" title={metric.detail}>{metric.detail}</span>
           </button>
         ))}
       </div>

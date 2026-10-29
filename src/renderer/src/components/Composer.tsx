@@ -1,21 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { motion } from 'framer-motion'
-import {
-  AtSign,
-  Check,
-  ChevronDown,
-  Command,
-  Cpu,
-  Folder,
-  FolderPlus,
-  ListChecks,
-  MessageCircle,
-  Paperclip,
-  Shield,
-  CheckCheck,
-  X,
-  Zap
-} from 'lucide-react'
+import { FolderPlus, MessageCircle } from 'lucide-react'
 import { BrandMark } from './BrandMarks'
 import { agentName } from '../lib/localProfile'
 import { toast } from 'sonner'
@@ -24,6 +9,7 @@ import { useApp } from '../store'
 import { cn, errorMessage, folderName } from '../lib/utils'
 import { PERMISSION_CHOICES } from '../lib/composerChoices'
 import { IconButton, Popover, Segmented } from './ui'
+import { ICON_SIZES, Icon, type IconName } from './icons'
 import { ShimmerText } from '../motion/ShimmerText'
 import { BounceLetters } from '../motion/WorkRing'
 import { ComposerAttachments, mergeAttachments } from '../motion/ComposerAttachments'
@@ -56,11 +42,11 @@ interface ComposerProps {
   variant?: 'home' | 'task'
 }
 
-const PERMISSION_ICONS: Record<PermissionMode, typeof Shield> = {
-  plan: ListChecks,
-  manual: Shield,
-  auto: Zap,
-  skip: CheckCheck
+const PERMISSION_ICONS: Record<PermissionMode, IconName> = {
+  plan: 'plan',
+  manual: 'shield',
+  auto: 'quick',
+  skip: 'checkAll'
 }
 
 const PERMISSIONS = PERMISSION_CHOICES.map((choice) => ({
@@ -112,7 +98,6 @@ export function Composer({
     activeProvider?.models[0] ||
     ''
   const permission = PERMISSIONS.find((item) => item.value === permissionMode) ?? PERMISSIONS[0]
-  const PermissionIcon = permission.icon
 
   useEffect(() => {
     const el = textareaRef.current
@@ -164,7 +149,7 @@ export function Composer({
       kind: '@',
       label: 'Attach files',
       detail: 'Add real files to this message',
-      icon: <Paperclip size={13} />,
+      icon: <Icon name="attach" size="md" />,
       run: () => void pickAttachments()
     },
     ...folders.map((folder, index) => ({
@@ -173,7 +158,7 @@ export function Composer({
       label: folderName(folder),
       detail: folder,
       keywords: 'folder workspace context',
-      icon: <Folder size={13} />,
+      icon: <Icon name="folder" size="md" />,
       insert: `${folder} `
     })),
     ...attachments.map((file) => ({
@@ -182,14 +167,14 @@ export function Composer({
       label: file.name,
       detail: 'Attached to this message',
       keywords: 'attachment file context',
-      icon: <AtSign size={13} />,
+      icon: <Icon name="mention" size="md" />,
       insert: `${file.name} `
     })),
     {
       id: 'command-folder',
       kind: '/',
       label: 'Add a working folder',
-      icon: <FolderPlus size={13} />,
+      icon: <FolderPlus size={ICON_SIZES.md} />,
       run: () => void addFolder()
     },
     ...PERMISSIONS.map((option) => ({
@@ -198,7 +183,7 @@ export function Composer({
       label: `Permissions: ${option.label}`,
       detail: option.description,
       keywords: 'permission approval mode',
-      icon: <Command size={13} />,
+      icon: <Icon name="command" size="md" />,
       run: () => onPermissionChange(option.value)
     })),
     ...providers.flatMap((provider) =>
@@ -208,7 +193,7 @@ export function Composer({
         label: item,
         detail: `Use ${provider.name} for this task`,
         keywords: `model provider ${provider.name}`,
-        icon: <Cpu size={13} />,
+        icon: <Icon name="model" size="md" />,
         run: () => onModelChange(provider.id, item)
       }))
     ),
@@ -218,7 +203,7 @@ export function Composer({
           kind: '/' as const,
           label: `Switch to ${value === 'chat' ? 'Chat' : 'Cowork'}`,
           keywords: 'mode conversation work',
-          icon: <MessageCircle size={13} />,
+          icon: <MessageCircle size={ICON_SIZES.md} />,
           run: () => onModeChange(value)
         }))
       : [])
@@ -246,7 +231,19 @@ export function Composer({
             </>
           ) : null}
           {commands.menu}
-          <textarea
+          <div className="flex items-start gap-2.5 px-4 pt-3">
+            <span
+              aria-hidden
+              className={cn(
+                'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border',
+                mode === 'cowork'
+                  ? 'border-accent/45 bg-accent-soft text-accent-ink'
+                  : 'border-line bg-surface-2 text-muted'
+              )}
+            >
+              <BrandMark size={12} />
+            </span>
+            <textarea
           ref={textareaRef}
           value={text}
           onChange={commands.onChange}
@@ -261,12 +258,13 @@ export function Composer({
             (running
               ? 'Add instructions to steer this task…'
               : mode === 'cowork'
-                ? 'Describe an outcome. SelfImpulse will plan it and do the work…'
-                : 'Ask a question or think something through…')
+                ? 'Describe an outcome…'
+                : 'Ask anything…')
           }
           rows={1}
-          className="scroll-thin block w-full resize-none overflow-y-auto bg-transparent px-4.5 pt-4 pb-1 text-[14.5px] leading-relaxed text-ink outline-none placeholder:text-faint"
+          className="scroll-thin block w-full min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-0 pt-0.5 pb-1 text-[14.5px] leading-relaxed text-ink outline-none placeholder:text-faint"
         />
+          </div>
 
         <ComposerAttachments files={attachments} onChange={onAttachmentsChange} />
 
@@ -310,7 +308,7 @@ export function Composer({
             aria-label="Attach files"
             className="h-7 w-7"
           >
-            <Paperclip size={14} />
+            <Icon name="attach" size="md" />
           </IconButton>
 
           <Popover
@@ -322,7 +320,7 @@ export function Composer({
                 className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11.5px] font-medium text-muted transition-colors hover:bg-surface-2 hover:text-ink"
                 title="Working folders"
               >
-                <Folder size={13} />
+                <Icon name="folder" size="sm" />
                 <span className="max-w-[110px] truncate">
                   {picking
                     ? 'Choosing…'
@@ -354,7 +352,7 @@ export function Composer({
                         className="group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-2"
                         title={folder}
                       >
-                        <Folder size={13} className="shrink-0 text-accent" />
+                        <Icon name="folder" size="md" className="text-accent" />
                         <span className="min-w-0 flex-1 truncate text-[12px]">{folder}</span>
                         {onRemoveFolder ? (
                           <button
@@ -362,7 +360,7 @@ export function Composer({
                             className="rounded p-0.5 text-faint opacity-0 group-hover:opacity-100 hover:text-danger"
                             aria-label={`Remove ${folder}`}
                           >
-                            <X size={12} />
+                            <Icon name="close" size="sm" />
                           </button>
                         ) : null}
                       </div>
@@ -376,7 +374,7 @@ export function Composer({
                   }}
                   className="menu-item mt-1 border border-line border-dashed text-[12px] text-muted"
                 >
-                  <FolderPlus size={13} />
+                  <FolderPlus size={ICON_SIZES.md} />
                   Add a folder
                 </button>
               </div>
@@ -392,7 +390,7 @@ export function Composer({
                 className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11.5px] font-medium text-muted transition-colors hover:bg-surface-2 hover:text-ink"
                 title={`Permissions: ${permission.label}`}
               >
-                <PermissionIcon size={13} />
+                <Icon name={permission.icon} size="sm" />
                 <span className="hidden sm:inline">{permission.label}</span>
               </button>
             )}
@@ -403,7 +401,6 @@ export function Composer({
                   Permissions
                 </div>
                 {PERMISSIONS.map((option) => {
-                  const Icon = option.icon
                   return (
                     <button
                       key={option.value}
@@ -413,12 +410,12 @@ export function Composer({
                       }}
                       className="menu-item items-start py-2"
                     >
-                      <Icon size={14} className="mt-0.5 shrink-0" />
+                      <Icon name={option.icon} size="md" className="mt-0.5" />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5 text-[12.5px] font-medium">
                           {option.label}
                           {permissionMode === option.value ? (
-                            <Check size={12} className="text-accent" />
+                            <Icon name="confirm" size="sm" className="text-accent" />
                           ) : null}
                         </span>
                         <span className="mt-0.5 block text-[11px] leading-relaxed text-muted">
@@ -442,9 +439,9 @@ export function Composer({
                   className="flex h-7 max-w-[190px] items-center gap-1.5 rounded-lg px-2 text-[11.5px] font-medium text-muted transition-colors hover:bg-surface-2 hover:text-ink"
                   title="Model"
                 >
-                  <Cpu size={13} />
+                  <Icon name="model" size="sm" />
                   <span className="truncate">{activeModel || 'Choose model'}</span>
-                  <ChevronDown size={11} className="shrink-0 text-faint" />
+                  <Icon name="chevronDown" size="xs" className="text-faint" />
                 </button>
               )}
             >
@@ -476,7 +473,7 @@ export function Composer({
                               data-active={selected}
                             >
                               <span className="min-w-0 flex-1 truncate text-[12px]">{item}</span>
-                              {selected ? <Check size={12} className="text-accent" /> : null}
+                              {selected ? <Icon name="confirm" size="sm" className="text-accent" /> : null}
                             </button>
                           )
                         })}
@@ -491,7 +488,7 @@ export function Composer({
                     }}
                     className="menu-item text-[12px] text-muted"
                   >
-                    <Cpu size={13} />
+                    <Icon name="model" size="md" />
                     Manage models…
                   </button>
                 </div>

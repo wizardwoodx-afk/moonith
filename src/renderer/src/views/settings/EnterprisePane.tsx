@@ -1,12 +1,6 @@
 import { useEffect, useState } from 'react'
-import {
-  AlertTriangle,
-  ArrowRight,
-  Check,
-  LockKeyhole,
-  ScanEye,
-  ScrollText
-} from 'lucide-react'
+import { ScanEye, ScrollText } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import type { PublicSettings } from '@shared/types'
 import {
   AGENT_ROLE_LABELS,
@@ -173,7 +167,7 @@ export function EnterprisePane({ settings }: { settings: PublicSettings }) {
                         active ? 'border-accent bg-accent text-on-ink' : 'border-line-strong'
                       )}
                     >
-                      {active ? <Check size={10} /> : null}
+                      {active ? <Icon name="confirm" size="xs" /> : null}
                     </span>
                     <span className="text-[12.5px] font-semibold text-ink">
                       {AGENT_ROLE_LABELS[role]}
@@ -190,7 +184,7 @@ export function EnterprisePane({ settings }: { settings: PublicSettings }) {
             })}
           </div>
           <div className="flex items-start gap-2.5 rounded-lg border border-line bg-canvas/45 px-3 py-2.5">
-            <LockKeyhole size={13} className="mt-0.5 shrink-0 text-accent" />
+            <Icon name="lock" size="xs" className="mt-0.5 text-accent" />
             <p className="text-[10.5px] leading-relaxed text-muted">
               Change a task&apos;s role from its task menu. These are local authorization roles —
               not hosted SSO or directory sync.
@@ -345,7 +339,7 @@ export function EnterprisePane({ settings }: { settings: PublicSettings }) {
           </div>
           {governance.dlp.mode !== 'off' && governance.dlp.categories.length === 0 ? (
             <div className="flex items-start gap-2 text-[10.5px] text-warn">
-              <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+              <Icon name="caution" size="xs" className="mt-0.5" />
               DLP is enabled with no detectors selected, so nothing will match.
             </div>
           ) : null}
@@ -422,7 +416,7 @@ export function EnterprisePane({ settings }: { settings: PublicSettings }) {
             </p>
           </div>
           <Button variant="secondary" onClick={() => openSettings('audit')}>
-            Open audit log <ArrowRight size={13} />
+            Open audit log <Icon name="arrowRight" size="md" />
           </Button>
         </div>
       </SettingsSection>

@@ -1,24 +1,9 @@
 import { agentName } from '../../lib/localProfile'
 import { useEffect, useRef, useState, type ClipboardEvent } from 'react'
 import { motion } from 'framer-motion'
-import {
-  AlertCircle,
-  AtSign,
-  Camera,
-  Check,
-  CheckCheck,
-  ChevronDown,
-  Command,
-  Cpu,
-  Folder,
-  ListChecks,
-  Paperclip,
-  Plus,
-  ShieldCheck,
-  Sparkles,
-  X,
-  Zap
-} from 'lucide-react'
+import { Check, CheckCheck, ListChecks, ShieldCheck, Zap } from 'lucide-react'
+import { Icon } from '../../components/icons'
+import { BrandMark } from '../../components/BrandMarks'
 import { toast } from 'sonner'
 import type { AttachmentRef, PermissionMode, TaskMode } from '@shared/types'
 import { useApp } from '../../store'
@@ -75,7 +60,7 @@ export function CaptainComposer({
   onChooseWorkspace,
   onClearWorkspace,
   onSubmit,
-  placeholder = `Ask ${agentName()}…`,
+  placeholder = mode === 'cowork' ? 'Describe an outcome…' : 'Ask anything…',
   busy = false,
   running = false,
   autoFocus = false,
@@ -200,7 +185,7 @@ export function CaptainComposer({
       kind: '@',
       label: 'Attach files',
       detail: 'Add real files to this message',
-      icon: <Paperclip size={13} />,
+      icon: <Icon name="attach" size="md" />,
       run: () => void pickFiles()
     },
     ...(workspace
@@ -210,7 +195,7 @@ export function CaptainComposer({
           label: folderName(workspace),
           detail: workspace,
           keywords: 'workspace folder context',
-          icon: <Folder size={13} />,
+          icon: <Icon name="folder" size="md" />,
           insert: `${workspace} `
         }]
       : []),
@@ -220,7 +205,7 @@ export function CaptainComposer({
       label: file.name,
       detail: 'Attached to this message',
       keywords: 'attachment file context',
-      icon: <AtSign size={13} />,
+      icon: <Icon name="mention" size="md" />,
       insert: `${file.name} `
     })),
     ...(onChooseWorkspace
@@ -228,7 +213,7 @@ export function CaptainComposer({
           id: 'captain-command-workspace',
           kind: '/' as const,
           label: workspace ? 'Change workspace' : 'Choose a workspace',
-          icon: <Folder size={13} />,
+          icon: <Icon name="folder" size="md" />,
           run: () => void onChooseWorkspace()
         }]
       : []),
@@ -238,7 +223,7 @@ export function CaptainComposer({
       label: 'Run an autonomous job',
       detail: 'Long-running work that keeps going without step-by-step approvals',
       keywords: 'autonomous job agent build',
-      icon: <Cpu size={13} />,
+      icon: <Icon name="model" size="md" />,
       insert: 'Autonomous job: '
     },
     {
@@ -247,7 +232,7 @@ export function CaptainComposer({
       label: `Permissions: ${fullAccess.label}`,
       detail: fullAccess.blurb,
       keywords: 'permission approval mode',
-      icon: <Zap size={13} />,
+      icon: <Icon name="quick" size="md" />,
       run: () => {
         void window.knight.rookSetPermission('yolo')
         onPermissionChange('skip')
@@ -259,7 +244,7 @@ export function CaptainComposer({
       label: 'Research a topic',
       detail: 'Gather sources and write a brief with links',
       keywords: 'research report sources brief',
-      icon: <Sparkles size={13} />,
+      icon: <Icon name="spark" size="md" />,
       insert: 'Research: in-depth report on '
     },
     {
@@ -268,7 +253,7 @@ export function CaptainComposer({
       label: 'File a change request',
       detail: 'Make the changes and leave them ready for your review',
       keywords: 'cr git pull request changerequest gitops',
-      icon: <Command size={13} />,
+      icon: <Icon name="command" size="md" />,
       insert: 'Change request for '
     },
     {
@@ -277,7 +262,7 @@ export function CaptainComposer({
       label: 'Daily brief',
       detail: 'Generate your proactive morning brief with triage items & approvals',
       keywords: 'brief morning daily summary executive promey',
-      icon: <Sparkles size={13} />,
+      icon: <Icon name="spark" size="md" />,
       insert: 'Generate morning brief'
     },
     {
@@ -286,7 +271,7 @@ export function CaptainComposer({
       label: 'Triage inbox & stream',
       detail: 'Sort priority tasks and surface items requiring your decision',
       keywords: 'triage inbox stream priority alerts promey',
-      icon: <Command size={13} />,
+      icon: <Icon name="command" size="md" />,
       insert: 'Triage inbox and prioritize tasks'
     },
     {
@@ -295,7 +280,7 @@ export function CaptainComposer({
       label: 'Duet mode',
       detail: 'Proactive executive assistant co-steering and smart approvals',
       keywords: 'duet proactive copilot executive promey',
-      icon: <Command size={13} />,
+      icon: <Icon name="command" size="md" />,
       insert: 'Start duet session with Promey'
     },
     ...PERMISSION_CHOICES.map((choice) => ({
@@ -304,7 +289,7 @@ export function CaptainComposer({
       label: `Permissions: ${choice.label}`,
       detail: choice.blurb,
       keywords: 'permission approval mode',
-      icon: <Command size={13} />,
+      icon: <Icon name="command" size="md" />,
       run: () => onPermissionChange(choice.value)
     })),
     ...providers.flatMap((provider) =>
@@ -314,7 +299,7 @@ export function CaptainComposer({
         label: item,
         detail: `Use ${provider.name} for this task`,
         keywords: `model provider ${provider.name}`,
-        icon: <Cpu size={13} />,
+        icon: <Icon name="model" size="md" />,
         run: () => onModelChange({
           providerId: provider.id,
           providerName: provider.name,
@@ -336,12 +321,60 @@ export function CaptainComposer({
       onFiles={(incoming) => onAttachmentsChange(mergeAttachments(attachments, incoming))}
     >
       <div className={cn('w-full', className)}>
+        {onModeChange ? (
+          /* The mode is the first decision, not a chip buried in the toolbar:
+             Chat reads and answers, Cowork changes files. */
+          <div className="mb-1.5 flex items-center gap-1 px-1" role="tablist" aria-label="What this task will do">
+            {(['chat', 'cowork'] as TaskMode[]).map((value) => {
+              const active = mode === value
+              return (
+                <button
+                  key={value}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => {
+                    onModeChange(value)
+                    setCoworkNoFolder(value === 'cowork' && !workspace)
+                  }}
+                  className={cn(
+                    'flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium transition-colors',
+                    active
+                      ? value === 'cowork'
+                        ? 'border-accent/45 bg-accent-soft text-accent-ink'
+                        : 'border-line-strong bg-surface-3 text-ink'
+                      : 'border-transparent text-faint hover:text-muted'
+                  )}
+                >
+                  {value === 'cowork' ? <BrandMark size={11} /> : <Icon name="spark" size="xs" />}
+                  {value === 'chat' ? 'Chat' : 'Cowork'}
+                </button>
+              )
+            })}
+            <span className="ml-auto pr-1 text-[10px] text-faint">
+              {mode === 'cowork' ? 'changes files' : 'reads and answers'}
+            </span>
+          </div>
+        ) : null}
         <motion.div
           layout
           className="composer-shell relative px-3 pt-2.5 pb-2"
         >
           {commands.menu}
-          <textarea
+          <div className="flex items-start gap-2.5">
+            {/* The head, not a name in the placeholder: Cowork wears the accent
+                because it is the mode that touches files. */}
+            <span
+              aria-hidden
+              className={cn(
+                'mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border',
+                mode === 'cowork'
+                  ? 'border-accent/45 bg-accent-soft text-accent-ink'
+                  : 'border-line bg-surface-2 text-muted'
+              )}
+            >
+              <BrandMark size={12} />
+            </span>
+            <textarea
           ref={textareaRef}
           aria-label={`Message ${agentName()}`}
           value={draft}
@@ -359,8 +392,9 @@ export function CaptainComposer({
           aria-activedescendant={commands.activeId}
           rows={2}
           placeholder={placeholder}
-          className="scroll-thin block min-h-[58px] w-full resize-none bg-transparent px-0.5 py-1 text-[14px] leading-[1.6] text-ink outline-none placeholder:text-faint"
+          className="scroll-thin block min-h-[58px] w-full min-w-0 flex-1 resize-none bg-transparent px-0.5 py-1 text-[14px] leading-[1.6] text-ink outline-none placeholder:text-faint"
         />
+          </div>
 
         <ComposerAttachments files={attachments} onChange={onAttachmentsChange} compact />
 
@@ -376,7 +410,7 @@ export function CaptainComposer({
                 aria-label="Attach files, capture the screen or choose a working folder"
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line text-muted transition-colors hover:border-line-strong hover:text-ink"
               >
-                <Plus size={14} />
+                <Icon name="add" size="md" />
               </button>
             )}
           >
@@ -392,7 +426,7 @@ export function CaptainComposer({
                     void pickFiles()
                   }}
                 >
-                  <Paperclip size={13} />
+                  <Icon name="attach" size="md" />
                   <span className="min-w-0 flex-1 truncate">Attach files</span>
                 </button>
                 <button
@@ -404,7 +438,7 @@ export function CaptainComposer({
                     void captureScreen()
                   }}
                 >
-                  <Camera size={13} />
+                  <Icon name="capture" size="md" />
                   <span className="min-w-0 flex-1 truncate">
                     {capturing ? 'Capturing screen…' : 'Capture screen'}
                   </span>
@@ -419,7 +453,7 @@ export function CaptainComposer({
                     void onChooseWorkspace?.()
                   }}
                 >
-                  <Folder size={13} />
+                  <Icon name="folder" size="md" />
                   <span className="min-w-0 flex-1 truncate">
                     {workspace ? 'Change workspace…' : 'Choose workspace (optional)'}
                   </span>
@@ -432,7 +466,7 @@ export function CaptainComposer({
                       onClearWorkspace?.()
                     }}
                   >
-                    <X size={13} />
+                    <Icon name="close" size="md" />
                     Clear workspace
                   </button>
                 ) : null}
@@ -452,7 +486,7 @@ export function CaptainComposer({
               >
                 <PermissionIcon size={13} />
                 <span>{permission.label}</span>
-                <ChevronDown size={10} className="text-faint" />
+                <Icon name="chevronDown" size="md" className="text-faint" />
               </button>
             )}
           >
@@ -492,30 +526,6 @@ export function CaptainComposer({
             )}
           </Popover>
 
-          {onModeChange ? (
-            <div
-              className="flex h-8 items-center gap-0.5 rounded-md border border-line p-0.5"
-              title="Chat reads and answers. Cowork changes files."
-            >
-              {(['chat', 'cowork'] as TaskMode[]).map((value) => (
-                <button
-                  key={value}
-                  onClick={() => {
-                    onModeChange(value)
-                    setCoworkNoFolder(value === 'cowork' && !workspace)
-                  }}
-                  aria-pressed={mode === value}
-                  className={
-                    'rounded-[5px] px-2 text-[11.5px] font-medium transition-colors ' +
-                    (mode === value ? 'bg-surface-3 text-ink' : 'text-muted hover:text-ink')
-                  }
-                >
-                  {value === 'chat' ? 'Chat' : 'Cowork'}
-                </button>
-              ))}
-            </div>
-          ) : null}
-
           <div className="ml-auto flex min-w-0 items-center gap-1.5">
             <Popover
               side="top"
@@ -527,9 +537,9 @@ export function CaptainComposer({
                   title="Model"
                   className="flex h-8 max-w-[220px] items-center gap-1.5 rounded-md px-2 text-[12px] font-medium text-muted transition-colors hover:bg-surface-3 hover:text-ink"
                 >
-                  <Sparkles size={12} className="shrink-0" />
+                  <Icon name="spark" size="md" />
                   <span className="min-w-0 truncate" title={model.model || 'Choose a model'}>{model.model || 'Choose a model'}</span>
-                  <ChevronDown size={10} className="shrink-0 text-faint" />
+                  <Icon name="chevronDown" size="md" className="text-faint" />
                 </button>
               )}
             >
@@ -573,7 +583,7 @@ export function CaptainComposer({
                               data-active={selected}
                             >
                               <span className="min-w-0 flex-1 truncate text-[12px]" title={item}>{item}</span>
-                              {selected ? <Check size={11} className="text-accent" /> : null}
+                              {selected ? <Icon name="confirm" size="md" className="text-accent" /> : null}
                             </button>
                           )
                         })}
@@ -588,7 +598,7 @@ export function CaptainComposer({
                     }}
                     className="menu-item text-[12px] text-muted"
                   >
-                    <Cpu size={13} />
+                    <Icon name="model" size="md" />
                     Manage models…
                   </button>
                 </div>
@@ -608,7 +618,7 @@ export function CaptainComposer({
 
         {coworkNoFolder && mode === 'cowork' && !workspace ? (
           <div className="mx-3 mb-2 flex items-start gap-2 rounded-lg border border-warn/25 bg-warn/5 px-2.5 py-1.5">
-            <AlertCircle size={11} className="mt-0.5 shrink-0 text-warn" />
+            <Icon name="alert" size="xs" className="mt-0.5 text-warn" />
             <p className="min-w-0 flex-1 text-[10.5px] leading-relaxed text-warn">
               Pick a folder before Cowork writes files.
             </p>
@@ -617,7 +627,7 @@ export function CaptainComposer({
               aria-label="Dismiss Cowork folder notice"
               className="shrink-0 text-faint transition-colors hover:text-ink"
             >
-              <X size={11} />
+              <Icon name="close" size="xs" />
             </button>
           </div>
         ) : null}
@@ -637,7 +647,7 @@ export function CaptainComposer({
           className="flex min-w-0 items-center gap-1.5 transition-colors hover:text-muted"
           title={workspace ?? 'Choose a workspace'}
         >
-          <Folder size={12} />
+          <Icon name="folder" size="xs" />
           <span className="min-w-0 truncate">{workspace ? folderName(workspace) : 'No workspace selected'}</span>
         </button>
         {providers.length ? (

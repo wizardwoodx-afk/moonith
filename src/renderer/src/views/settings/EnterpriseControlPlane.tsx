@@ -1,18 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import {
-  Activity,
-  Archive,
-  CheckCircle2,
-  Clock3,
-  KeyRound,
-  LockKeyhole,
-  Plus,
-  RefreshCw,
-  RotateCcw,
-  ShieldX,
-  Users
-} from 'lucide-react'
+import { Activity, Archive, CheckCircle2, Clock3, RotateCcw, ShieldX } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import {
   ENTERPRISE_ACTIONS,
   ENTERPRISE_RESOURCE_KINDS,
@@ -318,14 +307,14 @@ export function EnterpriseControlPlane() {
             className="text-faint transition-colors hover:text-ink"
             title="Refresh control plane"
           >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="md" className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       }
     >
       <div className="space-y-4">
         <div className="flex items-start gap-2.5 rounded-lg border border-line bg-canvas/45 px-3 py-2.5">
-          <LockKeyhole size={13} className="mt-0.5 shrink-0 text-accent" />
+          <Icon name="lock" size="xs" className="mt-0.5 text-accent" />
           <p className="text-[10px] leading-relaxed text-muted">
             Default deny; a deny rule always overrides a grant. Local product policy only — not
             hosted SSO or hard tenant isolation.
@@ -372,7 +361,7 @@ export function EnterpriseControlPlane() {
             {tab === 'Overview' ? (
               <div className="space-y-5">
                 <form onSubmit={testAuthorization} className="rounded-xl border border-line bg-panel-2/45 p-3">
-                  <p className="mb-3 flex items-center gap-2 text-[11.5px] font-medium text-ink"><KeyRound size={13} /> Access test</p>
+                  <p className="mb-3 flex items-center gap-2 text-[11.5px] font-medium text-ink"><Icon name="key" size="sm" /> Access test</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Principal">
                       <select name="principalId" required className={inputClass}>
@@ -410,7 +399,7 @@ export function EnterpriseControlPlane() {
                   ))}
                 </div>
                 <details className="rounded-xl border border-line bg-canvas/35 p-3">
-                  <summary className="cursor-pointer text-[11px] font-medium text-ink"><Plus size={12} className="mr-1 inline" /> Create namespace</summary>
+                  <summary className="cursor-pointer text-[11px] font-medium text-ink"><Icon name="add" size="sm" className="mr-1 inline" /> Create namespace</summary>
                   <form onSubmit={submitNamespace} className="mt-3 grid gap-3 sm:grid-cols-2">
                     <Field label="Namespace id"><input name="id" required pattern="[A-Za-z0-9][A-Za-z0-9:._%@-]*" className={inputClass} placeholder="research" /></Field>
                     <Field label="Display name"><input name="name" required className={inputClass} placeholder="Research workspace" /></Field>
@@ -419,7 +408,7 @@ export function EnterpriseControlPlane() {
                   </form>
                 </details>
                 <div>
-                  <p className="mb-2 flex items-center gap-2 text-[11px] font-medium text-ink"><Users size={13} /> Human and per-agent identities</p>
+                  <p className="mb-2 flex items-center gap-2 text-[11px] font-medium text-ink"><Icon name="users" size="sm" /> Human and per-agent identities</p>
                   <div className="space-y-2">
                     {snapshot.state.principals.map((principal) => (
                       <EntityCard key={principal.id} title={principalName(principal.name)} subtitle={`${principal.kind} · ${principal.id}`} lifecycle={principal.lifecycle} detail={principal.agentRef ? `Team ${principal.agentRef.teamId} · seat ${principal.agentRef.seatId}` : 'Local human owner and recovery identity.'} busy={busy} onLifecycle={(next) => lifecycle('principal', principal.id, next)} />
@@ -444,7 +433,7 @@ export function EnterpriseControlPlane() {
                   <div className="space-y-2">{snapshot.state.roles.map((role) => <EntityCard key={role.id} title={role.name} subtitle={`${role.id} · ${role.namespaceId}`} lifecycle={role.lifecycle} detail={`${role.actions.join(', ') || 'No actions'} · ${role.resourceKinds.join(', ') || 'no resource kinds'}`} busy={busy} onLifecycle={(next) => lifecycle('role', role.id, next)} />)}</div>
                 </div>
                 <details className="rounded-xl border border-line bg-canvas/35 p-3">
-                  <summary className="cursor-pointer text-[11px] font-medium text-ink"><Plus size={12} className="mr-1 inline" /> Define or update a Role</summary>
+                  <summary className="cursor-pointer text-[11px] font-medium text-ink"><Icon name="add" size="sm" className="mr-1 inline" /> Define or update a Role</summary>
                   <form onSubmit={submitRole} className="mt-3 space-y-3">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <Field label="Role id"><input name="id" required className={inputClass} placeholder="role:read-only" /></Field>
@@ -462,7 +451,7 @@ export function EnterpriseControlPlane() {
                   <div className="space-y-2">{snapshot.state.bindings.map((binding) => <EntityCard key={binding.id} title={binding.id} subtitle={`${binding.principalId} → ${binding.roleId}`} lifecycle={binding.lifecycle} detail={`${binding.resource.kind}:${binding.resource.id ?? 'any'} · ${binding.resource.namespaceId}`} busy={busy} onLifecycle={(next) => lifecycle('binding', binding.id, next)} />)}</div>
                 </div>
                 <details className="rounded-xl border border-line bg-canvas/35 p-3">
-                  <summary className="cursor-pointer text-[11px] font-medium text-ink"><Plus size={12} className="mr-1 inline" /> Create binding</summary>
+                  <summary className="cursor-pointer text-[11px] font-medium text-ink"><Icon name="add" size="sm" className="mr-1 inline" /> Create binding</summary>
                   <form onSubmit={submitBinding} className="mt-3 grid gap-3 sm:grid-cols-2">
                     <Field label="Binding id"><input name="id" required className={inputClass} placeholder="binding:researcher" /></Field>
                     <Field label="Principal"><select name="principalId" className={inputClass}>{snapshot.state.principals.map((principal) => <option key={principal.id} value={principal.id}>{principal.name}</option>)}</select></Field>
@@ -480,7 +469,7 @@ export function EnterpriseControlPlane() {
                 <p className="text-[10.5px] leading-relaxed text-muted">Deny rules are checked before every grant. Disable one for a temporary exception; archiving keeps it in history.</p>
                 <div className="space-y-2">{snapshot.state.restrictions.length === 0 ? <p className="rounded-lg border border-dashed border-line px-3 py-5 text-center text-[10.5px] text-faint">No deny rules. Default deny still applies wherever no grant exists.</p> : snapshot.state.restrictions.map((restriction) => <EntityCard key={restriction.id} title={restriction.name} subtitle={`${restriction.id} · ${restriction.principalId ?? 'all principals'}`} lifecycle={restriction.lifecycle} detail={`${restriction.actions.join(', ')} · ${restriction.resource.kind}:${restriction.resource.id ?? 'any'} · ${restriction.resource.namespaceId}`} busy={busy} onLifecycle={(next) => lifecycle('restriction', restriction.id, next)} />)}</div>
                 <details className="rounded-xl border border-line bg-canvas/35 p-3">
-                  <summary className="cursor-pointer text-[11px] font-medium text-ink"><Plus size={12} className="mr-1 inline" /> Create deny rule</summary>
+                  <summary className="cursor-pointer text-[11px] font-medium text-ink"><Icon name="add" size="sm" className="mr-1 inline" /> Create deny rule</summary>
                   <form onSubmit={submitRestriction} className="mt-3 space-y-3">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <Field label="Deny rule id"><input name="id" required className={inputClass} placeholder="restriction:no-external-write" /></Field>

@@ -773,6 +773,21 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.coworkSearchSkills, (_event, query: string) =>
     coworkEngineBridge.getRegistry().searchSkills(query)
   )
+  ipcMain.handle(IPC.coworkEnterpriseSummary, () =>
+    coworkEngineBridge.getEnterprise().getSummary()
+  )
+  ipcMain.handle(IPC.coworkIssuePassport, (_event, principal: string) =>
+    coworkEngineBridge.getEnterprise().passport.issuePassport(principal)
+  )
+  ipcMain.handle(IPC.coworkGetBlastRadius, () =>
+    coworkEngineBridge.getEnterprise().blastRadius.getBudgetStatus()
+  )
+  ipcMain.handle(IPC.coworkListProofs, () =>
+    coworkEngineBridge.getEnterprise().verifier.listProofs()
+  )
+  ipcMain.handle(IPC.coworkListRules, () =>
+    coworkEngineBridge.getEnterprise().evolution.listAllRules()
+  )
 
   registerBackendIpc()
   registerAuditIpc()

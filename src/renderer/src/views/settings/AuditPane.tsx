@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import {
-  AlertTriangle,
-  Download,
-  RefreshCw,
-  ScrollText,
-  Search,
-  ShieldCheck
-} from 'lucide-react'
+import { Download, ScrollText } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import type {
   AuditEventView,
   AuditExportResult,
@@ -44,9 +38,9 @@ function OutcomeBanner({ outcome }: { outcome: Outcome }) {
       )}
     >
       {outcome.tone === 'positive' ? (
-        <ShieldCheck size={14} className="mt-0.5 shrink-0 text-positive" />
+        <Icon name="shield" size="sm" className="mt-0.5 text-positive" />
       ) : (
-        <AlertTriangle size={14} className="mt-0.5 shrink-0 text-danger" />
+        <Icon name="caution" size="sm" className="mt-0.5 text-danger" />
       )}
       <p
         className={cn(
@@ -276,7 +270,7 @@ export function AuditPane() {
               void loadEvents(query, eventOutcome)
             }}
           >
-            <RefreshCw size={12} /> Refresh
+            <Icon name="refresh" size="md" /> Refresh
           </Button>
         }
       >
@@ -341,7 +335,7 @@ export function AuditPane() {
               <Download size={13} /> Export signed JSONL
             </Button>
             <Button variant="secondary" loading={verifying} onClick={() => void runVerify()}>
-              <ShieldCheck size={13} /> Verify an export
+              <Icon name="shield" size="md" /> Verify an export
             </Button>
           </div>
           {outcome ? <OutcomeBanner outcome={outcome} /> : null}
@@ -361,7 +355,7 @@ export function AuditPane() {
             }}
           >
             <div className="relative min-w-0 flex-1">
-              <Search size={12} className="absolute top-1/2 left-3 -translate-y-1/2 text-faint" />
+              <Icon name="search" size="sm" className="absolute top-1/2 left-3 -translate-y-1/2 text-faint" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}

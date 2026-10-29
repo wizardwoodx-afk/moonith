@@ -10,6 +10,7 @@ import { BrowserLens } from './perceptionMatrix'
 import { SurfaceStreamer } from './surfaceProtocol'
 import { PolicyArbiter, QuarantineGate } from './policyArbiter'
 import { LobeSkillRegistry } from './lobeSkillRegistry'
+import { CoworkEnterpriseSubsystem } from './enterprise'
 
 export interface CoworkKernelConfig {
   sessionId: string;
@@ -28,6 +29,7 @@ export class CoworkKernel {
   public readonly policy: PolicyArbiter;
   public readonly quarantine: QuarantineGate;
   public readonly registry: LobeSkillRegistry;
+  public readonly enterprise: CoworkEnterpriseSubsystem;
 
   constructor(config: Partial<CoworkKernelConfig> = {}) {
     this.config = {
@@ -42,6 +44,7 @@ export class CoworkKernel {
     this.policy = new PolicyArbiter();
     this.quarantine = new QuarantineGate(this.surface);
     this.registry = new LobeSkillRegistry();
+    this.enterprise = new CoworkEnterpriseSubsystem();
   }
 
   public getSessionId(): string {
@@ -76,6 +79,22 @@ export class CoworkKernel {
         error: 'Execution halted by DivergenceGuard: Redundant cycle pattern detected.',
         elapsedMs: Date.now() - startTime,
         divergenceScore: divergenceRisk
+      };
+      this.ledger.record(result);
+      return result;
+    }
+
+    const blastCheck = this.enterprise.blastRadius.recordConsumption(100, 0.001, modality === 'tool' ? 1 : 0);
+    if (!blastCheck.allowed) {
+      this.status = 'quarantined';
+      const result: CoworkStepResult = {
+        stepIndex: this.stepCount,
+        modality,
+        actionName,
+        inputPayload: payload,
+        error: `Quarantined by BlastRadiusArbiter: ${blastCheck.reason}`,
+        elapsedMs: Date.now() - startTime,
+        divergenceScore: 1.0
       };
       this.ledger.record(result);
       return result;
@@ -170,6 +189,7 @@ export class CoworkKernel {
         divergenceScore: divergenceRisk
       };
 
+      this.enterprise.verifier.attestToolExecution(actionName, payload, outputPayload || {});
       this.ledger.record(result);
       this.status = 'idle';
       return result;

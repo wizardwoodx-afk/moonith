@@ -5,12 +5,8 @@ import {
   FlaskConical,
   Gauge,
   MemoryStick,
-  RefreshCw,
   ScrollText,
-  ShieldCheck,
-  Sparkles,
   XCircle,
-  Zap,
   Cpu,
   Layers,
   Activity,
@@ -18,6 +14,7 @@ import {
   ShieldAlert,
   Terminal
 } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import type { RsiralsSnapshot } from '@shared/rsirals'
 import type { KnowledgeProposalView } from '@shared/types'
 import { errorMessage } from '../../lib/utils'
@@ -111,13 +108,13 @@ export function LearningPane() {
             title="Refresh learning evidence"
             className="text-faint hover:text-ink"
           >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="md" className={loading ? 'animate-spin' : ''} />
           </button>
         }
         >
         <div className="space-y-5">
           <div className="flex items-start gap-2.5 rounded-lg border border-line bg-canvas/45 px-3 py-2.5">
-            <ShieldCheck size={14} className="mt-0.5 shrink-0 text-accent" />
+            <Icon name="shield" size="xs" className="mt-0.5 text-accent" />
             <p className="text-[10.5px] leading-relaxed text-muted">
               Learning here never trains model weights, rewrites SelfImpulse source, or bypasses
               your approval. The numbers below are read from this device.
@@ -145,7 +142,7 @@ export function LearningPane() {
                   <div className="rounded-xl border border-line bg-canvas/45 p-3.5">
                     <div className="flex items-center justify-between border-b border-line pb-2.5">
                       <div className="flex items-center gap-2">
-                        <Zap size={15} className="text-amber-500" />
+                        <Icon name="quick" size="md" className="text-amber-500" />
                         <h4 className="text-[12px] font-semibold text-ink">1. Per-action learning</h4>
                       </div>
                     </div>
@@ -325,7 +322,7 @@ export function LearningPane() {
             title="Refresh knowledge proposals"
             className="text-faint hover:text-ink"
           >
-            <RefreshCw size={14} className={proposalsLoading ? 'animate-spin' : ''} />
+            <Icon name="refresh" size="md" className={proposalsLoading ? 'animate-spin' : ''} />
           </button>
         }
       >
@@ -445,7 +442,7 @@ export function LearningPane() {
           </SettingsSection>
 
           <SettingsSection title="Learning limits">
-            <div className="space-y-2">{snapshot.boundaries.map((boundary) => <p key={boundary} className="flex items-start gap-2 text-[10.5px] leading-relaxed text-muted"><Sparkles size={12} className="mt-0.5 shrink-0 text-accent" />{boundary}</p>)}</div>
+            <div className="space-y-2">{snapshot.boundaries.map((boundary) => <p key={boundary} className="flex items-start gap-2 text-[10.5px] leading-relaxed text-muted"><Icon name="spark" size="sm" className="mt-0.5 text-accent" />{boundary}</p>)}</div>
             <p className="mt-4 flex items-center gap-2 border-t border-line pt-4 text-[10px] text-faint"><Brain size={13} /> Nothing learned here overrides your permissions or approvals.</p>
           </SettingsSection>
         </>

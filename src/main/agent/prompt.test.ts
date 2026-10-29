@@ -24,10 +24,11 @@ function prompt(): string {
 }
 
 describe('system prompt voice', () => {
-  it('asks for plain words and forbids emoji in replies', () => {
+  it('allows an emoji when the moment calls for one, never as decoration', () => {
     const text = prompt()
-    expect(text).toContain('no emoji')
-    expect(text).not.toContain('Emoji usage')
+    expect(text).toContain('the way a colleague would')
+    expect(text).toContain('At most one in a reply')
+    expect(text).toContain('never on bad news')
     expect(text).not.toContain('Actively and naturally include emojis')
   })
 

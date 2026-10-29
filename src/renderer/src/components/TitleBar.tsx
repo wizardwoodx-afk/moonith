@@ -1,29 +1,23 @@
 import {
   Building2,
-  ChevronLeft,
-  ChevronRight,
   ClipboardPaste,
-  Copy,
   Handshake,
-  Info,
   MessageSquare,
   PanelLeft,
-  Plus,
   Redo2,
   Scissors,
-  Settings,
-  Undo2,
-  Users
+  Undo2
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { toast } from 'sonner'
 import { useApp } from '../store'
 import { startNewTask } from '../lib/navigation'
 import { Popover } from './ui'
+import { ICON_SIZES, Icon } from './icons'
 import { ActiveWorkIsland } from '../motion/ActiveWorkIsland'
 
 function MenuAction({
-  icon: Icon,
+  icon: Glyph,
   label,
   hint,
   onClick,
@@ -43,7 +37,7 @@ function MenuAction({
       }}
       className="menu-item"
     >
-      <span className="flex h-4 w-4 items-center justify-center text-faint">{Icon}</span>
+      <span className="flex h-4 w-4 items-center justify-center text-faint">{Glyph}</span>
       <span className="flex-1 text-[12.5px]">{label}</span>
       {hint ? <span className="ml-3 text-[10px] text-faint">{hint}</span> : null}
     </button>
@@ -121,7 +115,7 @@ export function TitleBar({
         title={sidebarCollapsed ? 'Expand left sidebar' : 'Collapse left sidebar'}
         className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors outline-none hover:bg-surface-3 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40"
       >
-        <PanelLeft size={15} strokeWidth={1.8} />
+        <PanelLeft size={ICON_SIZES.md} strokeWidth={1.8} />
       </button>
       <button
         onClick={onBack}
@@ -130,7 +124,7 @@ export function TitleBar({
         title="Back"
         className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors outline-none hover:bg-surface-3 hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent focus-visible:ring-2 focus-visible:ring-accent/40"
       >
-        <ChevronLeft size={15} strokeWidth={1.8} />
+        <Icon name="chevronLeft" size="md" />
       </button>
       <button
         onClick={onForward}
@@ -139,7 +133,7 @@ export function TitleBar({
         title="Forward"
         className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors outline-none hover:bg-surface-3 hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent focus-visible:ring-2 focus-visible:ring-accent/40"
       >
-        <ChevronRight size={15} strokeWidth={1.8} />
+        <Icon name="chevronRight" size="md" />
       </button>
 
       <nav aria-label="Application menu" className="ml-2 flex items-center gap-0.5">
@@ -151,14 +145,14 @@ export function TitleBar({
           {(close) => (
             <div>
               <MenuAction
-                icon={<Plus size={13} />}
+                icon={<Icon name="add" size="md" />}
                 label="New task"
                 hint="Ctrl+N"
                 onClick={newTask}
                 close={close}
               />
               <MenuAction
-                icon={<Settings size={13} />}
+                icon={<Icon name="settings" size="md" />}
                 label="Settings"
                 hint="Ctrl+,"
                 onClick={() => openSettings('general')}
@@ -166,7 +160,7 @@ export function TitleBar({
               />
               <MenuDivider />
               <MenuAction
-                icon={<Users size={13} />}
+                icon={<Icon name="users" size="md" />}
                 label="Agents & Teams"
                 onClick={() => openSettings('agent-team')}
                 close={close}
@@ -183,14 +177,14 @@ export function TitleBar({
           {(close) => (
             <div>
               <MenuAction
-                icon={<Undo2 size={13} />}
+                icon={<Undo2 size={ICON_SIZES.md} />}
                 label="Undo"
                 hint="Ctrl+Z"
                 onClick={() => edit('undo')}
                 close={close}
               />
               <MenuAction
-                icon={<Redo2 size={13} />}
+                icon={<Redo2 size={ICON_SIZES.md} />}
                 label="Redo"
                 hint="Ctrl+Shift+Z"
                 onClick={() => edit('redo')}
@@ -198,21 +192,21 @@ export function TitleBar({
               />
               <MenuDivider />
               <MenuAction
-                icon={<Scissors size={13} />}
+                icon={<Scissors size={ICON_SIZES.md} />}
                 label="Cut"
                 hint="Ctrl+X"
                 onClick={() => edit('cut')}
                 close={close}
               />
               <MenuAction
-                icon={<Copy size={13} />}
+                icon={<Icon name="copy" size="md" />}
                 label="Copy"
                 hint="Ctrl+C"
                 onClick={() => edit('copy')}
                 close={close}
               />
               <MenuAction
-                icon={<ClipboardPaste size={13} />}
+                icon={<ClipboardPaste size={ICON_SIZES.md} />}
                 label="Paste"
                 hint="Ctrl+V"
                 onClick={() => edit('paste')}
@@ -230,21 +224,21 @@ export function TitleBar({
           {(close) => (
             <div>
               <MenuAction
-                icon={<MessageSquare size={13} />}
+                icon={<MessageSquare size={ICON_SIZES.md} />}
                 label="Chat"
                 hint="Ctrl+1"
                 onClick={() => openSurface('chat')}
                 close={close}
               />
               <MenuAction
-                icon={<Building2 size={13} />}
+                icon={<Building2 size={ICON_SIZES.md} />}
                 label="Company"
                 hint="Ctrl+2"
                 onClick={() => openSurface('company')}
                 close={close}
               />
               <MenuAction
-                icon={<Handshake size={13} />}
+                icon={<Handshake size={ICON_SIZES.md} />}
                 label="Table"
                 hint="Ctrl+3"
                 onClick={() => openSurface('table')}
@@ -252,7 +246,7 @@ export function TitleBar({
               />
               <MenuDivider />
               <MenuAction
-                icon={<Settings size={13} />}
+                icon={<Icon name="settings" size="md" />}
                 label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 onClick={onToggleSidebar}
                 close={close}
@@ -269,7 +263,7 @@ export function TitleBar({
           {(close) => (
             <div>
               <MenuAction
-                icon={<Info size={13} />}
+                icon={<Icon name="info" size="md" />}
                 label="About SelfImpulse"
                 onClick={() => openSettings('about')}
                 close={close}

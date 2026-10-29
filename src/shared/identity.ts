@@ -16,7 +16,7 @@ export const APP_AUTHOR = 'K.S. / SelfImpulse'
  * correctly mid-sentence, because it appears in UI copy and in the system prompt
  * — the two places must never disagree about what to call the agent.
  */
-export const DEFAULT_AGENT_NAME = 'Impulse'
+export const DEFAULT_AGENT_NAME = 'SelfImpulse'
 
 /** Resolve a possibly-unset agent name to something speakable. */
 export function resolveAgentName(name?: string): string {
