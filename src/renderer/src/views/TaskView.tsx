@@ -348,6 +348,8 @@ function TaskHeader({
   panelOpen: boolean
 }) {
   const settings = useApp((state) => state.settings)
+  const openPanelTab = useApp((state) => state.openPanelTab)
+  const panelTab = useApp((state) => state.panelTab)
   const liveCrew = useApp(
     (state) => state.subagents.filter((run) => run.taskId === task.id && run.status === 'running').length
   )
@@ -557,6 +559,60 @@ function TaskHeader({
         <span className="hidden sm:inline">Compact</span>
       </button>
 
+      {/* Qoder-style Skills, Sub-agents, and MCP capability buttons */}
+      <div className="hidden lg:flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => openPanelTab('crew')}
+          title="Open Sub-agents & Delegated Runs"
+          className={cn(
+            'flex h-8 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium transition-colors cursor-pointer',
+            panelOpen && panelTab === 'crew'
+              ? 'bg-accent/15 text-accent border border-accent/30'
+              : 'border border-line bg-surface/50 text-muted hover:text-ink hover:bg-surface-2'
+          )}
+        >
+          <Icon name="crew" size="xs" />
+          <span>Sub-agents</span>
+          {liveCrew > 0 ? (
+            <span className="flex items-center gap-1 text-[9.5px] text-accent font-mono font-semibold">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+              {liveCrew}
+            </span>
+          ) : null}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => openPanelTab('skills')}
+          title="Open Impulse Skills & Playbooks"
+          className={cn(
+            'flex h-8 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium transition-colors cursor-pointer',
+            panelOpen && panelTab === 'skills'
+              ? 'bg-accent/15 text-accent border border-accent/30'
+              : 'border border-line bg-surface/50 text-muted hover:text-ink hover:bg-surface-2'
+          )}
+        >
+          <Icon name="spark" size="xs" active />
+          <span>Skills</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => openPanelTab('mcp')}
+          title="Open MCP Services & Tools"
+          className={cn(
+            'flex h-8 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium transition-colors cursor-pointer',
+            panelOpen && panelTab === 'mcp'
+              ? 'bg-accent/15 text-accent border border-accent/30'
+              : 'border border-line bg-surface/50 text-muted hover:text-ink hover:bg-surface-2'
+          )}
+        >
+          <Icon name="connector" size="xs" active />
+          <span>MCPs</span>
+        </button>
+      </div>
+
       <button
         onClick={onTogglePanel}
         aria-pressed={panelOpen}
@@ -678,6 +734,8 @@ export function TaskView() {
   const setPanelOpen = useApp((state) => state.setPanelOpen)
   const approval = useApp((state) => state.approval)
   const settings = useApp((state) => state.settings)
+  const openPanelTab = useApp((state) => state.openPanelTab)
+  const panelTab = useApp((state) => state.panelTab)
   const sendToCurrent = useApp((state) => state.sendToCurrent)
   const reactToMessage = useApp((state) => state.reactToMessage)
   const rateMessage = useApp((state) => state.rateMessage)

@@ -611,21 +611,9 @@ export function ConnectorsPane() {
         </div>
       )}
 
-      {state && !state.configured ? (
-        <SettingsSection title="Toolkits">
-          <EmptyPanel
-            icon={<Icon name="connector" size="xl" />}
-            title="No key saved, so there is nothing to list."
-            className="pt-10 pb-8"
-          >
-            Paste a key above and press <ActionWord>Connect</ActionWord>.
-          </EmptyPanel>
-        </SettingsSection>
-      ) : null}
-
-      {state?.configured && state.enabled ? (
+      {state ? (
         <SettingsSection
-          title="Toolkits"
+          title="Impulse Connectors Matrix"
           
           action={
             <Button size="sm" variant="ghost" loading={refreshing} onClick={() => void load(true)}>

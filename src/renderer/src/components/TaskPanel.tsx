@@ -1,7 +1,6 @@
-import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { LucideIcon } from 'lucide-react'
-import { Activity, PanelRightClose, Sun } from 'lucide-react'
+import { Activity, Boxes, PanelRightClose, Sun } from 'lucide-react'
 import type { Task } from '@shared/types'
 import { useApp } from '../store'
 import { cn } from '../lib/utils'
@@ -11,17 +10,21 @@ import { ArtifactPanelBody } from './Artifacts'
 import { CrewPanel } from './task-panel/CrewRuns'
 import { NowPanel } from './task-panel/NowPanel'
 import { SourcesPanel } from './task-panel/SourcesPanel'
-import { ToolsPanel } from './task-panel/ToolsPanel'
+import { SkillsPanel } from './task-panel/SkillsPanel'
+import { McpPanel } from './task-panel/McpPanel'
+import { ConnectorsPanel } from './task-panel/ConnectorsPanel'
 import { RookWorkerPanel } from './task-panel/RookWorkerPanel'
 import { PromeyDuetPanel } from './task-panel/PromeyDuetPanel'
 import { useTaskCapabilities } from './task-panel/useTaskCapabilities'
 
-type PanelTab = 'now' | 'crew' | 'tools' | 'files' | 'rook' | 'promey'
+export type PanelTab = 'now' | 'crew' | 'skills' | 'mcp' | 'connectors' | 'files' | 'rook' | 'promey'
 
 const TABS: readonly { id: PanelTab; label: string; icon: IconName | LucideIcon }[] = [
   { id: 'now', label: 'Now', icon: Activity },
-  { id: 'crew', label: 'Team', icon: 'crew' },
-  { id: 'tools', label: 'Tools', icon: 'tool' },
+  { id: 'crew', label: 'Sub-agents', icon: 'crew' },
+  { id: 'skills', label: 'Skills', icon: 'spark' },
+  { id: 'mcp', label: 'MCPs', icon: 'connector' },
+  { id: 'connectors', label: 'Connectors', icon: Boxes },
   { id: 'files', label: 'Files', icon: 'folderOpen' },
   { id: 'rook', label: 'Worker', icon: 'model' },
   { id: 'promey', label: 'Promey', icon: Sun }
@@ -29,15 +32,18 @@ const TABS: readonly { id: PanelTab; label: string; icon: IconName | LucideIcon 
 
 const FOOTER: Record<PanelTab, string | null> = {
   now: null,
-  crew: 'Runs stored on this device',
-  tools: 'Installed skills and ready tool servers',
+  crew: 'Agent delegations stored on this device',
+  skills: 'Impulse Skill Hub & installed playbooks',
+  mcp: 'Model Context Protocol servers and tool schemas',
+  connectors: 'Impulse Connectors Matrix with external platforms',
   files: 'Created files stay in this task',
   rook: 'Background jobs and approvals',
   promey: 'Proactive briefing, triage, and human-in-the-loop approvals'
 }
 
 export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }) {
-  const [tab, setTab] = useState<PanelTab>('now')
+  const tab = useApp((state) => state.panelTab)
+  const setTab = useApp((state) => state.setPanelTab)
   const capabilities = useTaskCapabilities()
   const refreshSubAgents = useApp((state) => state.refreshSubAgents)
   const liveCrew = useApp(
@@ -49,7 +55,12 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
 
   const countFor = (id: PanelTab): string | number | null => {
     if (id === 'crew') return liveCrew || crewCount || null
-    if (id === 'tools') return capabilities.loading ? null : capabilities.skills.length + capabilities.configs.length || null
+    if (id === 'skills') return capabilities.loading ? null : capabilities.skills.length || null
+    if (id === 'mcp') {
+      if (capabilities.loading) return null
+      const ready = capabilities.statuses.filter((s) => s.status === 'ready').length
+      return capabilities.configs.length ? `${ready}/${capabilities.configs.length}` : null
+    }
     if (id === 'files') return task.artifacts.length || null
     return null
   }
@@ -57,7 +68,7 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
   const footer = FOOTER[tab]
 
   return (
-    <aside aria-label="Task workspace" className="panel-in flex h-full w-[380px] max-w-[92vw] shrink-0 flex-col border-l border-line bg-canvas-deep/65">
+    <aside aria-label="Task workspace" className="panel-in flex h-full w-[390px] max-w-[92vw] shrink-0 flex-col border-l border-line bg-canvas-deep/65">
       <div className="flex h-[54px] shrink-0 items-center gap-2.5 border-b border-line px-3">
         <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-surface text-accent">
           <Activity size={ICON_SIZES.md} />
@@ -68,8 +79,8 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
         <div className="ml-auto flex items-center gap-0.5">
           <IconButton
             onClick={() => void Promise.all([refreshSubAgents(), capabilities.refresh()])}
-            aria-label="Refresh Team, skills, and MCP"
-            title="Refresh Team, skills, and MCP"
+            aria-label="Refresh capabilities"
+            title="Refresh Sub-agents, skills, and MCP"
             disabled={capabilities.refreshing}
           >
             <Icon name="refresh" size="md" className={capabilities.refreshing ? 'animate-spin' : ''} />
@@ -80,8 +91,6 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
         </div>
       </div>
 
-      {/* A count inside the tab slot wrapped 'Tools 4' mid-label, so the number
-          rides on the accessible name and the label stays on one line. */}
       <div className="scroll-thin flex shrink-0 overflow-x-auto border-b border-line px-2" role="tablist" aria-label="Task workspace sections">
         {TABS.map((item) => {
           const Glyph = item.icon
@@ -96,8 +105,8 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
               title={count === null ? item.label : `${item.label} · ${count}`}
               onClick={() => setTab(item.id)}
               className={cn(
-                'relative flex h-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap px-2 text-[10px] font-medium transition-colors outline-none focus-visible:bg-surface-2/50',
-                active ? 'text-ink' : 'text-faint hover:text-muted'
+                'relative flex h-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap px-2 text-[10px] font-medium transition-colors outline-none focus-visible:bg-surface-2/50 cursor-pointer',
+                active ? 'text-ink font-semibold' : 'text-faint hover:text-muted'
               )}
             >
               {typeof Glyph === 'string' ? (
@@ -106,7 +115,18 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
                 <Glyph size={ICON_SIZES.xs} className="shrink-0" />
               )}
               {item.label}
-              {active ? <motion.span layoutId="task-workspace-tab" className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-accent" transition={{ type: 'spring', stiffness: 420, damping: 32 }} /> : null}
+              {count !== null ? (
+                <span className={cn('rounded px-1 text-[9px]', active ? 'bg-accent/15 text-accent' : 'bg-surface-2 text-faint')}>
+                  {count}
+                </span>
+              ) : null}
+              {active ? (
+                <motion.span
+                  layoutId="task-workspace-tab"
+                  className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-accent"
+                  transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                />
+              ) : null}
             </button>
           )
         })}
@@ -121,9 +141,11 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
           transition={{ duration: 0.15 }}
           className="flex min-h-0 flex-1 flex-col"
         >
-          {tab === 'now' ? <NowPanel task={task} capabilities={capabilities} onNavigate={setTab} /> : null}
+          {tab === 'now' ? <NowPanel task={task} capabilities={capabilities} onNavigate={(next) => setTab(next === 'tools' ? 'skills' : next)} /> : null}
           {tab === 'crew' ? <CrewPanel taskId={task.id} /> : null}
-          {tab === 'tools' ? <ToolsPanel capabilities={capabilities} /> : null}
+          {tab === 'skills' ? <SkillsPanel capabilities={capabilities} /> : null}
+          {tab === 'mcp' ? <McpPanel capabilities={capabilities} /> : null}
+          {tab === 'connectors' ? <ConnectorsPanel /> : null}
           {tab === 'files' ? (
             <div className="flex min-h-0 flex-1 flex-col">
               <SourcesPanel task={task} />

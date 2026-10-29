@@ -1,10 +1,10 @@
 /**
  * ImpulseSkillRegistry: LobeChat Skills & Plugin Index for SelfImpulse.
  *
- * Directly integrates the LobeChat plugin ecosystem schema and index model
- * (inspired by lobehub/lobe-chat-plugins), branded with Impulse.
- * Enables the agent to query, install, and execute tools dynamically from a local-first
- * index of thousands of developer, designer, and automation capabilities.
+ * Integrates the open-source LobeChat plugin ecosystem schema and index model
+ * (inspired by lobehub/lobe-chat-plugins), branded with Impulse ("Impulse Skill Hub" / "Self Skills").
+ * Enables the agent to query, inspect, and execute tools dynamically from a local-first
+ * index of developer, designer, and automation capabilities with zero latency and full offline support.
  */
 export interface ImpulseToolDefinition {
   name: string
@@ -31,7 +31,208 @@ export interface ImpulseSkillManifest {
   systemPrompt?: string
 }
 
-const BUILTIN_IMPULSE_SKILLS: ImpulseSkillManifest[] = [
+export const BUILTIN_IMPULSE_SKILLS: ImpulseSkillManifest[] = [
+  {
+    identifier: 'impulse_web_search',
+    name: 'Impulse Web Intelligence Search',
+    description: 'Real-time search engine crawler and web intelligence extractor with structured summary synthesis.',
+    author: 'SelfImpulse',
+    category: 'productivity',
+    version: '2.1.0',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'The search query or target URL' },
+        depth: { type: 'string', enum: ['standard', 'deep', 'academic'], description: 'Search depth' },
+        maxResults: { type: 'number', description: 'Number of results to retrieve (default: 5)' }
+      },
+      required: ['query']
+    }
+  },
+  {
+    identifier: 'impulse_code_sandbox',
+    name: 'Impulse Code Interpreter Sandbox',
+    description: 'Isolated computation sandbox for executing Python, JavaScript, and data analytics algorithms.',
+    author: 'SelfImpulse',
+    category: 'developer',
+    version: '2.4.0',
+    parameters: {
+      type: 'object',
+      properties: {
+        language: { type: 'string', enum: ['python', 'javascript', 'typescript', 'bash'], description: 'Runtime language' },
+        code: { type: 'string', description: 'Source code snippet to execute' },
+        timeoutSeconds: { type: 'number', description: 'Execution timeout in seconds' }
+      },
+      required: ['language', 'code']
+    }
+  },
+  {
+    identifier: 'impulse_arxiv_scholar',
+    name: 'Impulse ArXiv Scholar Inspector',
+    description: 'Query ArXiv research papers, inspect paper abstracts, extract methodologies, and generate citations.',
+    author: 'SelfImpulse',
+    category: 'analysis',
+    version: '1.5.0',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Academic subject, DOI, or keyword' },
+        sortBy: { type: 'string', enum: ['relevance', 'lastUpdatedDate', 'submittedDate'] },
+        maxResults: { type: 'number', description: 'Max papers to return' }
+      },
+      required: ['query']
+    }
+  },
+  {
+    identifier: 'impulse_chart_generator',
+    name: 'Impulse AntV & Mermaid Visualizer',
+    description: 'Renders dynamic AntV charts (bar, line, radar, scatter) and Mermaid diagrams (flowcharts, sequence, ERDs).',
+    author: 'SelfImpulse',
+    category: 'creative',
+    version: '2.0.0',
+    parameters: {
+      type: 'object',
+      properties: {
+        chartType: { type: 'string', enum: ['antv_bar', 'antv_line', 'antv_pie', 'mermaid_flow', 'mermaid_sequence', 'mermaid_er'] },
+        title: { type: 'string', description: 'Chart title' },
+        data: { type: 'object', description: 'Dataset or Mermaid markup string' }
+      },
+      required: ['chartType', 'title', 'data']
+    }
+  },
+  {
+    identifier: 'impulse_figma_inspector',
+    name: 'Impulse Figma Design Tokens Inspector',
+    description: 'Inspects Figma files, extracts design token hierarchies (OKLCH, spacing, typography), and generates CSS.',
+    author: 'SelfImpulse',
+    category: 'design',
+    version: '1.3.0',
+    parameters: {
+      type: 'object',
+      properties: {
+        fileKey: { type: 'string', description: 'Figma file key from URL' },
+        nodeId: { type: 'string', description: 'Optional specific frame or component ID' }
+      },
+      required: ['fileKey']
+    }
+  },
+  {
+    identifier: 'impulse_github_ops',
+    name: 'Impulse GitHub Repository Ops',
+    description: 'Inspects repositories, queries pull request diffs, manages issues, and tracks branch histories.',
+    author: 'SelfImpulse',
+    category: 'developer',
+    version: '2.2.0',
+    parameters: {
+      type: 'object',
+      properties: {
+        repo: { type: 'string', description: 'Repository in format owner/repo' },
+        action: { type: 'string', enum: ['list_prs', 'get_diff', 'read_file', 'create_issue', 'commit_history'] },
+        issueOrPrNumber: { type: 'number', description: 'Target issue or PR number' }
+      },
+      required: ['repo', 'action']
+    }
+  },
+  {
+    identifier: 'impulse_wolfram_compute',
+    name: 'Impulse Wolfram Computational Engine',
+    description: 'Solves complex mathematical equations, scientific calculus, unit conversions, and physical calculations.',
+    author: 'SelfImpulse',
+    category: 'analysis',
+    version: '1.1.0',
+    parameters: {
+      type: 'object',
+      properties: {
+        expression: { type: 'string', description: 'Math formula, equation, or physical quantity query' },
+        assumptions: { type: 'string', description: 'Optional mathematical assumptions' }
+      },
+      required: ['expression']
+    }
+  },
+  {
+    identifier: 'impulse_media_flux',
+    name: 'Impulse Multimodal Asset & Image Generator',
+    description: 'Generates UI graphic assets, icons, posters, and photographic visuals with precise prompt control.',
+    author: 'SelfImpulse',
+    category: 'creative',
+    version: '1.8.0',
+    parameters: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: 'Visual asset description' },
+        aspectRatio: { type: 'string', enum: ['1:1', '16:9', '9:16', '4:3', '3:2'] },
+        style: { type: 'string', enum: ['photorealistic', 'vector_flat', '3d_isometric', 'minimalist_line'] }
+      },
+      required: ['prompt']
+    }
+  },
+  {
+    identifier: 'impulse_whisper_transcriber',
+    name: 'Impulse Speech & Audio Transcriber',
+    description: 'Transcribes audio recordings, voice memos, and video audio into structured text with timestamps.',
+    author: 'SelfImpulse',
+    category: 'productivity',
+    version: '2.0.0',
+    parameters: {
+      type: 'object',
+      properties: {
+        audioPath: { type: 'string', description: 'Path to audio or video file' },
+        language: { type: 'string', description: 'Language code e.g. en, es, fr, auto' },
+        includeTimestamps: { type: 'boolean', description: 'Whether to return word-level timestamps' }
+      },
+      required: ['audioPath']
+    }
+  },
+  {
+    identifier: 'impulse_sql_explorer',
+    name: 'Impulse SQL Database Explorer',
+    description: 'Introspects database schemas, runs read-only analytics queries, and optimizes query execution plans.',
+    author: 'SelfImpulse',
+    category: 'developer',
+    version: '1.9.0',
+    parameters: {
+      type: 'object',
+      properties: {
+        connectionUri: { type: 'string', description: 'SQLite path or database connection URI' },
+        sql: { type: 'string', description: 'SQL query to execute' },
+        readOnly: { type: 'boolean', description: 'Enforce read-only transaction (default: true)' }
+      },
+      required: ['connectionUri', 'sql']
+    }
+  },
+  {
+    identifier: 'impulse_weather_meteorology',
+    name: 'Impulse Global Meteorological Engine',
+    description: 'Fetches high-precision weather forecasts, air quality indices, and meteorological radar data.',
+    author: 'SelfImpulse',
+    category: 'productivity',
+    version: '1.0.0',
+    parameters: {
+      type: 'object',
+      properties: {
+        location: { type: 'string', description: 'City name or coordinates (latitude, longitude)' },
+        days: { type: 'number', description: 'Forecast days (1-7)' }
+      },
+      required: ['location']
+    }
+  },
+  {
+    identifier: 'impulse_document_rag',
+    name: 'Impulse Semantic Document Search (RAG)',
+    description: 'Performs chunking, dense vector embedding, and cosine similarity search over local workspace documents.',
+    author: 'SelfImpulse',
+    category: 'analysis',
+    version: '2.1.0',
+    parameters: {
+      type: 'object',
+      properties: {
+        targetDir: { type: 'string', description: 'Directory containing source files' },
+        query: { type: 'string', description: 'Natural language search query' },
+        topK: { type: 'number', description: 'Number of relevant chunks to retrieve' }
+      },
+      required: ['targetDir', 'query']
+    }
+  },
   {
     identifier: 'impulse_design_system_generator',
     name: 'Impulse Design System Generator',
@@ -127,6 +328,20 @@ export class ImpulseSkillRegistry {
   }
 
   /**
+   * Return all registered skills as an array.
+   */
+  list(): ImpulseSkillManifest[] {
+    return Array.from(this.skills.values())
+  }
+
+  /**
+   * Get a specific skill by identifier.
+   */
+  get(identifier: string): ImpulseSkillManifest | undefined {
+    return this.skills.get(identifier)
+  }
+
+  /**
    * Register a new community or ecosystem skill manifest into the index.
    */
   register(manifest: ImpulseSkillManifest): void {
@@ -145,6 +360,17 @@ export class ImpulseSkillRegistry {
       description: skill.description,
       parameters: skill.parameters
     }
+  }
+
+  /**
+   * Return all skills formatted as agent tool specifications.
+   */
+  toAllProviderToolSpecs(): ImpulseToolDefinition[] {
+    return Array.from(this.skills.values()).map((skill) => ({
+      name: skill.identifier,
+      description: skill.description,
+      parameters: skill.parameters
+    }))
   }
 
   /**

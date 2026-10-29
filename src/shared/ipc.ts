@@ -85,6 +85,10 @@ export const IPC = {
 
   usageSummary: 'usage:summary',
 
+  authStatus: 'auth:status',
+  authConnect: 'auth:connect',
+  authDisconnect: 'auth:disconnect',
+
   connectorsState: 'connectors:state',
   connectorsSave: 'connectors:save',
   connectorsConnect: 'connectors:connect',

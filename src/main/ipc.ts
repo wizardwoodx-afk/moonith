@@ -8,6 +8,7 @@ import { REA_SERVER_CONFIG } from '@shared/constants'
 import { LOCAL_OWNER_PRINCIPAL_ID } from '@shared/enterpriseControl'
 import type {
   AttachmentRef,
+  AuthConnectInput,
   ChatMessage,
   ChannelInput,
   ConnectorsInput,
@@ -43,6 +44,7 @@ import { coworkTools } from './agent/tools/coworkTools'
 import { rookTools } from './agent/tools/rookTools'
 import { rsiralsTools } from './agent/tools/rsiralsTools'
 import { promeyTools } from './agent/tools/promeyTools'
+import { impulseSecureAuth } from './auth/betterAuth'
 import { rookEngineBridge } from './engine/rookBridge'
 import { promeyEngineBridge } from './engine/promeyBridge'
 import { coworkEngineBridge } from './engine/coworkBridge'
@@ -714,6 +716,14 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.memoryImport, (_event, text: string) => memoryService.importText(text))
 
   ipcMain.handle(IPC.usageSummary, () => usageService.summary())
+
+  ipcMain.handle(IPC.authStatus, () => impulseSecureAuth.getStatus())
+  ipcMain.handle(IPC.authConnect, (_event, input: AuthConnectInput) =>
+    impulseSecureAuth.connect(input)
+  )
+  ipcMain.handle(IPC.authDisconnect, (_event, providerId: string) =>
+    impulseSecureAuth.disconnect(providerId)
+  )
 
   ipcMain.handle(IPC.connectorsState, (_event, refresh?: boolean) =>
     connectorsManager.getState(Boolean(refresh))

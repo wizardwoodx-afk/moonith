@@ -301,6 +301,35 @@ export interface ConnectorsToolkitInfo {
   connectable: boolean
 }
 
+export interface AuthProviderInfo {
+  id: 'github' | 'google' | 'microsoft' | 'discord' | 'gitlab'
+  name: string
+  description: string
+  icon: string
+  connected: boolean
+  username?: string
+  email?: string
+  avatarUrl?: string
+  lastAuthenticated?: string
+}
+
+export interface AuthState {
+  enabled: boolean
+  encryptionAvailable: boolean
+  providers: AuthProviderInfo[]
+  activeUser?: {
+    name: string
+    email: string
+    avatarUrl?: string
+    provider: string
+  }
+}
+
+export interface AuthConnectInput {
+  providerId: 'github' | 'google' | 'microsoft' | 'discord' | 'gitlab'
+  manualToken?: string
+}
+
 export interface ConnectorsToolInfo {
   slug: string
   name: string
@@ -1427,6 +1456,10 @@ export interface KnightApi {
   importMemories: (text: string) => Promise<MemoryNote[]>
 
   getUsageSummary: () => Promise<UsageSummary>
+
+  authStatus: () => Promise<AuthState>
+  authConnect: (input: AuthConnectInput) => Promise<AuthState>
+  authDisconnect: (providerId: string) => Promise<AuthState>
 
   connectorsState: (refresh?: boolean) => Promise<ConnectorsState>
   saveConnectors: (input: ConnectorsInput) => Promise<ConnectorsState>

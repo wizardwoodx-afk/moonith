@@ -69,7 +69,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     id: 'mode-config',
     label: 'Modes',
     group: 'Personal',
-    summary: 'Self and Collab.',
+    summary: 'Self and Cowork.',
     keywords: ['self', 'collab', 'team', 'mode', 'captain', 'peer', 'table', 'seats'],
     status: 'live',
     hidden: true,

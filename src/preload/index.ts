@@ -13,6 +13,7 @@ import type { MarketspaceCreateInput } from '@shared/marketspace'
 import { AION_IPC, NOMOS_IPC, SPHRAGIS_IPC } from '@shared/enterprise'
 import type {
   ApprovalRequest,
+  AuthConnectInput,
   ApprovalDecision,
   AuditExportResult,
   AuditSummary,
@@ -158,6 +159,10 @@ const api: KnightApi = {
   importMemories: (text: string) => ipcRenderer.invoke(IPC.memoryImport, text),
 
   getUsageSummary: () => ipcRenderer.invoke(IPC.usageSummary),
+
+  authStatus: () => ipcRenderer.invoke(IPC.authStatus),
+  authConnect: (input: AuthConnectInput) => ipcRenderer.invoke(IPC.authConnect, input),
+  authDisconnect: (providerId: string) => ipcRenderer.invoke(IPC.authDisconnect, providerId),
 
   connectorsState: (refresh?: boolean) => ipcRenderer.invoke(IPC.connectorsState, refresh),
   saveConnectors: (input: ConnectorsInput) => ipcRenderer.invoke(IPC.connectorsSave, input),

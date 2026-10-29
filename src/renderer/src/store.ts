@@ -49,6 +49,7 @@ interface AppState {
   view: View
   approval: ApprovalRequest | null
   panelOpen: boolean
+  panelTab: 'now' | 'crew' | 'skills' | 'mcp' | 'connectors' | 'files' | 'rook' | 'promey'
   preview: Artifact | null
 
   bootstrap: () => Promise<void>
@@ -84,6 +85,8 @@ interface AppState {
   saveSettings: (patch: SettingsPatch) => Promise<PublicSettings | null>
   respondApproval: (approved: boolean, always?: boolean) => Promise<void>
   setPanelOpen: (open: boolean) => void
+  setPanelTab: (tab: 'now' | 'crew' | 'skills' | 'mcp' | 'connectors' | 'files' | 'rook' | 'promey') => void
+  openPanelTab: (tab: 'now' | 'crew' | 'skills' | 'mcp' | 'connectors' | 'files' | 'rook' | 'promey') => void
   setPreview: (artifact: Artifact | null) => void
   handleEvent: (event: TaskEvent) => void
   setApproval: (approval: ApprovalRequest | null) => void
@@ -121,6 +124,7 @@ export const useApp = create<AppState>((set, get) => ({
   view: { kind: 'surface', surface: 'chat' },
   approval: null,
   panelOpen: false,
+  panelTab: 'now',
   preview: null,
 
   bootstrap: async () => {
@@ -450,6 +454,8 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   setPanelOpen: (open) => set({ panelOpen: open }),
+  setPanelTab: (tab) => set({ panelTab: tab }),
+  openPanelTab: (tab) => set({ panelOpen: true, panelTab: tab }),
   setPreview: (artifact) => set({ preview: artifact }),
   setApproval: (approval) => set({ approval }),
 

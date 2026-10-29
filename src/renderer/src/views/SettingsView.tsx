@@ -52,6 +52,8 @@ import {
 import { toast } from 'sonner'
 import type {
   AppInfo,
+  AuthState,
+  AuthProviderInfo,
   EngineStatusPublic,
   McpMarketDetail,
   McpMarketSearchResult,
@@ -2317,6 +2319,127 @@ function McpServerModal({
   )
 }
 
+function ImpulseSecureAuthSection() {
+  const [auth, setAuth] = useState<AuthState | null>(null)
+  const [connecting, setConnecting] = useState<string | null>(null)
+
+  const loadAuth = useCallback(async () => {
+    try {
+      const state = await window.knight.authStatus()
+      setAuth(state)
+    } catch {
+      // Ignored
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadAuth()
+  }, [loadAuth])
+
+  const handleConnect = async (providerId: AuthProviderInfo['id']) => {
+    setConnecting(providerId)
+    try {
+      const updated = await window.knight.authConnect({ providerId })
+      setAuth(updated)
+      toast.success(`Connected to ${providerId.toUpperCase()} with Impulse Secure Auth.`)
+    } catch (e) {
+      toast.error(errorMessage(e))
+    } finally {
+      setConnecting(null)
+    }
+  }
+
+  const handleDisconnect = async (providerId: string) => {
+    setConnecting(providerId)
+    try {
+      const updated = await window.knight.authDisconnect(providerId)
+      setAuth(updated)
+      toast.success(`Disconnected from ${providerId.toUpperCase()}.`)
+    } catch (e) {
+      toast.error(errorMessage(e))
+    } finally {
+      setConnecting(null)
+    }
+  }
+
+  return (
+    <SettingsSection
+      title="Impulse Secure Auth"
+      action={
+        <span className="flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-0.5 text-[10px] text-muted font-medium">
+          <ShieldCheck size={12} className={auth?.encryptionAvailable ? 'text-positive' : 'text-warn'} />
+          {auth?.encryptionAvailable ? 'OS Keychain Encrypted (DPAPI / safeStorage)' : 'Encrypted Vault'}
+        </span>
+      }
+    >
+      <p className="mb-3 text-[11px] text-muted">
+        SelfImpulse Identity Guard · Open-Source OAuth with PKCE verification and hardware-backed token encryption.
+      </p>
+      <div className="grid gap-2.5 sm:grid-cols-2">
+        {auth?.providers.map((p) => (
+          <div
+            key={p.id}
+            className="flex flex-col justify-between rounded-xl border border-line bg-surface/50 p-3.5 transition-colors hover:border-line-strong"
+          >
+            <div>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-surface-2 text-ink">
+                    <KeyRound size={13} className="text-accent" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-[12px] font-semibold text-ink truncate">{p.name}</h4>
+                    <p className="text-[10px] text-faint line-clamp-1">{p.description}</p>
+                  </div>
+                </div>
+                <span
+                  className={cn(
+                    'shrink-0 rounded-full px-2 py-0.5 text-[9.5px] font-medium border',
+                    p.connected
+                      ? 'border-positive/30 bg-positive/10 text-positive'
+                      : 'border-line bg-surface-2 text-faint'
+                  )}
+                >
+                  {p.connected ? 'Connected' : 'Not linked'}
+                </span>
+              </div>
+
+              {p.connected && p.email ? (
+                <div className="mt-2.5 rounded-lg bg-surface-2/60 px-2 py-1 text-[10.5px] font-mono text-muted truncate">
+                  {p.email}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-3 flex items-center justify-end gap-2 border-t border-line/60 pt-2.5">
+              {p.connected ? (
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  loading={connecting === p.id}
+                  onClick={() => void handleDisconnect(p.id)}
+                  className="text-danger hover:text-danger hover:bg-danger/10"
+                >
+                  Disconnect
+                </Button>
+              ) : (
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  loading={connecting === p.id}
+                  onClick={() => void handleConnect(p.id)}
+                >
+                  Connect via PKCE
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </SettingsSection>
+  )
+}
+
 function ProfilePane({ settings }: { settings: PublicSettings }) {
   const profile = useLocalProfile()
   const tasks = useApp((state) => state.tasks)
@@ -2458,6 +2581,8 @@ function ProfilePane({ settings }: { settings: PublicSettings }) {
           </FieldGroup>
         </div>
       </SettingsSection>
+
+      <ImpulseSecureAuthSection />
 
       <SettingsSection title="Account">
         <SettingList>
