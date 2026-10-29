@@ -8,6 +8,7 @@ import { REA_SERVER_CONFIG } from '@shared/constants'
 import { LOCAL_OWNER_PRINCIPAL_ID } from '@shared/enterpriseControl'
 import type {
   AttachmentRef,
+  ChatMessage,
   ChannelInput,
   ConnectorsInput,
   CreateScheduleInput,
@@ -33,6 +34,8 @@ import type {
   TableJoinInput,
   TableProposalInput,
   Task,
+  TaskCompactInput,
+  TaskCompactResult,
   UpdateTaskInput
 } from '@shared/types'
 import { agentRuntime } from './agent/runtime'
@@ -276,6 +279,92 @@ export function registerIpc(): void {
     }
     publishTask(task)
     return task
+  })
+
+  ipcMain.handle(IPC.taskCompact, async (_event, input: TaskCompactInput): Promise<TaskCompactResult> => {
+    const task = store.getTask(String(input?.taskId ?? ''))
+    if (!task) throw new Error('Task not found.')
+    if (!task.messages || task.messages.length <= 2) {
+      return {
+        success: false,
+        taskId: task.id,
+        foldedCount: 0,
+        savedTokens: 0,
+        summary: '',
+        message: 'Not enough conversation history to compact.'
+      }
+    }
+
+    const keepTail = Math.max(2, input.keepTailCount ?? 4)
+    if (task.messages.length <= keepTail && !input.force) {
+      return {
+        success: false,
+        taskId: task.id,
+        foldedCount: 0,
+        savedTokens: 0,
+        summary: '',
+        message: `Need more than ${keepTail} messages to compact.`
+      }
+    }
+
+    const splitIndex = task.messages.length <= keepTail
+      ? Math.max(1, Math.floor(task.messages.length / 2))
+      : task.messages.length - keepTail
+
+    const toFold = task.messages.slice(0, splitIndex)
+    const toKeep = task.messages.slice(splitIndex)
+
+    const charactersBefore = toFold.reduce(
+      (acc, m) => acc + (m.content?.length || 0) + (m.thinking?.length || 0),
+      0
+    )
+    const tokensBefore = Math.ceil(charactersBefore / 4)
+
+    const userObjectives = toFold
+      .filter((m) => m.role === 'user' && m.content?.trim())
+      .map((m) => m.content.trim())
+
+    const summaryHighlights = userObjectives.length
+      ? userObjectives
+          .slice(0, 4)
+          .map((item) => `• ${item.slice(0, 140).replace(/\r?\n/g, ' ')}`)
+          .join('\n')
+      : '• Ongoing conversational task progression'
+
+    const summary = [
+      '### Context Executive Summary',
+      `- **Task Focus**: ${task.title || task.objective || 'Active Session'}`,
+      `- **Folded turns**: Compressed ${toFold.length} earlier turns to preserve token budget.`,
+      `- **Key Requirements & Directives**:\n${summaryHighlights}`,
+      `- **State Retention**: Retaining active work trail and most recent ${toKeep.length} context messages for seamless continuation.`
+    ].join('\n\n')
+
+    const tokensAfter = Math.ceil(summary.length / 4)
+    const savedTokens = Math.max(0, tokensBefore - tokensAfter)
+
+    const compactedMessage: ChatMessage = {
+      id: `compact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      role: 'assistant',
+      content: summary,
+      createdAt: new Date().toISOString(),
+      isCompacted: true,
+      compactedSummary: summary,
+      savedTokens,
+      foldedCount: toFold.length,
+      foldedMessages: toFold
+    }
+
+    task.messages = [compactedMessage, ...toKeep]
+    await store.saveTask(task)
+    publishTask(task)
+
+    return {
+      success: true,
+      taskId: task.id,
+      foldedCount: toFold.length,
+      savedTokens,
+      summary
+    }
   })
 
   ipcMain.handle(IPC.taskReact, async (_event, input: MessageReactionInput) => {

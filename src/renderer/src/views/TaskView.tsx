@@ -1,10 +1,13 @@
 import { agentName } from '../lib/localProfile'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
+  ChevronDown,
+  ChevronUp,
   Circle,
   Loader2,
   MessageCircle,
+  Minimize2,
   MoreHorizontal,
   PanelRightOpen,
   Trash2,
@@ -267,6 +270,74 @@ function CopyMessage({ text }: { text: string }) {
  * 24px gap between transcript turns. Elevation comes from the `Elev` ladder;
  * state colours may replace the neutral hairline but never the shadow level.
  * The two deliberate breaks are noted where they occur. */
+/** Compacted context summary card (Qoder-style context compression) */
+function CompactedContextCard({ message }: { message: ChatMessage }) {
+  const [expanded, setExpanded] = useState(false)
+  const folded = message.foldedMessages || []
+
+  return (
+    <div
+      className={cn(
+        'my-4 overflow-hidden rounded-[var(--r-card)] border border-line bg-surface/85 transition-all',
+        ElevShadow.raised
+      )}
+    >
+      <div className="flex items-center justify-between border-b border-line px-4 py-2.5 bg-surface-2/70">
+        <div className="flex items-center gap-2">
+          <div className="flex h-5 w-5 items-center justify-center rounded-md bg-accent-soft text-accent">
+            <Minimize2 size={11} strokeWidth={2.4} />
+          </div>
+          <span className="text-[12px] font-semibold tracking-[-0.01em] text-ink">
+            Context Compacted
+          </span>
+          <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-medium text-faint border border-line">
+            Folded {message.foldedCount ?? folded.length} turns · Saved ~{(message.savedTokens ?? 0).toLocaleString()} tokens
+          </span>
+        </div>
+        {folded.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-muted hover:text-ink hover:bg-surface-3 transition-colors cursor-pointer"
+          >
+            <span>{expanded ? 'Hide original turns' : 'View folded turns'}</span>
+            {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+        ) : null}
+      </div>
+
+      <div className="px-4 py-3 text-[13px] leading-relaxed text-ink/90">
+        <Markdown content={message.compactedSummary || message.content} />
+      </div>
+
+      {expanded && folded.length > 0 ? (
+        <div className="border-t border-line bg-canvas/60 p-4 space-y-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-faint">
+            Folded History ({folded.length} messages)
+          </div>
+          <div className="max-h-[360px] overflow-y-auto space-y-2 pr-1 scroll-thin">
+            {folded.map((fm, idx) => (
+              <div
+                key={fm.id || idx}
+                className={cn(
+                  'rounded-lg p-2.5 text-[12px] border border-line-subtle',
+                  fm.role === 'user' ? 'bg-surface-2 ml-8' : 'bg-surface mr-8'
+                )}
+              >
+                <div className="flex items-center justify-between mb-1 text-[10px] font-semibold text-faint uppercase">
+                  <span>{fm.role === 'user' ? 'User' : 'Self/Cowork'}</span>
+                  <span>{fm.createdAt ? timeAgo(fm.createdAt) : ''}</span>
+                </div>
+                <div className="text-ink/80 whitespace-pre-wrap">{fm.content}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function TaskHeader({
   task,
   onTogglePanel,
@@ -285,6 +356,29 @@ function TaskHeader({
   const resumeCurrent = useApp((state) => state.resumeCurrent)
   const stopCurrent = useApp((state) => state.stopCurrent)
   const updateCurrent = useApp((state) => state.updateCurrent)
+  const compactTask = useApp((state) => state.compactTask)
+  const [isCompacting, setIsCompacting] = useState(false)
+
+  const estimatedTokens = useMemo(() => {
+    const chars = task.messages.reduce(
+      (acc, m) => acc + (m.content?.length || 0) + (m.thinking?.length || 0),
+      0
+    )
+    return Math.ceil(chars / 4)
+  }, [task.messages])
+  const budgetTokens = 48000
+  const usagePercent = Math.min(100, Math.round((estimatedTokens / budgetTokens) * 100))
+  const canCompact = task.messages.length > 2
+
+  const handleCompact = async () => {
+    if (isCompacting || !canCompact) return
+    setIsCompacting(true)
+    try {
+      await compactTask(task.id, true)
+    } finally {
+      setIsCompacting(false)
+    }
+  }
 
   const provider = task.providerId
     ? settings?.providers.find((item) => item.id === task.providerId)
@@ -422,6 +516,47 @@ function TaskHeader({
         </Button>
       ) : null}
 
+      {/* Qoder-style Context Token Budget Meter */}
+      <div
+        className={cn(
+          'hidden md:inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[length:var(--text-micro)] font-mono transition-colors',
+          Elev.hairline,
+          'bg-surface text-muted'
+        )}
+        title={`Context token budget: ${estimatedTokens.toLocaleString()} / ${budgetTokens.toLocaleString()} tokens (${usagePercent}%). Compact older turns to free context window.`}
+      >
+        <span
+          className={cn(
+            'h-1.5 w-1.5 rounded-full shrink-0',
+            usagePercent >= 80 ? 'bg-rose-500' : usagePercent >= 50 ? 'bg-amber-500' : 'bg-emerald-500'
+          )}
+        />
+        <span>
+          {estimatedTokens >= 1000 ? `${(estimatedTokens / 1000).toFixed(1)}k` : estimatedTokens} / {budgetTokens / 1000}k
+        </span>
+      </div>
+
+      {/* Qoder-style Compact Context Button */}
+      <button
+        type="button"
+        onClick={() => void handleCompact()}
+        disabled={isCompacting || !canCompact}
+        title="Compact context (Fold older turns into summary to free tokens)"
+        aria-label="Compact context"
+        className={cn(
+          'flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-medium transition-colors cursor-pointer',
+          Elev.hairline,
+          'text-muted hover:text-ink hover:bg-surface-2 disabled:opacity-40 disabled:cursor-not-allowed'
+        )}
+      >
+        {isCompacting ? (
+          <Loader2 size={12} className="animate-spin text-accent" />
+        ) : (
+          <Minimize2 size={12} />
+        )}
+        <span className="hidden sm:inline">Compact</span>
+      </button>
+
       <button
         onClick={onTogglePanel}
         aria-pressed={panelOpen}
@@ -478,6 +613,17 @@ function TaskHeader({
                 Show task browser
               </button>
             ) : null}
+            <button
+              className="menu-item"
+              disabled={isCompacting || !canCompact}
+              onClick={() => {
+                close()
+                void handleCompact()
+              }}
+            >
+              <Minimize2 size={13} />
+              Compact context
+            </button>
             <button
               className="menu-item"
               onClick={() => {
@@ -666,6 +812,10 @@ export function TaskView() {
 
             <div className="space-y-6">
               {visible.map((message, index) => {
+                if (message.isCompacted) {
+                  return <CompactedContextCard key={message.id} message={message} />
+                }
+
                 if (message.role === 'user') {
                   const isEditing = editingMessageId === message.id
                   return (

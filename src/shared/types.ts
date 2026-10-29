@@ -589,6 +589,12 @@ export interface ChatMessage {
   /** The local like/dislike on an assistant turn, with the reason when given. */
   feedback?: MessageFeedbackRecord
   hidden?: boolean
+  /** Qoder-style context compaction markers */
+  isCompacted?: boolean
+  compactedSummary?: string
+  savedTokens?: number
+  foldedCount?: number
+  foldedMessages?: ChatMessage[]
 }
 
 export const MESSAGE_REACTIONS = ['👍', '❤️', '🎉', '👀', '✅', '💡'] as const
@@ -776,6 +782,21 @@ export interface UpdateTaskInput {
   model?: string
   title?: string
   agentRole?: AgentRole
+}
+
+export interface TaskCompactInput {
+  taskId: string
+  force?: boolean
+  keepTailCount?: number
+}
+
+export interface TaskCompactResult {
+  success: boolean
+  taskId: string
+  foldedCount: number
+  savedTokens: number
+  summary: string
+  message?: string
 }
 
 export interface DiffLine {
@@ -1345,6 +1366,7 @@ export interface KnightApi {
   stopTask: (id: string) => Promise<void>
   resumeTask: (id: string) => Promise<void>
   updateTask: (input: UpdateTaskInput) => Promise<Task>
+  compactTask: (input: TaskCompactInput) => Promise<TaskCompactResult>
   reactToMessage: (input: MessageReactionInput) => Promise<Task>
   rateMessage: (input: MessageFeedbackInput) => Promise<Task>
   addFolder: (id: string) => Promise<Task | null>

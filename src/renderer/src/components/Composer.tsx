@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { motion } from 'framer-motion'
-import { FolderPlus, MessageCircle } from 'lucide-react'
+import { FolderPlus, MessageCircle, Minimize2 } from 'lucide-react'
 import { BrandMark } from './BrandMarks'
 import { agentName } from '../lib/localProfile'
 import { toast } from 'sonner'
@@ -81,6 +81,7 @@ export function Composer({
   variant = 'home'
 }: ComposerProps) {
   const settings = useApp((state) => state.settings)
+  const compactTask = useApp((state) => state.compactTask)
   const openSettings = useApp((state) => state.openSettings)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [picking, setPicking] = useState(false)
@@ -171,6 +172,15 @@ export function Composer({
       icon: <Icon name="mention" size="md" />,
       insert: `${file.name} `
     })),
+    {
+      id: 'command-compact',
+      kind: '/' as const,
+      label: '/compact · Compress context',
+      detail: 'Summarize older messages to free context tokens (Qoder style)',
+      keywords: 'compact compress context tokens fold summarize qoder',
+      icon: <Minimize2 size={ICON_SIZES.md} />,
+      run: () => void compactTask()
+    },
     {
       id: 'command-folder',
       kind: '/',

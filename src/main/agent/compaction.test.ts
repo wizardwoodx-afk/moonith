@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ModelMessage } from '../backend/core/types'
+import type { ChatMessage } from '@shared/types'
 import {
   estimateTokens,
   groupTurns,
@@ -126,5 +127,40 @@ describe('renderTranscript', () => {
     expect(text).toContain('src/1.ts')
     expect(text).toContain('tool result:')
     expect(summaryMessage('notes').content).toContain('notes')
+  })
+})
+
+describe('Qoder-style compacted message structure', () => {
+  it('preserves executive summary markers and folded message payloads', () => {
+    const rawMessages = [
+      { id: 'm1', role: 'user' as const, content: 'Analyze the system performance', createdAt: new Date().toISOString() },
+      { id: 'm2', role: 'assistant' as const, content: 'Scanning metrics and profiling latency...', createdAt: new Date().toISOString() },
+      { id: 'm3', role: 'user' as const, content: 'Apply the recommendations', createdAt: new Date().toISOString() },
+      { id: 'm4', role: 'assistant' as const, content: 'Applied optimizations. All tests passing.', createdAt: new Date().toISOString() }
+    ]
+
+    const folded = rawMessages.slice(0, 2)
+    const kept = rawMessages.slice(2)
+    const summary = '### Context Executive Summary\n- Initial Objective: Analyze system performance\n- Retaining recent turns'
+
+    const compactedRecord: ChatMessage = {
+      id: 'compact-test-1',
+      role: 'assistant' as const,
+      content: summary,
+      createdAt: new Date().toISOString(),
+      isCompacted: true,
+      compactedSummary: summary,
+      savedTokens: 420,
+      foldedCount: folded.length,
+      foldedMessages: folded
+    }
+
+    const compactedTaskMessages: ChatMessage[] = [compactedRecord, ...kept]
+
+    expect(compactedTaskMessages[0].isCompacted).toBe(true)
+    expect(compactedTaskMessages[0].foldedCount).toBe(2)
+    expect(compactedTaskMessages[0].foldedMessages?.length).toBe(2)
+    expect(compactedTaskMessages[0].savedTokens).toBe(420)
+    expect(compactedTaskMessages.length).toBe(3)
   })
 })

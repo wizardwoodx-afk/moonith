@@ -18,6 +18,7 @@ export const IPC = {
   taskStop: 'task:stop',
   taskResume: 'task:resume',
   taskUpdate: 'task:update',
+  taskCompact: 'task:compact',
   taskReact: 'task:react',
   taskFeedback: 'task:feedback',
   taskEditMessage: 'task:edit-message',

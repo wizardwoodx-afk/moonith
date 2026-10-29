@@ -48,6 +48,8 @@ import type {
   TableHostInput,
   TableJoinInput,
   TableProposalInput,
+  TaskCompactInput,
+  TaskCompactResult,
   TaskEvent,
   UpdateTaskInput
 } from '@shared/types'
@@ -73,6 +75,7 @@ const api: KnightApi = {
   stopTask: (id: string) => ipcRenderer.invoke(IPC.taskStop, id),
   resumeTask: (id: string) => ipcRenderer.invoke(IPC.taskResume, id),
   updateTask: (input: UpdateTaskInput) => ipcRenderer.invoke(IPC.taskUpdate, input),
+  compactTask: (input: TaskCompactInput) => ipcRenderer.invoke(IPC.taskCompact, input),
   reactToMessage: (input: MessageReactionInput) => ipcRenderer.invoke(IPC.taskReact, input),
   rateMessage: (input: MessageFeedbackInput) => ipcRenderer.invoke(IPC.taskFeedback, input),
   addFolder: (id: string) => ipcRenderer.invoke(IPC.taskAddFolder, id),

@@ -1,7 +1,7 @@
 import { agentName } from '../../lib/localProfile'
 import { useEffect, useRef, useState, type ClipboardEvent } from 'react'
 import { motion } from 'framer-motion'
-import { Check, CheckCheck, ListChecks, ShieldCheck, Zap } from 'lucide-react'
+import { Check, CheckCheck, ListChecks, Minimize2, ShieldCheck, Zap } from 'lucide-react'
 import { Icon } from '../../components/icons'
 import { BrandMark } from '../../components/BrandMarks'
 import { toast } from 'sonner'
@@ -90,6 +90,7 @@ export function CaptainComposer({
   className?: string
 }) {
   const settings = useApp((state) => state.settings)
+  const compactTask = useApp((state) => state.compactTask)
   const openSettings = useApp((state) => state.openSettings)
   const currentTaskId = useApp((state) => state.currentTask?.id)
   const textareaRef = useRef<HTMLTextAreaElement>(null)

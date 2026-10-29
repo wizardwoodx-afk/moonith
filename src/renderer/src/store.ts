@@ -13,6 +13,7 @@ import type {
   Task,
   TaskEvent,
   TaskMode,
+  TaskCompactResult,
   TaskSummary
 } from '@shared/types'
 import { errorMessage } from './lib/utils'
@@ -78,6 +79,7 @@ interface AppState {
   addFolderToCurrent: () => Promise<void>
   removeFolderFromCurrent: (folder: string) => Promise<void>
   renameTask: (id: string, title: string) => Promise<void>
+  compactTask: (taskId?: string, force?: boolean) => Promise<TaskCompactResult | null>
   deleteTask: (id: string) => Promise<void>
   saveSettings: (patch: SettingsPatch) => Promise<PublicSettings | null>
   respondApproval: (approved: boolean, always?: boolean) => Promise<void>
@@ -365,6 +367,30 @@ export const useApp = create<AppState>((set, get) => ({
       set({ currentTask: updated })
     } catch (error) {
       toast.error(errorMessage(error))
+    }
+  },
+
+  compactTask: async (taskId, force = true) => {
+    const targetId = taskId || get().currentTask?.id
+    if (!targetId) return null
+    try {
+      const result = await window.knight.compactTask({ taskId: targetId, force })
+      if (result.success) {
+        toast.success(`Context compacted · Saved ~${result.savedTokens} tokens (${result.foldedCount} turns)`)
+        const refreshed = await window.knight.getTask(targetId)
+        if (refreshed) {
+          set((state) => ({
+            currentTask: state.currentTask?.id === targetId ? refreshed : state.currentTask,
+            tasks: mergeSummary(state.tasks, refreshed)
+          }))
+        }
+      } else if (result.message) {
+        toast.info(result.message)
+      }
+      return result
+    } catch (error) {
+      toast.error(errorMessage(error))
+      return null
     }
   },
 
