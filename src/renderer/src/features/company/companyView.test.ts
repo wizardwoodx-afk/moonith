@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_GOVERNANCE_SETTINGS } from '@shared/governance'
 import type { PublicSettings, Task, TaskSummary } from '@shared/types'
 import {
   buildActivity,
@@ -120,12 +121,15 @@ describe('company view', () => {
         }
       ],
       mcpServers: [],
-      connectors: { hasKey: false, enabled: false, toolkits: [] },
+      connectors: { hasKey: false, enabled: false, toolkits: [], userId: '' },
       channels: [],
       defaultPermissionMode: 'manual',
+      engineMode: 'engine',
       customInstructions: '',
       allowShell: false,
-      onboardingComplete: true
+      onboardingComplete: true,
+      agentName: '',
+      governance: DEFAULT_GOVERNANCE_SETTINGS
     }
     expect(engineSummary(null).ready).toBe(false)
     expect(engineSummary(base).ready).toBe(false)

@@ -48,7 +48,7 @@ function ps(script: string, { timeout = 30000, env }: PsOptions = {}): Promise<s
   })
 }
 
-const SNAPSHOT_DIR = join(tmpdir(), 'knight-cowork', 'snapshots')
+const SNAPSHOT_DIR = join(tmpdir(), 'selfimpulse', 'snapshots')
 
 /* ------------------------------------------------------------------ */
 /* Screen capture                                                      */
@@ -60,7 +60,7 @@ $bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen
 $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
 $g = [System.Drawing.Graphics]::FromImage($bmp)
 $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-$out = $env:KNIGHT_SHOT
+$out = $env:SELFIMPULSE_SHOT
 $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
 $g.Dispose(); $bmp.Dispose()
 $bounds.Width.ToString() + "x" + $bounds.Height.ToString()
@@ -78,7 +78,7 @@ export async function screenshot(): Promise<Screenshot> {
   if (!IS_WIN) throw new Error('Screen capture is only implemented for Windows in this build.')
   mkdirSync(SNAPSHOT_DIR, { recursive: true })
   const file = join(SNAPSHOT_DIR, `shot-${Date.now()}.png`)
-  const size = await ps(CAPTURE_PS, { env: { KNIGHT_SHOT: file } })
+  const size = await ps(CAPTURE_PS, { env: { SELFIMPULSE_SHOT: file } })
   if (!existsSync(file)) throw new Error('The screenshot could not be written.')
   const buf = readFileSync(file)
   return { ok: true, file, bytes: buf.length, screen: String(size).trim(), data: buf.toString('base64') }
@@ -159,7 +159,7 @@ public class FW {
   [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
 }
 "@
-$target = $env:KNIGHT_WINDOW
+$target = $env:SELFIMPULSE_WINDOW
 $cb = [FW+EnumWindowsProc]{
   param($h, $l)
   if ([FW]::IsWindowVisible($h)) {
@@ -184,7 +184,7 @@ export interface FocusResult {
 }
 
 export async function focusWindow(title: string): Promise<FocusResult> {
-  await ps(FOCUS_PS, { env: { KNIGHT_WINDOW: title } })
+  await ps(FOCUS_PS, { env: { SELFIMPULSE_WINDOW: title } })
   return { ok: true, title }
 }
 
@@ -196,7 +196,7 @@ public class MC {
   [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint dx, uint dy, uint d, IntPtr e);
 }
 "@
-[MC]::SetCursorPos([int]$env:KNIGHT_X, [int]$env:KNIGHT_Y) | Out-Null
+[MC]::SetCursorPos([int]$env:SELFIMPULSE_X, [int]$env:SELFIMPULSE_Y) | Out-Null
 Start-Sleep -Milliseconds 120
 [MC]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero)
 [MC]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)
@@ -212,14 +212,14 @@ public class MM {
   [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, IntPtr extra);
 }
 "@
-[MM]::SetCursorPos([int]$env:KNIGHT_X, [int]$env:KNIGHT_Y) | Out-Null
+[MM]::SetCursorPos([int]$env:SELFIMPULSE_X, [int]$env:SELFIMPULSE_Y) | Out-Null
 Start-Sleep -Milliseconds 100
-$button = [int]$env:KNIGHT_BUTTON
+$button = [int]$env:SELFIMPULSE_BUTTON
 $down = if ($button -eq 2) { 0x0008 } else { 0x0002 }
 $up   = if ($button -eq 2) { 0x0010 } else { 0x0004 }
 [MM]::mouse_event($down, 0, 0, 0, [IntPtr]::Zero)
 [MM]::mouse_event($up, 0, 0, 0, [IntPtr]::Zero)
-if ([int]$env:KNIGHT_CLICK_COUNT -gt 1) {
+if ([int]$env:SELFIMPULSE_CLICK_COUNT -gt 1) {
   Start-Sleep -Milliseconds 90
   [MM]::mouse_event($down, 0, 0, 0, [IntPtr]::Zero)
   [MM]::mouse_event($up, 0, 0, 0, [IntPtr]::Zero)
@@ -234,7 +234,7 @@ public class MS {
   [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint dx, uint dy, uint d, IntPtr e);
 }
 "@
-$dir = $env:KNIGHT_DIRECTION
+$dir = $env:SELFIMPULSE_DIRECTION
 $delta = switch ($dir) { "up" { 240 } "right" { -240 } "left" { 240 } default { -240 } }
 [MS]::mouse_event(0x0800, 0, [uint32]([int32]$delta), 0, [IntPtr]::Zero)
 "ok"
@@ -248,7 +248,7 @@ public class MK {
 }
 "@
 $map = @{ ctrl = 0x11; control = 0x11; alt = 0x12; shift = 0x10; win = 0x5B; enter = 0x0D; return = 0x0D; tab = 0x09; esc = 0x1B; escape = 0x1B; backspace = 0x08; space = 0x20; delete = 0x2E }
-$keys = $env:KNIGHT_KEYS -split '\\s+' | Where-Object { $_ }
+$keys = $env:SELFIMPULSE_KEYS -split '\\s+' | Where-Object { $_ }
 $codes = @()
 foreach ($k in $keys) {
   $low = $k.ToLower()
@@ -282,15 +282,15 @@ export async function click({ x, y, button = 'left', count = 1 }: ClickArgs): Pr
   await ps(
     `Add-Type -AssemblyName System.Windows.Forms
 ${MOUSE_PS.replace(
-      'if ([int]$env:KNIGHT_CLICK_COUNT -gt 1)',
-      'if ([int]$env:KNIGHT_CLICK_COUNT -gt 1)'
+      'if ([int]$env:SELFIMPULSE_CLICK_COUNT -gt 1)',
+      'if ([int]$env:SELFIMPULSE_CLICK_COUNT -gt 1)'
     )}`,
     {
       env: {
-        KNIGHT_X: String(x),
-        KNIGHT_Y: String(y),
-        KNIGHT_BUTTON: button === 'right' ? '2' : '1',
-        KNIGHT_CLICK_COUNT: String(count)
+        SELFIMPULSE_X: String(x),
+        SELFIMPULSE_Y: String(y),
+        SELFIMPULSE_BUTTON: button === 'right' ? '2' : '1',
+        SELFIMPULSE_CLICK_COUNT: String(count)
       }
     }
   )
@@ -310,7 +310,7 @@ export interface ScrollResult {
 
 export async function scroll({ direction = 'down', amount = 1 }: ScrollArgs): Promise<ScrollResult> {
   for (let i = 0; i < Math.max(1, amount); i++) {
-    await ps(SCROLL_PS, { env: { KNIGHT_DIRECTION: direction } })
+    await ps(SCROLL_PS, { env: { SELFIMPULSE_DIRECTION: direction } })
   }
   return { ok: true, direction, amount }
 }
@@ -326,7 +326,7 @@ export interface HotkeyResult {
 
 export async function hotkey({ keys = [] }: HotkeyArgs): Promise<HotkeyResult> {
   const list = (Array.isArray(keys) ? keys : String(keys).split(/\s+/)).filter(Boolean)
-  await ps(HOTKEY_PS, { env: { KNIGHT_KEYS: list.join(' ') } })
+  await ps(HOTKEY_PS, { env: { SELFIMPULSE_KEYS: list.join(' ') } })
   return { ok: true, keys: list }
 }
 
@@ -342,9 +342,9 @@ export async function type({ text }: TypeArgs): Promise<TypeResult> {
   await ps(
     `Add-Type -AssemblyName Microsoft.VisualBasic
 Start-Sleep -Milliseconds 120
-[Microsoft.VisualBasic.SendKeys]::SendWait($env:KNIGHT_TEXT)
+[Microsoft.VisualBasic.SendKeys]::SendWait($env:SELFIMPULSE_TEXT)
 "ok"`,
-    { env: { KNIGHT_TEXT: String(text).replace(/([+^%~(){}\[\]])/g, '{$1}') } }
+    { env: { SELFIMPULSE_TEXT: String(text).replace(/([+^%~(){}\[\]])/g, '{$1}') } }
   )
   return { ok: true }
 }

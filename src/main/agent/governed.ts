@@ -36,6 +36,7 @@ import {
   type ReceiptService
 } from '../sphragis'
 import type { GovernedAction, GovernedResult } from '@shared/enterprise'
+import type { PermissionMode } from '@shared/types'
 import type { AgentTool, ToolContext } from './tools/types'
 
 export interface GovernedDeps {
@@ -81,7 +82,7 @@ export function governToolCall(
     approval: GovernedAction['approval']
     /** What this call does, in words — lands in the governance record. */
     detail?: string
-    permissionMode?: 'manual' | 'auto' | 'skip'
+    permissionMode?: PermissionMode
     missionId?: string
   },
   deps?: GovernedDeps
@@ -123,7 +124,7 @@ async function runGovernedEffect(core: {
   args: Record<string, unknown>
   /** The effect. Runs ONLY when the gate allows. */
   effect: () => Promise<{ content: string; isError?: boolean }>
-  permissionMode?: 'manual' | 'auto' | 'skip'
+  permissionMode?: PermissionMode
   missionId?: string
   /** Called when the gate steers. Resolve true = approved, false = denied. */
   onSteer?: (decision: GovernanceDecision) => Promise<boolean>
@@ -160,10 +161,10 @@ async function runGovernedEffect(core: {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
     return {
-      content: `Blocked by the governance gate (nomos-journal-unavailable): the decision for "${core.tool.name}" could not be persisted (${detail}) — the action was refused, not run unrecorded`,
+      content: `Blocked by the governance gate (governance-journal-unavailable): the decision for "${core.tool.name}" could not be persisted (${detail}) — the action was refused, not run unrecorded`,
       isError: true,
       decision: 'deny' as const,
-      rule: 'nomos-journal-unavailable',
+      rule: 'governance-journal-unavailable',
       actionId: core.ids.actionId,
       executed: false
     }
@@ -256,7 +257,7 @@ export async function executeGovernedTool(input: {
   rawArgs: Record<string, unknown>
   ctx: ToolContext
   ids: ActionIds
-  permissionMode?: 'manual' | 'auto' | 'skip'
+  permissionMode?: PermissionMode
   missionId?: string
   /** Called when the gate steers. Resolve true = approved, false = denied. */
   onSteer?: (decision: GovernanceDecision) => Promise<boolean>
@@ -301,7 +302,7 @@ export async function runGovernedAction(
   action: GovernedAction,
   options: {
     ids: ActionIds
-    permissionMode?: 'manual' | 'auto' | 'skip'
+    permissionMode?: PermissionMode
     missionId?: string
     onSteer?: (decision: GovernanceDecision) => Promise<boolean>
     deps?: GovernedDeps

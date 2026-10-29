@@ -9,6 +9,7 @@ import type {
   CreateScheduleInput,
   CreateTaskInput,
   McpServerConfig,
+  PermissionMode,
   ProviderInput,
   ProviderKind,
   ProviderPublic,
@@ -18,6 +19,12 @@ import type {
   Task,
   TaskSummary
 } from '@shared/types'
+import {
+  DEFAULT_GOVERNANCE_SETTINGS,
+  normalizeAgentRole,
+  normalizeGovernanceSettings,
+  type GovernanceSettings
+} from '@shared/governance'
 import { getPaths, ensureTaskWorkspace, taskWorkspace } from './paths'
 import { atomicWriteJson, newId, nowIso, readJson } from './util'
 
@@ -34,6 +41,7 @@ interface StoredProvider {
 interface StoredConnectors {
   enabled: boolean
   toolkits: string[]
+  userId: string
   secret?: string
 }
 
@@ -47,6 +55,7 @@ interface StoredChannel {
   lastMessageAt?: string
   messagesIn: number
   messagesOut: number
+  allowedChatIds: string[]
   error?: string
 }
 
@@ -57,21 +66,28 @@ interface StoredSettings {
   channels: StoredChannel[]
   defaultProviderId?: string
   defaultModel?: string
-  defaultPermissionMode: 'manual' | 'auto' | 'skip'
+  defaultPermissionMode: PermissionMode
+  engineMode: 'engine' | 'internal'
   customInstructions: string
   allowShell: boolean
   onboardingComplete: boolean
+  /** What the user calls their agent. Empty until they name it. */
+  agentName: string
+  governance: GovernanceSettings
 }
 
 const DEFAULT_SETTINGS: StoredSettings = {
   providers: [],
   mcpServers: [],
-  connectors: { enabled: true, toolkits: [] },
+  connectors: { enabled: true, toolkits: [], userId: 'selfimpulse-local' },
   channels: [],
   defaultPermissionMode: 'manual',
+  engineMode: 'engine',
   customInstructions: '',
   allowShell: false,
-  onboardingComplete: false
+  onboardingComplete: false,
+  agentName: '',
+  governance: DEFAULT_GOVERNANCE_SETTINGS
 }
 
 function canEncrypt(): boolean {
@@ -110,16 +126,32 @@ export function openSecret(sealed: string | undefined): string | undefined {
   return undefined
 }
 
+function normalizeChatIds(value: unknown, strict = false): string[] {
+  if (!Array.isArray(value)) return []
+  const ids = value.map(String).map((id) => id.trim()).filter(Boolean)
+  if (strict && ids.some((id) => !/^-?\d{1,20}$/.test(id))) {
+    throw new Error('Telegram chat IDs must be numeric (group IDs may start with -).')
+  }
+  return [...new Set(ids.filter((id) => /^-?\d{1,20}$/.test(id)))]
+}
+
 function sanitizeMcpServer(config: McpServerConfig): McpServerConfig {
+  const transport =
+    config.transport === 'http' || config.transport === 'sse' ? config.transport : 'stdio'
   return {
     id: config.id || newId('mcp'),
     name: config.name.trim() || 'MCP server',
-    command: config.command.trim(),
+    transport,
+    command: String(config.command ?? '').trim(),
     args: (config.args ?? []).map(String),
+    url: config.url?.trim() || undefined,
+    headers: config.headers,
     env: config.env ?? {},
     enabled: config.enabled !== false,
     preset: config.preset,
-    toolAllowlist: config.toolAllowlist?.filter(Boolean)
+    toolAllowlist: config.toolAllowlist?.filter(Boolean),
+    source: config.source === 'lobehub' ? 'lobehub' : 'manual',
+    sourceUrl: config.sourceUrl
   }
 }
 
@@ -151,6 +183,11 @@ export class Store {
       toolkits: Array.isArray(rawSettings.connectors?.toolkits)
         ? rawSettings.connectors.toolkits.map(String).filter(Boolean)
         : [],
+      userId:
+        typeof rawSettings.connectors?.userId === 'string' &&
+        rawSettings.connectors.userId.trim()
+          ? rawSettings.connectors.userId.trim()
+          : 'selfimpulse-local',
       secret:
         typeof rawSettings.connectors?.secret === 'string'
           ? rawSettings.connectors.secret
@@ -169,9 +206,11 @@ export class Store {
             lastMessageAt: channel.lastMessageAt,
             messagesIn: Number(channel.messagesIn) || 0,
             messagesOut: Number(channel.messagesOut) || 0,
+            allowedChatIds: normalizeChatIds(channel.allowedChatIds),
             error: typeof channel.error === 'string' ? channel.error : undefined
           }))
       : []
+    this.settings.governance = normalizeGovernanceSettings(rawSettings.governance)
 
     const files = await fs.readdir(getPaths().tasks).catch(() => [] as string[])
     for (const file of files) {
@@ -242,6 +281,7 @@ export class Store {
       lastMessageAt: channel.lastMessageAt,
       messagesIn: channel.messagesIn,
       messagesOut: channel.messagesOut,
+      allowedChatIds: [...channel.allowedChatIds],
       error: channel.error
     }
   }
@@ -254,24 +294,38 @@ export class Store {
       connectors: {
         hasKey: Boolean(settings.connectors.secret),
         enabled: settings.connectors.enabled,
-        toolkits: settings.connectors.toolkits
+        toolkits: settings.connectors.toolkits,
+        userId: settings.connectors.userId
       },
       channels: settings.channels.map((channel) => this.toPublicChannel(channel)),
       defaultProviderId: settings.defaultProviderId,
       defaultModel: settings.defaultModel,
       defaultPermissionMode: settings.defaultPermissionMode,
+      engineMode: settings.engineMode,
       customInstructions: settings.customInstructions,
       allowShell: settings.allowShell,
-      onboardingComplete: settings.onboardingComplete
+      onboardingComplete: settings.onboardingComplete,
+      agentName: settings.agentName,
+      governance: settings.governance
     }
   }
 
-  getConnectorsConfig(): { apiKey?: string; enabled: boolean; toolkits: string[] } {
+  getGovernanceSettings(): GovernanceSettings {
+    return this.getSettings().governance
+  }
+
+  getConnectorsConfig(): {
+    apiKey?: string
+    enabled: boolean
+    toolkits: string[]
+    userId: string
+  } {
     const settings = this.getSettings()
     return {
       apiKey: openSecret(settings.connectors.secret),
       enabled: settings.connectors.enabled,
-      toolkits: [...settings.connectors.toolkits]
+      toolkits: [...settings.connectors.toolkits],
+      userId: settings.connectors.userId
     }
   }
 
@@ -282,6 +336,7 @@ export class Store {
     if (input.apiKey?.trim()) connectors.secret = sealSecret(input.apiKey.trim())
     if (input.enabled !== undefined) connectors.enabled = input.enabled
     if (input.toolkits) connectors.toolkits = [...new Set(input.toolkits.map(String).filter(Boolean))]
+    if (input.userId?.trim()) connectors.userId = input.userId.trim().slice(0, 120)
     await atomicWriteJson(getPaths().settingsFile, settings)
     return this.getPublicSettings()
   }
@@ -307,8 +362,12 @@ export class Store {
     const kind = existing?.kind ?? input.kind
     let secret = existing?.secret
     if (input.removeToken) secret = undefined
-    if (kind === 'webhook' && !secret) secret = sealSecret(`knight_${randomBytes(24).toString('hex')}`)
+    if (kind === 'webhook' && !secret) secret = sealSecret(`si_${randomBytes(24).toString('hex')}`)
     if (kind === 'telegram' && input.token?.trim()) secret = sealSecret(input.token.trim())
+    const allowedChatIds =
+      kind === 'telegram'
+        ? normalizeChatIds(input.allowedChatIds ?? existing?.allowedChatIds ?? [], true)
+        : []
 
     const channel: StoredChannel = {
       id,
@@ -320,6 +379,7 @@ export class Store {
       lastMessageAt: existing?.lastMessageAt,
       messagesIn: existing?.messagesIn ?? 0,
       messagesOut: existing?.messagesOut ?? 0,
+      allowedChatIds,
       error: existing?.error
     }
     if (existing) {
@@ -391,9 +451,14 @@ export class Store {
     if (patch.defaultProviderId !== undefined) settings.defaultProviderId = patch.defaultProviderId
     if (patch.defaultModel !== undefined) settings.defaultModel = patch.defaultModel
     if (patch.defaultPermissionMode !== undefined) settings.defaultPermissionMode = patch.defaultPermissionMode
+    if (patch.engineMode !== undefined) settings.engineMode = patch.engineMode
     if (patch.customInstructions !== undefined) settings.customInstructions = patch.customInstructions
     if (patch.allowShell !== undefined) settings.allowShell = patch.allowShell
     if (patch.onboardingComplete !== undefined) settings.onboardingComplete = patch.onboardingComplete
+    if (patch.agentName !== undefined) settings.agentName = patch.agentName.trim().slice(0, 24)
+    if (patch.governance !== undefined) {
+      settings.governance = normalizeGovernanceSettings(patch.governance)
+    }
 
     if (
       settings.defaultProviderId &&
@@ -461,6 +526,7 @@ export class Store {
       mode: input.mode,
       status: 'draft',
       permissionMode: input.permissionMode,
+      agentRole: normalizeAgentRole(input.agentRole, this.getSettings().governance.defaultRole),
       providerId: input.providerId,
       model: input.model,
       folders: uniqueFolders(input.folders ?? []),

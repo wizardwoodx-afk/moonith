@@ -1,16 +1,30 @@
-import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
+import {
+  createCipheriv,
+  createDecipheriv,
+  hkdfSync,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual
+} from 'node:crypto'
 import { createSocket, type Socket as DgramSocket } from 'node:dgram'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import { networkInterfaces, hostname } from 'node:os'
+import { networkInterfaces } from 'node:os'
 import type { AddressInfo } from 'node:net'
 import {
   EMPTY_TABLE_STATE,
   TABLE_CODE_LENGTH,
   TABLE_DISCOVERY_PORTS,
+  TABLE_MAX_PEERS,
+  TABLE_SEATS,
+  allDone,
+  markDone as applyMarkDone,
+  proposalSeats,
   publishProposal,
   turnKey as applyTurnKey,
   withdrawProposal
 } from '@shared/table'
+import { resolveAgentName } from '@shared/identity'
+import { store } from '../store'
 import type {
   TableGoal,
   TableGoalInput,
@@ -25,13 +39,26 @@ import type {
 } from '@shared/types'
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-const DISCOVERY_PREFIX = 'KNIGHT_TABLE_V1'
+const DISCOVERY_PREFIX = 'SELFIMPULSE_TABLE_V1'
+const LEGACY_DISCOVERY_PREFIX = 'KNIGHT_TABLE_V1'
 const MAX_BODY_BYTES = 64 * 1024
 const MAX_LEDGER = 200
 const MAX_PROPOSALS = 100
 const GUEST_TIMEOUT_MS = 12_000
 const GUEST_POLL_MS = 1_600
 const HEARTBEAT_FAILURES = 3
+
+/**
+ * The name the owner gave their agent. Ledger lines are read back to them in the
+ * Table feed, so they must speak the name they chose rather than the placeholder.
+ */
+function agentLabel(): string {
+  try {
+    return resolveAgentName(store.getPublicSettings().agentName)
+  } catch {
+    return resolveAgentName()
+  }
+}
 
 class HttpError extends Error {
   constructor(
@@ -49,6 +76,7 @@ interface SharedCore {
 }
 
 interface GuestSeat {
+  seat: TableSeat
   name: string
   device: string
   joinedAt: string
@@ -63,11 +91,12 @@ interface HostSession {
   code: string
   hostName: string
   startedAt: string
-  guest: GuestSeat | null
+  guests: GuestSeat[]
   core: SharedCore
 }
 
 interface GuestSession {
+  seat: TableSeat
   baseUrl: string
   token: string
   code: string
@@ -78,6 +107,7 @@ interface GuestSession {
   state: TableState
   polling: boolean
   failures: number
+  sessionKey: Buffer
 }
 
 function clean(value: unknown, max: number): string {
@@ -172,8 +202,78 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   }
 }
 
-function reply(res: ServerResponse, status: number, payload: unknown): void {
-  const body = JSON.stringify(payload)
+export interface EncryptedTableEnvelope {
+  __enc: 1
+  iv: string
+  tag: string
+  data: string
+}
+
+export function isEncryptedTableEnvelope(value: unknown): value is EncryptedTableEnvelope {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as Record<string, unknown>).__enc === 1 &&
+    typeof (value as Record<string, unknown>).iv === 'string' &&
+    typeof (value as Record<string, unknown>).tag === 'string' &&
+    typeof (value as Record<string, unknown>).data === 'string'
+  )
+}
+
+export function deriveTableKey(code: string): Buffer {
+  return Buffer.from(
+    hkdfSync(
+      'sha256',
+      Buffer.from(normalizeCode(code), 'utf8'),
+      'selfimpulse-table-join-salt',
+      'table-wire-v1',
+      32
+    )
+  )
+}
+
+export function deriveSessionKey(token: string): Buffer {
+  return Buffer.from(
+    hkdfSync(
+      'sha256',
+      Buffer.from(token, 'utf8'),
+      'selfimpulse-table-session-salt',
+      'table-session-v1',
+      32
+    )
+  )
+}
+
+export function encryptTablePayload(data: unknown, key: Buffer): EncryptedTableEnvelope {
+  const iv = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const plaintext = Buffer.from(JSON.stringify(data), 'utf8')
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()])
+  const tag = cipher.getAuthTag()
+  return {
+    __enc: 1,
+    iv: iv.toString('base64'),
+    tag: tag.toString('base64'),
+    data: ciphertext.toString('base64')
+  }
+}
+
+export function decryptTablePayload<T = unknown>(envelope: unknown, key: Buffer): T {
+  if (!isEncryptedTableEnvelope(envelope)) {
+    return envelope as T
+  }
+  const iv = Buffer.from(envelope.iv, 'base64')
+  const tag = Buffer.from(envelope.tag, 'base64')
+  const ciphertext = Buffer.from(envelope.data, 'base64')
+  const decipher = createDecipheriv('aes-256-gcm', key, iv)
+  decipher.setAuthTag(tag)
+  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
+  return JSON.parse(decrypted.toString('utf8')) as T
+}
+
+function reply(res: ServerResponse, status: number, payload: unknown, key?: Buffer): void {
+  const finalPayload = key ? encryptTablePayload(payload, key) : payload
+  const body = JSON.stringify(finalPayload)
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
@@ -272,8 +372,9 @@ async function bindDiscovery(
       continue
     }
     socket.on('message', (message, remote) => {
-      if (message.toString('utf8') !== `${DISCOVERY_PREFIX} ${code}`) return
-      const payload = JSON.stringify({ code, port, name: hostName, device: hostname() })
+      const msg = message.toString('utf8')
+      if (msg !== `${DISCOVERY_PREFIX} ${code}` && msg !== `${LEGACY_DISCOVERY_PREFIX} ${code}`) return
+      const payload = JSON.stringify({ code, port, name: hostName, device: 'Table Host' })
       socket.send(payload, remote.port, remote.address, () => undefined)
     })
     socket.on('error', () => undefined)
@@ -300,17 +401,22 @@ function openProposal(proposals: TableProposal[]): TableProposal | undefined {
   )
 }
 
+/** Starts the real work for a published joint action on this machine. Returns the local task id. */
+export type TableWorkStarter = (proposal: TableProposal) => Promise<string>
+
 export class TableService {
   private host: HostSession | null = null
   private guest: GuestSession | null = null
   private failures = new Map<string, { count: number; resetAt: number }>()
+  /** Injected at app start; publishing a joint action starts real work through it. */
+  workStarter: TableWorkStarter | null = null
 
   async getState(): Promise<TableState> {
     return this.state()
   }
 
   async hostTable(input: TableHostInput): Promise<TableState> {
-    const name = clean(input?.name, 40) || 'Captain'
+    const name = clean(input?.name, 40) || agentLabel()
     await this.leave()
     const code = makeCode()
     const core: SharedCore = { goal: null, proposals: [], ledger: [] }
@@ -335,11 +441,11 @@ export class TableService {
       code,
       hostName: name,
       startedAt,
-      guest: null,
+      guests: [],
       core
     }
     server.on('error', () => undefined)
-    pushLedger(core, entry('a', 'Opened the table. Waiting for the second Captain.', 'shared'))
+    pushLedger(core, entry('a', `Opened the table. Waiting for the other ${agentLabel()}s.`, 'shared'))
     return this.state()
   }
 
@@ -348,7 +454,7 @@ export class TableService {
     if (code.length !== TABLE_CODE_LENGTH) {
       throw new Error(`A table code is ${TABLE_CODE_LENGTH} characters.`)
     }
-    const name = clean(input?.name, 40) || 'Captain'
+    const name = clean(input?.name, 40) || agentLabel()
     const address = clean(input?.address, 120)
     await this.leave()
 
@@ -366,15 +472,22 @@ export class TableService {
       target = { baseUrl: `http://${found.address}:${found.port}`, address: found.address }
     }
 
-    let payload: { token?: string; state?: TableState }
+    let payload: { token?: string; seat?: TableSeat; state?: TableState }
+    const codeKey = deriveTableKey(code)
     try {
       const response = await fetch(`${target.baseUrl}/join`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ code, name, device: hostname() }),
+        body: JSON.stringify(encryptTablePayload({ code, name, device: 'Guest Desktop' }, codeKey)),
         signal: AbortSignal.timeout(6_000)
       })
-      const json = (await response.json()) as { token?: string; state?: TableState; error?: string }
+      const rawJson = (await response.json()) as unknown
+      const json = isEncryptedTableEnvelope(rawJson)
+        ? decryptTablePayload<{ token?: string; seat?: TableSeat; state?: TableState; error?: string }>(
+            rawJson,
+            codeKey
+          )
+        : (rawJson as { token?: string; state?: TableState; error?: string })
       if (!response.ok) throw new Error(json.error || `The host refused the join (${response.status}).`)
       payload = json
     } catch (error) {
@@ -384,9 +497,13 @@ export class TableService {
       throw error instanceof Error ? error : new Error(String(error))
     }
 
-    if (!payload.token || !payload.state) throw new Error('The host returned an incomplete table.')
+    if (!payload.token || !payload.state || !payload.seat) {
+      throw new Error('The host returned an incomplete table.')
+    }
     const startedAt = new Date().toISOString()
+    const sessionKey = deriveSessionKey(payload.token)
     this.guest = {
+      seat: payload.seat,
       baseUrl: target.baseUrl,
       token: payload.token,
       code,
@@ -397,13 +514,15 @@ export class TableService {
       state: {
         ...payload.state,
         role: 'guest',
+        seat: payload.seat,
         code,
         address: target.address,
         connected: true,
         startedAt
       },
       polling: false,
-      failures: 0
+      failures: 0,
+      sessionKey
     }
     return this.state()
   }
@@ -435,7 +554,7 @@ export class TableService {
     const title = clean(input?.title, 120)
     const summary = clean(input?.summary, 400)
     if (!title) throw new Error('Give the joint action a title.')
-    if (!summary) throw new Error('Describe what both Captains are agreeing to.')
+    if (!summary) throw new Error('Describe what the team is agreeing to.')
     if (this.host) {
       const core = this.host.core
       if (openProposal(core.proposals)) {
@@ -446,7 +565,8 @@ export class TableService {
         title,
         summary,
         proposedBy: this.seat(),
-        keys: { a: false, b: false },
+        keys: {},
+        seats: this.occupiedSeats(),
         status: 'pending',
         createdAt: new Date().toISOString()
       }
@@ -455,7 +575,7 @@ export class TableService {
         core,
         entry(
           this.seat(),
-          `Proposed “${title}”. Both Captains must turn a key.`,
+          `Proposed “${title}”. Both ${agentLabel()}s must turn a key.`,
           'pending'
         )
       )
@@ -479,7 +599,7 @@ export class TableService {
       if (next.status === 'approved') {
         pushLedger(
           core,
-          entry('joint', `“${next.title}” is co-signed by both Captains.`, 'approved')
+          entry('joint', `“${next.title}” is co-signed by every seated ${agentLabel()}.`, 'approved')
         )
       }
       return this.state()
@@ -494,7 +614,7 @@ export class TableService {
       const proposal = core.proposals.find((item) => item.id === id)
       if (!proposal) throw new Error('That joint action is no longer on the table.')
       if (proposal.proposedBy !== this.seat()) {
-        throw new Error('Only the Captain who proposed it can withdraw this action.')
+        throw new Error(`Only the ${agentLabel()} who proposed it can withdraw this action.`)
       }
       if (proposal.status !== 'pending') {
         throw new Error('Only a pending joint action can be withdrawn.')
@@ -524,11 +644,38 @@ export class TableService {
       core.proposals = core.proposals.map((item) => (item.id === id ? next : item))
       pushLedger(
         core,
-        entry('joint', `Published “${proposal.title}” to the shared table.`, 'shared')
+        entry('joint', `Published “${proposal.title}”. The work starts on every desk.`, 'shared')
       )
+      await this.beginWork(id, 'a')
       return this.state()
     }
-    return this.guestPost('/publish', { id })
+    await this.guestPost('/publish', { id })
+    await this.beginWork(id, this.seat())
+    return this.state()
+  }
+
+  async markDone(proposalId: string): Promise<TableState> {
+    const id = clean(proposalId, 80)
+    if (this.host) {
+      const core = this.host.core
+      const proposal = core.proposals.find((item) => item.id === id)
+      if (!proposal) throw new Error('That joint action is no longer on the table.')
+      if (proposal.status !== 'published') {
+        throw new Error('Only a published joint action can be marked done.')
+      }
+      const next = applyMarkDone(proposal, this.seat())
+      if (next === proposal) throw new Error('Your side is already marked done.')
+      core.proposals = core.proposals.map((item) => (item.id === id ? next : item))
+      pushLedger(core, entry('a', `Finished their side of “${proposal.title}”.`, 'shared'))
+      if (allDone(next)) {
+        pushLedger(
+          core,
+          entry('joint', `“${proposal.title}” is complete on all desks.`, 'approved')
+        )
+      }
+      return this.state()
+    }
+    return this.guestPost('/done', { id })
   }
 
   async leave(): Promise<TableState> {
@@ -556,36 +703,61 @@ export class TableService {
   }
 
   private seat(): TableSeat {
-    return this.host ? 'a' : 'b'
+    return this.host ? 'a' : this.guest ? this.guest.seat : 'a'
+  }
+
+  /** Every seat currently taken at the host's table; these seats must co-sign a proposal. */
+  private occupiedSeats(): TableSeat[] {
+    if (!this.host) return [this.seat()]
+    return ['a', ...this.host.guests.map((guest) => guest.seat)]
+  }
+
+  private async beginWork(proposalId: string, seat: TableSeat): Promise<void> {
+    const starter = this.workStarter
+    if (!starter) return
+    const proposal = this.host
+      ? this.host.core.proposals.find((item) => item.id === proposalId)
+      : this.guest?.state.proposals.find((item) => item.id === proposalId)
+    if (!proposal || proposal.status !== 'published' || proposal.taskIds?.[seat]) return
+    try {
+      const taskId = await starter(proposal)
+      if (this.host) {
+        this.host.core.proposals = this.host.core.proposals.map((item) =>
+          item.id === proposalId
+            ? { ...item, taskIds: { ...item.taskIds, [seat]: taskId } }
+            : item
+        )
+      } else {
+        await this.guestPost('/started', { id: proposalId, taskId })
+      }
+    } catch {
+      /* the table stays usable even if this desk cannot start the work */
+    }
   }
 
   private state(): TableState {
     if (this.host) {
       const host = this.host
       const now = Date.now()
-      const online = host.guest ? now - host.guest.lastSeen < GUEST_TIMEOUT_MS : false
       const peers: TablePeer[] = [
         {
           seat: 'a',
           name: host.hostName,
-          device: hostname(),
+          device: 'Host Desktop',
           online: true,
           joinedAt: host.startedAt
         },
-        ...(host.guest
-          ? [
-              {
-                seat: 'b' as const,
-                name: host.guest.name,
-                device: host.guest.device,
-                online,
-                joinedAt: host.guest.joinedAt
-              }
-            ]
-          : [])
+        ...host.guests.map((guest) => ({
+          seat: guest.seat,
+          name: guest.name,
+          device: guest.device,
+          online: now - guest.lastSeen < GUEST_TIMEOUT_MS,
+          joinedAt: guest.joinedAt
+        }))
       ]
       return {
         role: 'host',
+        seat: 'a',
         code: host.code,
         address: localAddress(),
         port: host.port,
@@ -627,12 +799,16 @@ export class TableService {
         signal: AbortSignal.timeout(4_000)
       })
       if (!response.ok) throw new Error(`Table state failed (${response.status})`)
-      const payload = (await response.json()) as TableState
+      const raw = (await response.json()) as unknown
+      const payload = isEncryptedTableEnvelope(raw)
+        ? decryptTablePayload<TableState>(raw, guest.sessionKey)
+        : (raw as TableState)
       if (this.guest !== guest) return
       guest.failures = 0
       guest.state = {
         ...payload,
         role: 'guest',
+        seat: guest.seat,
         code: guest.code,
         address: guest.address,
         connected: true,
@@ -659,28 +835,30 @@ export class TableService {
     if (!guest) throw new Error('You are not at a table.')
     let response: Response
     try {
+      const encryptedBody = encryptTablePayload(body, guest.sessionKey)
       response = await fetch(`${guest.baseUrl}${path}`, {
         method: 'POST',
         headers: {
           authorization: `Bearer ${guest.token}`,
           'content-type': 'application/json'
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(encryptedBody),
         signal: AbortSignal.timeout(6_000)
       })
     } catch {
       throw new Error('The host did not answer. Check the connection and try again.')
     }
-    const payload = (await response.json().catch(() => ({}))) as {
-      error?: string
-      state?: TableState
-    }
+    const raw = (await response.json().catch(() => ({}))) as unknown
+    const payload = isEncryptedTableEnvelope(raw)
+      ? decryptTablePayload<{ error?: string; state?: TableState }>(raw, guest.sessionKey)
+      : (raw as { error?: string; state?: TableState })
     if (!response.ok) throw new Error(payload.error || `The host refused that action (${response.status}).`)
     if (!payload.state) throw new Error('The host returned an incomplete table.')
     if (this.guest === guest) {
       guest.state = {
         ...payload.state,
         role: 'guest',
+        seat: guest.seat,
         code: guest.code,
         address: guest.address,
         connected: true,
@@ -691,12 +869,12 @@ export class TableService {
     return this.state()
   }
 
-  private authorize(req: IncomingMessage): GuestSeat {
+  private authorize(req: IncomingMessage): { guest: GuestSeat; sessionKey: Buffer } {
     const host = this.host
-    if (!host || !host.guest) throw new HttpError(401, 'Join a table first.')
     const token = bearer(req)
-    if (!tokensMatch(token, host.guest.token)) throw new HttpError(401, 'That table session is not valid.')
-    return host.guest
+    const guest = host?.guests.find((item) => tokensMatch(token, item.token))
+    if (!host || !guest) throw new HttpError(401, 'That table session is not valid.')
+    return { guest, sessionKey: deriveSessionKey(guest.token) }
   }
 
   private async handleHostRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -710,29 +888,36 @@ export class TableService {
       }
       if (path === '/state') {
         if (req.method !== 'GET') throw new HttpError(405, 'Use GET for state.')
-        this.authorize(req)
-        const host = this.host
-        if (host?.guest) host.guest.lastSeen = Date.now()
-        reply(res, 200, this.state())
+        const { guest, sessionKey } = this.authorize(req)
+        guest.lastSeen = Date.now()
+        reply(res, 200, this.state(), sessionKey)
         return
       }
-      if (!['/goal', '/propose', '/key', '/withdraw', '/publish', '/leave'].includes(path)) {
+      if (!['/goal', '/propose', '/key', '/withdraw', '/publish', '/leave', '/done', '/started'].includes(path)) {
         throw new HttpError(404, 'Unknown table route.')
       }
       if (req.method !== 'POST') throw new HttpError(405, 'Use POST for table actions.')
-      const guest = this.authorize(req)
+      const { guest, sessionKey } = this.authorize(req)
       guest.lastSeen = Date.now()
-      const body = await readJson(req)
+      const rawBody = await readJson(req)
+      let body: Record<string, unknown> = rawBody
+      if (isEncryptedTableEnvelope(rawBody)) {
+        try {
+          body = decryptTablePayload<Record<string, unknown>>(rawBody, sessionKey)
+        } catch {
+          throw new HttpError(400, 'Could not decrypt table payload.')
+        }
+      }
       const host = this.host
       if (!host) throw new HttpError(410, 'This table closed.')
 
       if (path === '/leave') {
-        host.guest = null
+        host.guests = host.guests.filter((item) => item.token !== guest.token)
         pushLedger(
           host.core,
-          entry('b', `${guest.name} left the table.`, 'shared')
+          entry(guest.seat, `${guest.name} left the table.`, 'shared')
         )
-        reply(res, 200, { state: this.state() })
+        reply(res, 200, { state: this.state() }, sessionKey)
         return
       }
 
@@ -743,10 +928,10 @@ export class TableService {
           title,
           detail: clean(body.detail, 600),
           due: clean(body.due, 40),
-          setBy: 'b',
+          setBy: guest.seat,
           updatedAt: new Date().toISOString()
         }
-        pushLedger(host.core, entry('b', `Set the shared goal to “${title}”.`, 'shared'))
+        pushLedger(host.core, entry(guest.seat, `Set the shared goal to “${title}”.`, 'shared'))
       }
 
       if (path === '/propose') {
@@ -760,37 +945,51 @@ export class TableService {
           id: `proposal_${randomUUID()}`,
           title,
           summary,
-          proposedBy: 'b',
-          keys: { a: false, b: false },
+          proposedBy: guest.seat,
+          keys: {},
+          seats: this.occupiedSeats(),
           status: 'pending',
           createdAt: new Date().toISOString()
         }
         host.core.proposals = [...host.core.proposals, proposal].slice(-MAX_PROPOSALS)
         pushLedger(
           host.core,
-          entry('b', `Proposed “${title}”. Both Captains must turn a key.`, 'pending')
+          entry(guest.seat, `Proposed “${title}”. Every seated ${agentLabel()} must turn a key.`, 'pending')
         )
       }
 
-      if (path === '/key' || path === '/withdraw' || path === '/publish') {
+      if (path === '/started') {
+        const id = clean(body.id, 80)
+        const taskId = clean(body.taskId, 80)
+        if (!taskId) throw new HttpError(400, 'A task id is required.')
+        const proposal = host.core.proposals.find((item) => item.id === id)
+        if (!proposal) throw new HttpError(404, 'That joint action is no longer on the table.')
+        host.core.proposals = host.core.proposals.map((item) =>
+          item.id === id
+            ? { ...item, taskIds: { ...item.taskIds, [guest.seat]: taskId } }
+            : item
+        )
+      }
+
+      if (path === '/key' || path === '/withdraw' || path === '/publish' || path === '/done') {
         const id = clean(body.id, 80)
         const proposal = host.core.proposals.find((item) => item.id === id)
         if (!proposal) throw new HttpError(404, 'That joint action is no longer on the table.')
         if (path === '/key') {
           if (proposal.status !== 'pending') throw new HttpError(409, 'That action is no longer pending.')
-          const next = applyTurnKey(proposal, 'b')
+          const next = applyTurnKey(proposal, guest.seat)
           if (next === proposal) throw new HttpError(409, 'Your key is already on this action.')
           host.core.proposals = host.core.proposals.map((item) => (item.id === id ? next : item))
           if (next.status === 'approved') {
             pushLedger(
               host.core,
-              entry('joint', `“${next.title}” is co-signed by both Captains.`, 'approved')
+              entry('joint', `“${next.title}” is co-signed by every seated ${agentLabel()}.`, 'approved')
             )
           }
         }
         if (path === '/withdraw') {
-          if (proposal.proposedBy !== 'b') {
-            throw new HttpError(403, 'Only the Captain who proposed it can withdraw this action.')
+          if (proposal.proposedBy !== guest.seat) {
+            throw new HttpError(403, `Only the ${agentLabel()} who proposed it can withdraw this action.`)
           }
           if (proposal.status !== 'pending') throw new HttpError(409, 'That action is no longer pending.')
           host.core.proposals = host.core.proposals.map((item) =>
@@ -798,7 +997,7 @@ export class TableService {
           )
           pushLedger(
             host.core,
-            entry('b', `Withdrew “${proposal.title}”. Nothing was published.`, 'withdrawn')
+            entry(guest.seat, `Withdrew “${proposal.title}”. Nothing was published.`, 'withdrawn')
           )
         }
         if (path === '/publish') {
@@ -810,12 +1009,31 @@ export class TableService {
           )
           pushLedger(
             host.core,
-            entry('joint', `Published “${proposal.title}” to the shared table.`, 'shared')
+            entry('joint', `Published “${proposal.title}”. The work starts on every desk.`, 'shared')
           )
+          await this.beginWork(id, 'a')
+        }
+        if (path === '/done') {
+          if (proposal.status !== 'published') {
+            throw new HttpError(409, 'Only a published joint action can be marked done.')
+          }
+          const next = applyMarkDone(proposal, guest.seat)
+          if (next === proposal) throw new HttpError(409, 'Your side is already marked done.')
+          host.core.proposals = host.core.proposals.map((item) => (item.id === id ? next : item))
+          pushLedger(
+            host.core,
+            entry(guest.seat, `Finished their side of “${proposal.title}”.`, 'shared')
+          )
+          if (allDone(next)) {
+            pushLedger(
+              host.core,
+              entry('joint', `“${proposal.title}” is complete on all desks.`, 'approved')
+            )
+          }
         }
       }
 
-      reply(res, 200, { state: this.state() })
+      reply(res, 200, { state: this.state() }, sessionKey)
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 500
       reply(res, status, {
@@ -833,7 +1051,19 @@ export class TableService {
     if (attempt && attempt.resetAt > now && attempt.count >= 6) {
       throw new HttpError(429, 'Too many join attempts. Wait a minute and try again.')
     }
-    const body = await readJson(req)
+    const rawBody = await readJson(req)
+    let body = rawBody
+    const codeKey = deriveTableKey(host.code)
+    if (isEncryptedTableEnvelope(rawBody)) {
+      try {
+        body = decryptTablePayload<Record<string, unknown>>(rawBody, codeKey)
+      } catch {
+        const next = attempt && attempt.resetAt > now ? attempt : { count: 0, resetAt: now + 60_000 }
+        next.count += 1
+        this.failures.set(remote, next)
+        throw new HttpError(403, 'That table code is not correct.')
+      }
+    }
     const code = normalizeCode(body.code)
     if (code !== host.code) {
       const next = attempt && attempt.resetAt > now ? attempt : { count: 0, resetAt: now + 60_000 }
@@ -845,23 +1075,28 @@ export class TableService {
       }
       throw new HttpError(403, 'That table code is not correct.')
     }
-    const online = host.guest ? now - host.guest.lastSeen < GUEST_TIMEOUT_MS : false
-    if (host.guest && online) {
-      throw new HttpError(409, 'This table already has two Captains.')
+    // A Captain who stopped answering has left their seat; free it for the next arrival.
+    host.guests = host.guests.filter((item) => now - item.lastSeen < GUEST_TIMEOUT_MS)
+    if (host.guests.length >= TABLE_MAX_PEERS - 1) {
+      throw new HttpError(409, `This table is full. Four ${agentLabel()}s is the limit.`)
     }
-    const name = clean(body.name, 40) || 'Captain'
+    const name = clean(body.name, 40) || agentLabel()
     const device = clean(body.device, 60) || remote
+    const taken = new Set(host.guests.map((item) => item.seat))
+    const seat = TABLE_SEATS.find((candidate) => candidate !== 'a' && !taken.has(candidate))
+    if (!seat) throw new HttpError(409, `This table is full. Four ${agentLabel()}s is the limit.`)
     const guest: GuestSeat = {
+      seat,
       name,
       device,
       joinedAt: new Date().toISOString(),
       lastSeen: now,
       token: randomBytes(32).toString('hex')
     }
-    host.guest = guest
+    host.guests.push(guest)
     this.failures.delete(remote)
-    pushLedger(host.core, entry('b', `${name} joined the table.`, 'shared'))
-    reply(res, 200, { token: guest.token, state: this.state() })
+    pushLedger(host.core, entry(seat, `${name} joined the table.`, 'shared'))
+    reply(res, 200, { token: guest.token, seat, state: this.state() }, codeKey)
   }
 }
 

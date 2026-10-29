@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
 import { LockKeyhole } from 'lucide-react'
-import type { AttachmentRef, PermissionMode, TaskSummary } from '@shared/types'
+import type { AttachmentRef, PermissionMode, TaskMode, TaskSummary } from '@shared/types'
 import { cn } from '../../lib/utils'
 import { buildActivity, type ActivityMetric } from '../../lib/activity'
 import type { ComposerModelState } from '../../lib/composerChoices'
-import { CaptainDoodle } from './CaptainDoodle'
 import { CaptainComposer } from './CaptainComposer'
+import { NameYourAgent } from './NameYourAgent'
+import { useAgentName } from '../../lib/localProfile'
+import { TaskDeck } from '../../motion/TaskDeck'
 
 const LEVELS = [
   'bg-surface-3',
@@ -35,7 +37,7 @@ function ActivityCard({ tasks }: { tasks: TaskSummary[] }) {
             {value === 'sessions' ? 'Sessions' : 'Receipts'}
           </button>
         ))}
-        <span className="ml-auto font-mono text-[9.5px] text-faint">
+        <span className="ml-auto font-mono text-[10px] text-faint">
           {grid.stats.total} {tab === 'sessions' ? 'sessions' : 'receipts'} this year
         </span>
       </div>
@@ -81,12 +83,14 @@ export function CaptainWelcome({
   tasks,
   model,
   permissionMode,
+  mode,
   draft,
   attachments,
   workspace,
   onDraftChange,
   onAttachmentsChange,
   onPermissionChange,
+  onModeChange,
   onModelChange,
   onChooseWorkspace,
   onClearWorkspace,
@@ -96,35 +100,35 @@ export function CaptainWelcome({
   tasks: TaskSummary[]
   model: ComposerModelState
   permissionMode: PermissionMode
+  mode: TaskMode
   draft: string
   attachments: AttachmentRef[]
   workspace: string | null
   onDraftChange: (value: string) => void
   onAttachmentsChange: (value: AttachmentRef[]) => void
   onPermissionChange: (value: PermissionMode) => void
+  onModeChange: (value: TaskMode) => void
   onModelChange: (value: ComposerModelState) => void
   onChooseWorkspace: () => void | Promise<void>
   onClearWorkspace: () => void
   onSend: () => void
   busy?: boolean
 }) {
+  const name = useAgentName()
+
   return (
     <div className="scroll-thin h-full overflow-y-auto">
       <div className="mx-auto flex min-h-full w-full max-w-[924px] flex-col px-6 pt-5 pb-2">
         <div className="rise flex flex-col items-center">
-          <CaptainDoodle />
-          <h1 className="mt-4 text-center text-[20px] leading-8 font-medium text-ink">
-            Beyond Busywork
-          </h1>
-          <p className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5 text-center text-[20px] leading-6 font-medium text-muted">
-            <span>What can</span>
-            <span className="text-ink">Captain</span>
-            <span>help you build?</span>
-          </p>
+          <NameYourAgent />
 
-          <div className="mt-7 flex w-full justify-center">
-            <ActivityCard tasks={tasks} />
-          </div>
+          {tasks.length ? (
+            <div className="mt-7 flex w-full justify-center">
+              <div className="w-full max-w-[520px]">
+                <TaskDeck tasks={tasks.slice(0, 4)} />
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="mx-auto mt-auto w-full max-w-[768px] pt-10">
@@ -135,13 +139,15 @@ export function CaptainWelcome({
             onAttachmentsChange={onAttachmentsChange}
             permissionMode={permissionMode}
             onPermissionChange={onPermissionChange}
+            mode={mode}
+            onModeChange={onModeChange}
             model={model}
             onModelChange={onModelChange}
             workspace={workspace}
             onChooseWorkspace={onChooseWorkspace}
             onClearWorkspace={onClearWorkspace}
             onSubmit={onSend}
-            placeholder="Ask Captain…"
+            placeholder={`Ask ${name}…`}
             busy={busy}
             autoFocus
           />

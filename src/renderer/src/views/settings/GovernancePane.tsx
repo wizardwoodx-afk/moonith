@@ -10,6 +10,7 @@
  * the state shown is always read back from the gate after the change, never
  * assumed from the click.
  */
+import { agentName } from '../../lib/localProfile'
 import { useCallback, useEffect, useState } from 'react'
 import { OctagonX, RefreshCw, Scale, ShieldOff } from 'lucide-react'
 import type {
@@ -105,7 +106,7 @@ export function GovernancePane() {
       setOutcome({
         tone: 'danger',
         message:
-          'The kill switch is engaged. Every action the Captain or the Crew attempts is refused until you release it.'
+          `The kill switch is engaged. Every action the ${agentName()} or the Crew attempts is refused until you release it.`
       })
       await load()
     } catch (error) {
@@ -157,11 +158,11 @@ export function GovernancePane() {
   return (
     <SettingsSection
       title="Governance gate"
-      description="Every effectful tool call is judged before it touches the world — the same way, on every path. This is what the gate has been deciding."
+      
     >
       <div className="space-y-5">
         <PaneNote>
-          Before the Captain or a Crew seat runs a tool, the gate checks three things in order: is
+          Before the {agentName()} or a Crew seat runs a tool, the gate checks three things in order: is
           this agent still allowed to act, does it hold the capability the tool needs, and does the
           action need a human. It fails closed — if the policy engine itself breaks, the action is
           refused rather than allowed. A high-risk action always reaches you, whatever the agent's
@@ -192,13 +193,13 @@ export function GovernancePane() {
               tone={summary.deny > 0 ? 'danger' : 'default'}
               hint="never ran"
             />
-            <Stat label="Registered agents" value={summary.agents} hint="the Captain and its Crew" />
+            <Stat label="Registered agents" value={summary.agents} hint={`the ${agentName()} and its Crew`} />
           </StatGrid>
         ) : null}
 
         {summary && decided === 0 ? (
           <EmptyState icon={<Scale size={18} />} title="Nothing judged yet">
-            The gate speaks the moment the Captain runs a tool. Until then there is nothing to show —
+            The gate speaks the moment the {agentName()} runs a tool. Until then there is nothing to show —
             which is the honest answer, not an empty promise.
           </EmptyState>
         ) : null}

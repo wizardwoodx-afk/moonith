@@ -2442,7 +2442,7 @@ export function exportSelfImpulseMemoryMarkdown(): string {
     ``,
     `## Skills — test-gated, learned from runs (${s.skills.length})`,
     ...(s.skills.length > 0
-      ? s.skills.map((k) => `- **${k.name} v${k.version}** — ${k.when}\n  - steps: ${k.steps.join(" → ")}\n  - tool: \`${k.tool}\` · runs ${k.runs} · wins ${k.wins} · avg score ${k.avgScore ?? "n/a"}${k.flagged ? " · ⚑ FLAGGED (review)" : ""}\n  - provenance: receipt \`${k.bornReceiptId}\``)
+      ? s.skills.map((k) => `- **${k.name} v${k.version}** — ${k.when}\n  - steps: ${k.steps.join(" → ")}\n  - tool: \`${k.tool}\` · runs ${k.runs} · wins ${k.wins} · avg score ${k.avgScore ?? "n/a"}${k.flagged ? " · FLAGGED (review)" : ""}\n  - provenance: receipt \`${k.bornReceiptId}\``)
       : ["- (none)"]),
     ``,
     `## Failure memory — rejected mutations (${s.failures.length})`,

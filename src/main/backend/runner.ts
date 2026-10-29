@@ -3,7 +3,7 @@ import type { ModelMessage, ToolSpec } from './core/types'
 import { runImpulseTurn } from './impulse'
 import type { Provider, ProviderToolSpec, WireMessage } from './provider'
 import type { BackendStore } from './store'
-import { ToolRuntime, type ToolPermissions } from './tools'
+import { ToolRuntime, isIntegrationToolName, type ToolPermissions } from './tools'
 
 /**
  * Agent runtime: a tool-calling loop on top of the provider, with delegation
@@ -164,13 +164,27 @@ export interface RunResult {
   stopped?: boolean
 }
 
-interface ResolvedAgent {
+export interface ResolvedAgent {
   id: string
   name: string
   prompt: string
   tools: string[] | null
   readOnly?: boolean
   canDelegate?: boolean
+}
+
+/**
+ * Where one dispatched tool call runs: the session it belongs to, the agent that
+ * asked for it, and the tool runtime holding the permission rules. All optional
+ * so a caller with no turn context (a test, a one-shot call) still goes through
+ * the same gated router.
+ */
+export interface DispatchContext {
+  session?: RunnerSession
+  agentId?: string
+  runtime?: ToolRuntime
+  depth?: number
+  parentAgent?: ResolvedAgent
 }
 
 export class AgentRunner {
@@ -208,9 +222,9 @@ export class AgentRunner {
     this.aborts.set(input.session.id, controller)
 
     const agent =
-      input.agentId === 'knight'
+      input.agentId === 'knight' || input.agentId === 'selfimpulse' || input.agentId === 'impulse'
         ? {
-            id: 'knight',
+            id: input.agentId ?? 'selfimpulse',
             name: 'SelfImpulse',
             role: 'orchestrator',
             prompt: this.settings.systemPrompt,
@@ -218,20 +232,7 @@ export class AgentRunner {
           }
         : this.resolveAgent(input.agentId ?? 'explore')
 
-    const runtime = new ToolRuntime({
-      workspace: this.workspace,
-      permissions: this.settings.permissions,
-      sandbox: this.settings.sandbox !== false,
-      // "ask" really asks: the renderer is prompted, and an unanswered prompt
-      // is a refusal rather than a silent yes.
-      onAsk: async (name: string) => {
-        const answer = await this.integrations.permissions?.ask({
-          tool: name,
-          args: { __session: input.session.id }
-        })
-        return Boolean(answer?.allowed)
-      }
-    })
+    const runtime = this.makeRuntime(input.session.id)
 
     // The ImpulseCore core is the default engine; the legacy loop stays as a fallback.
     try {
@@ -277,7 +278,7 @@ export class AgentRunner {
           ...toolSet.groundedActionsTools,
           ...toolSet.workTools,
           ...toolSet.mcpTools,
-          ...toolSet.openClawTools
+          ...toolSet.externalAgentTools
         ]
       : [
           ...toolSet.roleTools,
@@ -286,7 +287,7 @@ export class AgentRunner {
           ...toolSet.groundedActionsTools,
           ...toolSet.workTools,
           ...toolSet.mcpTools,
-          ...toolSet.openClawTools
+          ...toolSet.externalAgentTools
         ]
 
     const usage: RunnerUsage = { prompt: 0, completion: 0, total: 0, calls: 0 }
@@ -370,47 +371,16 @@ export class AgentRunner {
             tool: call.name
           })
 
-          let result: Record<string, unknown> | undefined
-          if (call.name === 'delegate_to_agent') {
-            result = (await this.delegate({
-              session: input.session,
-              args,
-              parentAgent: agent,
-              depth: opts.depth || 0
-            })) as unknown as Record<string, unknown>
-          } else if (call.name.startsWith('connectors_')) {
-            result = (await this.runConnectors(call.name.replace(/^connectors_/, ''), args)) as unknown as Record<
-              string,
-              unknown
-            >
-          } else if (call.name.startsWith('computer_')) {
-            result = (await this.integrations.computer?.invoke(call.name, args)) as unknown as Record<
-              string,
-              unknown
-            >
-          } else if (call.name === 'grounded_actions') {
-            const res = (await this.integrations.uitars?.run({
-              instruction: args.instruction as string,
-              maxSteps: args.maxSteps as number | undefined
-            })) as { steps?: unknown[]; summary?: string } | undefined
-            this.emit('agent:tool', {
-              sessionId: input.session.id,
-              agentId: agent.id,
-              tool: 'grounded_actions',
-              args,
-              result: { ok: true, steps: (res?.steps || []).length, summary: res?.summary }
-            })
-            result = res as unknown as Record<string, unknown>
-          } else {
-            result = (await runtime.invoke(call.name, args)) as unknown as Record<string, unknown>
-            this.emit('agent:tool', {
-              sessionId: input.session.id,
-              agentId: agent.id,
-              tool: call.name,
-              args,
-              result
-            })
-          }
+          // One router for both engines, so the integration gate below is the
+          // only place a connector, a desktop click, a grounded run or an MCP
+          // tool can be reached from.
+          const result = await this.dispatch(call.name, args, {
+            session: input.session,
+            agentId: agent.id,
+            runtime,
+            depth: opts.depth || 0,
+            parentAgent: agent
+          })
 
           if (result?.finished) {
             finalText = (result.summary as string) || finalText
@@ -460,6 +430,126 @@ export class AgentRunner {
     }
   }
 
+  /** The tool runtime for one turn: the settings' rules, sandbox, and a real ask. */
+  private makeRuntime(sessionId: string): ToolRuntime {
+    return new ToolRuntime({
+      workspace: this.workspace,
+      permissions: this.settings.permissions,
+      sandbox: this.settings.sandbox !== false,
+      // "ask" really asks: the renderer is prompted, and an unanswered prompt
+      // is a refusal rather than a silent yes.
+      onAsk: async (name: string) => {
+        const answer = await this.integrations.permissions?.ask({
+          tool: name,
+          args: { __session: sessionId }
+        })
+        return Boolean(answer?.allowed)
+      }
+    })
+  }
+
+  /**
+   * The integration gate. `mcp_*`, `connectors_*`, `computer_*` and
+   * `grounded_actions` perform a real external action — a desktop click, a write
+   * through somebody's account, a call on an MCP server — and none of them is in
+   * the workspace the sandbox confines, so an unlisted name is refused here rather
+   * than run. The rules are the tool runtime's, which means a `deny`, an `allow`
+   * and an `ask` (answered, or unanswered and therefore a no) all behave exactly
+   * as they do for `run_command`.
+   *
+   * Returns the tool-shaped refusal when the call must not run, or `undefined`
+   * when the name is not on the integration surface or the rules allow it.
+   */
+  private async guardIntegration(
+    name: string,
+    args: Record<string, unknown>,
+    runtime: ToolRuntime,
+    sessionId: string,
+    agentId: string
+  ): Promise<Record<string, unknown> | undefined> {
+    if (!isIntegrationToolName(name)) return undefined
+    if (await runtime.allowed(name)) return undefined
+    const result: Record<string, unknown> = {
+      ok: false,
+      error: `Tool "${name}" is blocked by the permission rules.`
+    }
+    // The same channel every other tool call is audited on, with the outcome the
+    // governance vocabulary already uses for a refusal.
+    this.emit('agent:tool', {
+      sessionId,
+      agentId,
+      tool: name,
+      args,
+      result,
+      outcome: 'denied'
+    })
+    return result
+  }
+
+  /**
+   * Runs one tool call. Both engines route through here — the legacy loop and the
+   * ImpulseCore tool port — so there is a single dispatch point to gate, and a
+   * tool name cannot reach an integration by taking the other path.
+   */
+  async dispatch(
+    name: string,
+    args: Record<string, unknown> = {},
+    ctx: DispatchContext = {}
+  ): Promise<Record<string, unknown>> {
+    const session = ctx.session ?? { id: 'backend', title: name }
+    const agentId = ctx.agentId ?? 'knight'
+    const runtime = ctx.runtime ?? this.makeRuntime(session.id)
+    const emit = (payload: Record<string, unknown>): void =>
+      this.emit('agent:tool', { sessionId: session.id, agentId, ...payload })
+
+    const blocked = await this.guardIntegration(name, args, runtime, session.id, agentId)
+    if (blocked) return blocked
+
+    if (name === 'delegate_to_agent') {
+      const parentAgent = ctx.parentAgent ?? this.resolveAgent(agentId)
+      const report = await this.delegate({ session, args, parentAgent, depth: ctx.depth ?? 0 })
+      return report as Record<string, unknown>
+    }
+    if (name.startsWith('connectors_')) {
+      const result = await this.runConnectors(name.replace(/^connectors_/, ''), args)
+      return (result ?? {}) as Record<string, unknown>
+    }
+    if (name.startsWith('computer_')) {
+      const result = await this.integrations.computer?.invoke(name, args)
+      return (result ?? {}) as Record<string, unknown>
+    }
+    if (name === 'grounded_actions') {
+      const res = (await this.integrations.uitars?.run({
+        instruction: args.instruction as string,
+        maxSteps: args.maxSteps as number | undefined
+      })) as { steps?: unknown[]; summary?: string } | undefined
+      emit({
+        tool: 'grounded_actions',
+        args,
+        result: { ok: true, steps: (res?.steps || []).length, summary: res?.summary }
+      })
+      return (res ?? {}) as Record<string, unknown>
+    }
+    if (name.startsWith('work_')) {
+      const result = await this.integrations.work?.run(name, args)
+      emit({ tool: name, args, result })
+      return (result ?? {}) as Record<string, unknown>
+    }
+    if (name.startsWith('mcp_')) {
+      const result = await this.runMcpTool(name.replace(/^mcp_/, ''), args)
+      emit({ tool: name, args, result })
+      return (result ?? {}) as Record<string, unknown>
+    }
+    if (name === 'externalAgent_agent') {
+      const result = await this.integrations.externalAgent?.agent(args.prompt as string)
+      emit({ tool: name, args, result })
+      return (result ?? {}) as Record<string, unknown>
+    }
+    const result = await runtime.invoke(name, args)
+    emit({ tool: name, args, result })
+    return result as unknown as Record<string, unknown>
+  }
+
   /**
    * The tool set for a turn: the role's own tools, plus the live Connectors
    * tools, the opt-in computer-use tools and the Grounded Actions capability.
@@ -475,7 +565,7 @@ export class AgentRunner {
     groundedActionsTools: ProviderToolSpec[]
     workTools: ProviderToolSpec[]
     mcpTools: ProviderToolSpec[]
-    openClawTools: ProviderToolSpec[]
+    externalAgentTools: ProviderToolSpec[]
     canDelegate: boolean
   }> {
     const roleTools = runtime.definitions().filter((definition) => {
@@ -493,7 +583,7 @@ export class AgentRunner {
     // MCP connectors (the GitHub MCP Server, Microsoft Learn, …) expose their own tools.
     const mcpTools = await this.mcpToolDefinitions()
     // ExternalAgent: hand a task to a running ExternalAgent gateway.
-    const openClawTools: ProviderToolSpec[] = this.integrations.externalAgent
+    const externalAgentTools: ProviderToolSpec[] = this.integrations.externalAgent
       ? [
           {
             type: 'function',
@@ -549,7 +639,7 @@ export class AgentRunner {
       groundedActionsTools,
       workTools,
       mcpTools,
-      openClawTools,
+      externalAgentTools,
       canDelegate
     }
   }
@@ -600,7 +690,7 @@ export class AgentRunner {
       ...toolSet.groundedActionsTools,
       ...toolSet.workTools,
       ...toolSet.mcpTools,
-      ...toolSet.openClawTools,
+      ...toolSet.externalAgentTools,
       ...(toolSet.canDelegate ? [DELEGATE_TOOL] : [])
     ]
 
@@ -625,41 +715,16 @@ export class AgentRunner {
         ...(payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {})
       })
 
-    const runTool = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
-      if (name === 'delegate_to_agent') {
-        return this.delegate({ session, args, parentAgent: agent, depth: opts.depth || 0 })
-      }
-      if (name.startsWith('connectors_')) {
-        return this.runConnectors(name.replace(/^connectors_/, ''), args)
-      }
-      if (name.startsWith('computer_')) {
-        return this.integrations.computer?.invoke(name, args)
-      }
-      if (name === 'grounded_actions') {
-        return this.integrations.uitars?.run({
-          instruction: args.instruction as string,
-          maxSteps: args.maxSteps as number | undefined
-        })
-      }
-      if (name.startsWith('work_')) {
-        const result = await this.integrations.work?.run(name, args)
-        emit('agent:tool', { tool: name, args, result })
-        return result
-      }
-      if (name.startsWith('mcp_')) {
-        const result = await this.runMcpTool(name.replace(/^mcp_/, ''), args)
-        emit('agent:tool', { tool: name, args, result })
-        return result
-      }
-      if (name === 'externalAgent_agent') {
-        const result = await this.integrations.externalAgent?.agent(args.prompt as string)
-        emit('agent:tool', { tool: name, args, result })
-        return result
-      }
-      const result = await runtime.invoke(name, args)
-      emit('agent:tool', { tool: name, args, result })
-      return result
-    }
+    // The core's tool port goes through the same gated router the legacy loop
+    // uses: no dispatch path reaches an integration without clearing the gate.
+    const runTool = async (name: string, args: Record<string, unknown>): Promise<unknown> =>
+      this.dispatch(name, args, {
+        session,
+        agentId: agent.id,
+        runtime,
+        depth: opts.depth || 0,
+        parentAgent: agent
+      })
 
     const result = await runImpulseTurn({
       provider: this.provider,
@@ -731,7 +796,7 @@ export class AgentRunner {
 
   buildSystemPrompt(agent: ResolvedAgent): string {
     const base =
-      agent.id === 'knight'
+      agent.id === 'knight' || agent.id === 'selfimpulse' || agent.id === 'impulse'
         ? this.settings.systemPrompt
         : `${agent.prompt}\n\nYou are running as the "${agent.name}" sub-agent of SelfImpulse.`
     const tier = this.tier()

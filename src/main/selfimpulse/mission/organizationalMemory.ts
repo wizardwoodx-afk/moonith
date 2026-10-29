@@ -32,41 +32,13 @@ export interface MemoryCortexReport {
   agentsMdInjections: string[];
 }
 
-export const SEED_INVARIANTS: CausalInvariant[] = [
-  {
-    id: "inv-001-worktree-isolation",
-    category: "sandbox",
-    rule: "Writing agents must never write directly into the base repository checkout; all edits must be staged in private sibling worktrees.",
-    originatingMissionId: "mission-init-01",
-    failureObserved: "Base checkout dirty with untracked files before reviewer execution.",
-    verifiedRepairAction: "Allocated dedicated git worktrees per writing seat under vh/<mission>/<seatId>.",
-    timesApplied: 34,
-    successRate: 1.0,
-    active: true,
-  },
-  {
-    id: "inv-002-snapshot-peer-review",
-    category: "testing",
-    rule: "Reviewers must inspect a synthesized merge snapshot branch (--no-ff) containing all writer commits, not the untouched base checkout.",
-    originatingMissionId: "mission-init-02",
-    failureObserved: "Reviewer passed code without seeing newly written features.",
-    verifiedRepairAction: "Built temporary review snapshot branch vh/<mission>/review before wave 3 review runs.",
-    timesApplied: 28,
-    successRate: 1.0,
-    active: true,
-  },
-  {
-    id: "inv-003-async-token-bucket",
-    category: "concurrency",
-    rule: "Token bucket rate limiters must acquire an atomic reservation lock before consuming burst tokens in async handlers.",
-    originatingMissionId: "mission-payment-04",
-    failureObserved: "Parallel request burst drained bucket below zero.",
-    verifiedRepairAction: "Wrapped token consumption in atomic reservation promise.",
-    timesApplied: 12,
-    successRate: 0.95,
-    active: true,
-  },
-];
+/**
+ * Starts empty on purpose. A memory that opens with invented run counts is not a
+ * memory, and these rules claim missions that never happened. Real invariants
+ * are recorded by recordRepairSuccess below.
+ */
+export const SEED_INVARIANTS: CausalInvariant[] = [];
+
 
 export class OrganizationalMemoryCortex {
   private invariants: Map<string, CausalInvariant> = new Map();

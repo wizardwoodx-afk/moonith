@@ -29,6 +29,9 @@ import type {
   HarmoniaDecisionStatus,
   ImpCodesAccess,
   ImpCodesImportResult,
+  KnowledgeDecideResult,
+  KnowledgeDecisionInput,
+  KnowledgeProposalView,
   KnightApi,
   McpServerConfig,
   MemoryInput,
@@ -133,6 +136,10 @@ const api: KnightApi = {
   createSkill: (draft: SkillDraft) => ipcRenderer.invoke(IPC.skillsCreate, draft),
   removeSkill: (id: string) => ipcRenderer.invoke(IPC.skillsRemove, id),
 
+  knowledgeList: (): Promise<KnowledgeProposalView[]> => ipcRenderer.invoke(IPC.knowledgeList),
+  knowledgeDecide: (input: KnowledgeDecisionInput): Promise<KnowledgeDecideResult> =>
+    ipcRenderer.invoke(IPC.knowledgeDecide, input),
+
   marketspaceList: (query?: string) => ipcRenderer.invoke(IPC.marketspaceList, query),
   marketspaceRead: (id: string) => ipcRenderer.invoke(IPC.marketspaceRead, id),
   marketspaceInstall: (id: string) => ipcRenderer.invoke(IPC.marketspaceInstall, id),
@@ -211,6 +218,13 @@ const api: KnightApi = {
   inspectDlp: (text: string, categories?: SensitiveDataCategory[]) =>
     ipcRenderer.invoke(GOVERNANCE_IPC.inspect, text, categories),
   rsiralsSnapshot: () => ipcRenderer.invoke(RSIRALS_IPC.snapshot),
+  rsiralsOctaStatus: () => ipcRenderer.invoke(RSIRALS_IPC.octaStatus),
+  rsiralsFastLoop: (action: unknown, context?: unknown) => ipcRenderer.invoke(RSIRALS_IPC.executeFastLoop, action, context),
+  rsiralsDiagnose: (trace: unknown, failure: unknown) => ipcRenderer.invoke(RSIRALS_IPC.diagnoseFailure, trace, failure),
+  rsiralsInduceSkill: (req: unknown) => ipcRenderer.invoke(RSIRALS_IPC.induceSkill, req),
+  rsiralsPublishClaim: (params: unknown) => ipcRenderer.invoke(RSIRALS_IPC.publishClaim, params),
+  rsiralsAcquireCharter: (params: unknown) => ipcRenderer.invoke(RSIRALS_IPC.acquireCharter, params),
+  rsiralsMetaEvolve: (candidate: unknown, evidence: unknown) => ipcRenderer.invoke(RSIRALS_IPC.metaEvolve, candidate, evidence),
   enterpriseControl: {
     snapshot: () => ipcRenderer.invoke(ENTERPRISE_CONTROL_IPC.snapshot),
     mutate: (mutation: EnterpriseControlMutation) =>

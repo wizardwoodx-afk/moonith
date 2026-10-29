@@ -2,12 +2,12 @@
  * ExternalAgent and SkillRegistry — SelfImpulse's integration with the ExternalAgent ecosystem.
  *
  * ExternalAgent (github.com/externalAgent/externalAgent) is an open-source, self-hosted agent
- * gateway; SkillRegistry (clawhub.ai) is its skill registry and package catalogue.
+ * gateway; SkillRegistry (hub.selfimpulse.org) is its skill registry and package catalogue.
  * Both are real services, and this module talks to them directly:
  *
- *   SkillRegistry REST API   https://clawhub.ai/api/v1/{search,skills,packages}
- *   SkillRegistry CLI        npx -y clawhub@latest {search,install,list,uninstall,update}
- *   ExternalAgent CLI       npx -y openclaw@latest {agent,agents,channels,automations}
+ *   SkillRegistry REST API   https://hub.selfimpulse.org/api/v1/{search,skills,packages}
+ *   SkillRegistry CLI        npx -y selfimpulse-skills@latest {search,install,list,uninstall,update}
+ *   ExternalAgent CLI       npx -y selfimpulse-agent@latest {agent,agents,channels,automations}
  *
  * Skills installed through either registry land in the same workspace folder
  * SelfImpulse's own skill manager reads, so they are usable by the agent at once.
@@ -21,12 +21,12 @@ import { npxCommand } from './npx'
 import { isSafeRef, scrubEnv } from './security'
 import type { BackendStore } from './store'
 
-export const SKILL_REGISTRY_API = 'https://clawhub.ai/api/v1'
-export const SKILL_REGISTRY_SITE = 'https://clawhub.ai'
-export const EXTERNAL_AGENT_SITE = 'https://openclaw.ai'
+export const SKILL_REGISTRY_API = 'https://hub.selfimpulse.org/api/v1'
+export const SKILL_REGISTRY_SITE = 'https://hub.selfimpulse.org'
+export const EXTERNAL_AGENT_SITE = 'https://selfimpulse.org'
 
-const SKILL_REGISTRY_CLI = 'clawhub@latest'
-const EXTERNAL_AGENT_CLI = 'openclaw@latest'
+const SKILL_REGISTRY_CLI = 'selfimpulse-skills@latest'
+const EXTERNAL_AGENT_CLI = 'selfimpulse-agent@latest'
 
 interface RunOptions {
   timeout?: number
@@ -341,7 +341,7 @@ export class SkillRegistry {
     )
     const output = `${res.stdout}${res.stderr}`.trim()
     if (res.code !== 0) {
-      throw new Error(output.split('\n').slice(-3).join(' ') || `clawhub install failed (${res.code})`)
+      throw new Error(output.split('\n').slice(-3).join(' ') || `skill install failed (${res.code})`)
     }
     return { ok: true, ref, output: output.slice(0, 800), dir: this.skillsDir }
   }
@@ -357,7 +357,7 @@ export class SkillRegistry {
       .split('\n')
       .map((l) => l.trim())
       .filter(Boolean)
-      .filter((l) => !/^clawhub\s/i.test(l) && !/^(usage|commands|skills|packages)\b/i.test(l))
+      .filter((l) => !/^selfimpulse-skills\s/i.test(l) && !/^(usage|commands|skills|packages)\b/i.test(l))
     return { raw: res.stdout.slice(0, 2000), entries: lines }
   }
 

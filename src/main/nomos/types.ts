@@ -82,7 +82,7 @@ export interface ActionIds {
 
 export type GovernanceDecisionKind = 'allow' | 'steer' | 'deny'
 
-export type PermissionMode = 'manual' | 'auto' | 'skip'
+export type PermissionMode = 'plan' | 'manual' | 'auto' | 'skip'
 
 /** Everything the gate needs to judge one proposed action. Pure data: the
  *  gate holds no hidden state beyond the registries it was built with. */

@@ -1,13 +1,16 @@
 import { z } from 'zod'
-import { relative } from 'node:path'
+import { isAbsolute, join, relative } from 'node:path'
 import type { ToolContext } from './types'
 import { defineTool, toolResultError } from './types'
 import {
+  convertDocumentToPdf,
+  extractDocumentContent,
   generateDocx,
   generatePdf,
   generatePresentation,
   generateSpreadsheet
 } from '../../services/documents'
+import { resolveSafePath } from '../../security'
 
 const cellSchema = z.union([z.string(), z.number(), z.boolean(), z.null()])
 
@@ -135,7 +138,85 @@ export const createPdfTool = defineTool({
   summarize: (args) => `Create PDF ${args.filename}`
 })
 
+/**
+ * Generated documents live under `artifacts/`, but the agent usually refers to
+ * them by bare filename, so a plain workspace lookup misses them. Fall back to
+ * the artifacts folder before reporting the file missing.
+ */
+async function resolveReadableDocument(ctx: ToolContext, path: string): Promise<string> {  try {
+    return await resolveSafePath(ctx.roots, path, { mode: 'read' })
+  } catch (error) {
+    if (isAbsolute(path)) throw error
+    try {
+      return await resolveSafePath(ctx.roots, join('artifacts', path), { mode: 'read' })
+    } catch {
+      throw error
+    }
+  }
+}
+
+export const readDocumentTool = defineTool({
+  name: 'read_document',
+  title: 'Read document',
+  description:
+    'Read and extract text, tables, and content from a Word (.docx), Excel (.xlsx), or PDF (.pdf) file in the workspace or granted folder.',
+  schema: z.object({
+    path: z.string().describe('File path, relative to workspace or absolute in granted folder.'),
+    offset: z.number().int().min(0).optional().describe('1-based starting line number.'),
+    limit: z.number().int().min(1).max(2000).optional().describe('Maximum lines (default 400).')
+  }),
+  sideEffect: 'read',
+  execute: async (args, ctx) => {
+    try {
+      const target = await resolveReadableDocument(ctx, args.path)
+      const rawText = await extractDocumentContent(target)
+      const lines = rawText.split(/\r?\n/)
+      const offset = Math.max(1, args.offset ?? 1)
+      const limit = args.limit ?? 400
+      const slice = lines.slice(offset - 1, offset - 1 + limit)
+      const header = `Document: ${relative(ctx.workspace, target) || target} (lines ${offset}-${offset + slice.length - 1} of ${lines.length})`
+      return { content: `${header}\n\n${slice.join('\n')}` }
+    } catch (error) {
+      return toolResultError(error)
+    }
+  },
+  summarize: (args) => `Read document ${args.path}`
+})
+
+export const convertDocumentTool = defineTool({
+  name: 'convert_document',
+  title: 'Convert document to PDF',
+  description:
+    'Convert an existing Word (.docx), Markdown, or text file into a PDF, keeping the original text, headings, lists, and tables so nothing is retyped or lost. Use this whenever the user asks to convert, export, or turn a document they already have into a PDF.',
+  schema: z.object({
+    path: z.string().describe('Source document path, relative to workspace or absolute in granted folder.'),
+    filename: z.string().optional().describe('Output PDF filename; defaults to the source name with .pdf.')
+  }),
+  sideEffect: 'write',
+  execute: async (args, ctx) => {
+    try {
+      const source = await resolveReadableDocument(ctx, args.path)
+      const generated = await convertDocumentToPdf(ctx.workspace, {
+        sourcePath: source,
+        filename: args.filename
+      })
+      const artifact = await ctx.addArtifact(generated.filePath, generated.previewPath)
+      return {
+        content: `Converted ${relative(ctx.workspace, source) || source} to PDF ${relative(
+          ctx.workspace,
+          generated.filePath
+        )}${artifact ? ` (artifact ${artifact.id})` : ''}`
+      }
+    } catch (error) {
+      return toolResultError(error)
+    }
+  },
+  summarize: (args) => `Convert ${args.path} to PDF`
+})
+
 export const documentTools = [
+  readDocumentTool,
+  convertDocumentTool,
   createDocumentTool,
   createSpreadsheetTool,
   createPresentationTool,

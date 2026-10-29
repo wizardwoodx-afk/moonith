@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, RotateCw } from 'lucide-react'
-import { BrandMark } from './components/BrandMark'
+import { BrandMark } from './components/BrandMarks'
 import { Toaster } from 'sonner'
 import { useApp, type View } from './store'
 import { cn } from './lib/utils'
@@ -10,10 +10,12 @@ import { AppRail } from './shell/AppRail'
 import { spaceClass } from './shell/surfaces'
 import { Onboarding } from './components/Onboarding'
 import { ApprovalDialog } from './components/ApprovalDialog'
+import { ConfirmHost } from './components/Confirm'
 import { SettingsView } from './views/SettingsView'
 import { TaskView } from './views/TaskView'
 import { SchedulesView } from './views/SchedulesView'
 import { CaptainSurface } from './features/captain/CaptainSurface'
+import { LibraryView } from './features/library/LibraryView'
 import { CompanySurface } from './features/company/CompanySurface'
 import { TableSurface } from './features/table/TableSurface'
 import { HelpButton } from './shell/HelpButton'
@@ -23,13 +25,11 @@ import { Button } from './components/ui'
 function Splash() {
   return (
     <div className="flex h-full flex-col items-center justify-center bg-canvas">
-      <div className="flex h-full flex-col items-center justify-center bg-canvas">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-surface text-accent shadow-[0_40px_80px_-40px_rgba(0,0,0,0.9)]">
-          <BrandMark size={22} className="breathing" />
-        </div>
-        <p className="display mt-4 text-[19px] text-ink">SelfImpulse</p>
-        <p className="mt-1 text-[11.5px] text-faint">Opening your workspace…</p>
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-surface text-accent shadow-[0_40px_80px_-40px_rgba(0,0,0,0.9)]">
+        <BrandMark size={22} className="breathing" />
       </div>
+      <p className="display mt-4 text-[19px] text-ink">SelfImpulse</p>
+      <p className="mt-1 text-[11.5px] text-faint">Opening your workspace…</p>
     </div>
   )
 }
@@ -59,7 +59,8 @@ function viewKey(view: View): string {
   return 'schedules'
 }
 
-const COLLAPSE_KEY = 'knight.sidebar-collapsed'
+const COLLAPSE_KEY = 'selfimpulse.sidebar-collapsed'
+const LEGACY_COLLAPSE_KEY = 'knight.sidebar-collapsed'
 
 export function App() {
   const ready = useApp((state) => state.ready)
@@ -77,7 +78,10 @@ export function App() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
-      return window.localStorage.getItem(COLLAPSE_KEY) === '1'
+      return (
+        window.localStorage.getItem(COLLAPSE_KEY) === '1' ||
+        window.localStorage.getItem(LEGACY_COLLAPSE_KEY) === '1'
+      )
     } catch {
       return false
     }
@@ -145,6 +149,9 @@ export function App() {
       } else if (event.key === '3') {
         event.preventDefault()
         openSurface('table')
+      } else if (event.key === '4') {
+        event.preventDefault()
+        openSurface('library')
       } else if (event.key.toLowerCase() === 'n') {
         event.preventDefault()
         startNewTask()
@@ -203,7 +210,7 @@ export function App() {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1">
-          <AppRail collapsed={sidebarCollapsed} />
+          {!settingsActive ? <AppRail collapsed={sidebarCollapsed} /> : null}
           <main
             className={cn(
               'relative min-w-0 flex-1 overflow-hidden bg-canvas text-ink transition-colors duration-300',
@@ -217,6 +224,9 @@ export function App() {
               {!settingsActive && view.kind === 'schedules' ? <SchedulesView /> : null}
               {!settingsActive && view.kind === 'surface' && activeSurface === 'chat' ? (
                 <CaptainSurface />
+              ) : null}
+              {!settingsActive && view.kind === 'surface' && activeSurface === 'library' ? (
+                <LibraryView />
               ) : null}
               {!settingsActive && view.kind === 'surface' && activeSurface === 'company' ? (
                 <CompanySurface />
@@ -235,6 +245,7 @@ export function App() {
         <>
           <Onboarding />
           <ApprovalDialog />
+          <ConfirmHost />
         </>
       ) : null}
 

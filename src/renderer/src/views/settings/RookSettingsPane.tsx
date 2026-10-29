@@ -55,7 +55,7 @@ export function RookSettingsPane() {
   const handleModeChange = async (mode: 'plan' | 'build' | 'yolo') => {
     try {
       await window.knight.rookSetPermission(mode)
-      toast.success(`Default regime set to ${mode.toUpperCase()}`)
+      toast.success(`Permission mode set to ${mode.toUpperCase()}`)
       await loadData()
     } catch (err: any) {
       toast.error(`Error: ${err.message}`)
@@ -97,10 +97,7 @@ export function RookSettingsPane() {
               <Cpu size={20} />
             </span>
             <div>
-              <h2 className="text-[16px] font-semibold text-ink">ROOK Autonomous Digital Worker</h2>
-              <p className="mt-0.5 text-[12px] text-faint">
-                Vision-Language GUI Grounding + Software Engineering ADE + 360K+ Skills Engine
-              </p>
+              <h2 className="text-[16px] font-semibold text-ink">Autonomous worker</h2>
             </div>
           </div>
           <button
@@ -126,7 +123,7 @@ export function RookSettingsPane() {
             <div className="mt-1 text-[18px] font-semibold text-ink">{status?.deliverablesCount ?? 0}</div>
           </div>
           <div className="rounded-xl border border-line/80 bg-canvas/50 p-3">
-            <span className="text-[10.5px] font-medium text-faint uppercase">Lobe Skills Indexed</span>
+            <span className="text-[10.5px] font-medium text-faint uppercase">Skills indexed</span>
             <div className="mt-1 text-[18px] font-semibold text-accent">
               {coworkStatus?.totalSkills ? coworkStatus.totalSkills.toLocaleString() : '360,000+'}
             </div>
@@ -136,9 +133,9 @@ export function RookSettingsPane() {
 
       {/* 2. Permission Regime Config */}
       <div className="rounded-2xl border border-line bg-surface/40 p-5 space-y-3">
-        <h3 className="text-[13px] font-semibold text-ink">Active Permission Regime</h3>
+        <h3 className="text-[13px] font-semibold text-ink">Permission mode</h3>
         <p className="text-[11.5px] text-faint leading-relaxed">
-          Controls the autonomy boundary for file edits, shell execution, and GUI computer actions.
+          Controls what the worker may do without asking.
         </p>
 
         <div className="grid grid-cols-3 gap-3 pt-1">
@@ -155,7 +152,7 @@ export function RookSettingsPane() {
               <BookOpen size={14} className="text-accent" /> Plan Mode
             </div>
             <p className="mt-1.5 text-[10.5px] text-faint leading-normal">
-              Safe read-only execution. Synthesizes plans, outlines, and research without touching workspace files.
+              Reads and plans only; changes nothing on this machine.
             </p>
           </button>
 
@@ -172,7 +169,7 @@ export function RookSettingsPane() {
               <Wrench size={14} /> Build Mode
             </div>
             <p className="mt-1.5 text-[10.5px] text-faint leading-normal">
-              Interactive development. Allows non-destructive file patching; prompts confirmation on shell commands.
+              Edits files freely; asks before running shell commands.
             </p>
           </button>
 
@@ -189,7 +186,7 @@ export function RookSettingsPane() {
               <Flame size={14} /> YOLO Mode
             </div>
             <p className="mt-1.5 text-[10.5px] text-faint leading-normal">
-              Full autonomous execution. Seamless background patching, terminal runs, and deliverable creation.
+              Runs file edits, terminal commands and background work without asking.
             </p>
           </button>
         </div>
@@ -198,15 +195,7 @@ export function RookSettingsPane() {
       {/* 3. Lobe Chat 360K+ Skills Explorer */}
       <div className="rounded-2xl border border-line bg-surface/40 p-5 space-y-3">
         <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-[13px] font-semibold text-ink">Lobe Chat Skills Catalog</h3>
-            <p className="text-[11.5px] text-faint">
-              Search and inspect 360,000+ indexed community and ecosystem skills available to the agent.
-            </p>
-          </div>
-          <span className="rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-medium text-accent">
-            360K+ Indexed
-          </span>
+          <h3 className="text-[13px] font-semibold text-ink">Skills catalog</h3>
         </div>
 
         <div className="relative pt-1">
@@ -215,6 +204,7 @@ export function RookSettingsPane() {
             type="text"
             value={skillQuery}
             onChange={(e) => void handleSearchSkills(e.target.value)}
+            aria-label="Search the skills catalog"
             placeholder="Search by skill name, domain (e.g. 'code', 'research', 'devops', 'design')..."
             className="w-full rounded-xl border border-line bg-canvas/70 pl-9 pr-4 py-2 text-[12px] text-ink placeholder:text-faint focus:border-accent focus:outline-none"
           />
@@ -238,7 +228,7 @@ export function RookSettingsPane() {
                 {skill.tags && (
                   <div className="mt-1.5 flex flex-wrap gap-1">
                     {skill.tags.map((t: string) => (
-                      <span key={t} className="rounded bg-surface px-1.5 py-0.2 text-[9.5px] text-faint border border-line/60">
+                      <span key={t} className="rounded bg-surface px-1.5 py-0.2 text-[10px] whitespace-nowrap text-faint border border-line/60">
                         #{t}
                       </span>
                     ))}
@@ -254,16 +244,14 @@ export function RookSettingsPane() {
       <div className="rounded-2xl border border-line bg-surface/40 p-5 space-y-3">
         <div className="flex items-center gap-2">
           <ShieldCheck size={16} className="text-accent" />
-          <h3 className="text-[13px] font-semibold text-ink">Sandboxed Secret Redaction Shield</h3>
+          <h3 className="text-[13px] font-semibold text-ink">Secret redaction check</h3>
         </div>
-        <p className="text-[11.5px] text-faint">
-          All API tokens, vault credentials, and private keys are scrubbed before deliverables or logs leave the sandbox.
-        </p>
 
         <div className="space-y-2 pt-1">
           <textarea
             value={secretTestInput}
             onChange={(e) => setSecretTestInput(e.target.value)}
+            aria-label="Text to test secret redaction on"
             rows={2}
             className="w-full rounded-xl border border-line bg-canvas/70 p-2.5 text-[11px] font-mono text-ink focus:border-accent focus:outline-none"
           />

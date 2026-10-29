@@ -767,7 +767,8 @@ export const ATELIER_THEME_IDS = THEMES.filter((theme) => theme.origin === 'atel
 )
 
 export const DEFAULT_THEME: ThemeId = 'moonlight'
-const STORAGE_KEY = 'knight.theme'
+const STORAGE_KEY = 'selfimpulse.theme'
+const LEGACY_STORAGE_KEY = 'knight.theme'
 
 export function themeById(id: ThemeId): Theme {
   return THEMES.find((theme) => theme.id === id) ?? THEMES[0]
@@ -775,7 +776,8 @@ export function themeById(id: ThemeId): Theme {
 
 export function readStoredTheme(): ThemeId {
   try {
-    const stored = window.localStorage.getItem(STORAGE_KEY) as ThemeId | null
+    const stored = (window.localStorage.getItem(STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_STORAGE_KEY)) as ThemeId | null
     if (stored && THEMES.some((theme) => theme.id === stored)) return stored
   } catch {
     /* storage is optional */

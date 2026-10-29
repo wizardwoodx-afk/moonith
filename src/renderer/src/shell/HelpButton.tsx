@@ -32,10 +32,10 @@ export function HelpButton() {
         {(close) => (
           <div>
             <div className="flex items-center justify-between px-2 py-1">
-              <span className="text-[9.5px] font-semibold tracking-[0.13em] text-faint uppercase">
+              <span className="text-[10px] font-semibold tracking-[0.13em] text-faint uppercase">
                 Help
               </span>
-              <span className="text-[9px] text-faint">Local-first</span>
+              <span className="text-[10px] text-faint">Local-first</span>
             </div>
             {HELP_ROWS.map((row) => {
               const Icon = row.icon
@@ -53,10 +53,6 @@ export function HelpButton() {
                 </button>
               )
             })}
-            <div className="mt-1 flex items-center gap-1.5 border-t border-line px-2 pt-2 pb-1 text-[10px] text-faint">
-              <span className="h-1 w-1 rounded-full bg-warn" />
-              SelfImpulse bridge · not connected
-            </div>
           </div>
         )}
       </Popover>

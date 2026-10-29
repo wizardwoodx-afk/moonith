@@ -1,14 +1,19 @@
-@import '@fontsource-variable/inter/index.css';
-@import '@fontsource-variable/instrument-sans/index.css';
-@import '@fontsource-variable/fraunces/index.css';
-@import '@fontsource-variable/fraunces/wght-italic.css';
+@import './assets/brand-fonts/fonts.css';
+@import 'blobatar/motion.css';
+@import 'blobatar/gaze.css';
 @import 'tailwindcss';
 
 @theme inline {
-  --font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-display: 'Instrument Sans Variable', 'Inter Variable', -apple-system, sans-serif;
-  --font-serif: 'Fraunces Variable', 'Iowan Old Style', Palatino, Georgia, serif;
-  --font-mono: 'Cascadia Code', 'SFMono-Regular', Consolas, monospace;
+  --font-sans: 'Pulsidian Sans', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-display: 'Pulsidian Serif Display', 'Pulsidian Serif', Georgia, 'Times New Roman', serif;
+  --font-serif: 'Pulsidian Serif', Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Radius scale. Four steps, no arbitrary values. */
+  --r-field: 8px;
+  --r-card: 12px;
+  --r-composer: 16px;
+  --r-modal: 18px;
 
   --color-canvas: var(--c-canvas);
   --color-canvas-deep: var(--c-canvas-deep);
@@ -35,6 +40,14 @@
   --color-on-ink: var(--c-on-ink);
   --color-identity-a: var(--c-identity-a);
   --color-identity-b: var(--c-identity-b);
+  --color-identity-c: var(--c-identity-c);
+  --color-identity-d: var(--c-identity-d);
+}
+
+/* Seats c and d rotate the hue of a and b so every theme gets four distinct seat colors. */
+:root {
+  --c-identity-c: oklch(from var(--c-identity-a) l c calc(h + 140deg));
+  --c-identity-d: oklch(from var(--c-identity-b) l c calc(h + 140deg));
 }
 
 /* Themes are applied on <html data-theme>. Moonlight is the house default. */
@@ -721,10 +734,39 @@ body {
 
 button {
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled):active {
+  /* Depth press matches the Button component's haptic travel so raw buttons
+     (chips, menu items, composer icon buttons) sink the same distance. The
+     property list is explicit: with only a duration here the initial value of
+     transition-property is "all", which would have animated layout too. Press
+     is 60ms, release returns at the element's own rate — deliberate slow under
+     the finger, snappy when it lifts. */
+  transform: translateY(1.5px) scale(0.978);
+  transition-property: transform, opacity, background-color, border-color, color, box-shadow !important;
+  transition-duration: 60ms !important;
 }
 
 button:disabled {
   cursor: default;
+}
+
+/* Atelier badge styling */
+.atelier-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  border: 1px solid var(--c-accent-soft);
+  background: var(--c-accent-soft);
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--c-accent-ink);
 }
 
 .titlebar-drag {
@@ -764,18 +806,71 @@ button:disabled {
   background-clip: content-box;
 }
 
-  .composer-shadow {
-   box-shadow:
-     0 1px 0 rgba(255, 255, 255, 0.02) inset,
-     0 40px 80px -40px rgba(0, 0, 0, 0.8),
-     0 0 0 1px rgba(255, 255, 255, 0.01);
+/* One shape for the chatbox everywhere. The two composer implementations used
+   to disagree (22px vs 12px), so the box visibly changed corners between screens. */
+.composer-shell {
+  border-radius: var(--r-composer);
+  border: 1px solid var(--c-line);
+  background: var(--c-surface);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.02) inset,
+    0 28px 56px -32px rgba(0, 0, 0, 0.75);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.composer-shell:focus-within {
+  border-color: var(--c-line-strong);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.02) inset,
+    0 28px 56px -32px rgba(0, 0, 0, 0.75),
+    0 0 0 1px var(--c-accent-soft);
+}
+
+/* The shader canvas is an overlay. Without an explicit size it falls back to
+   its backing-store dimensions, which feeds the resize observer and grows the
+   composer without bound. */
+.glimm-border {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.presence-halo {
+  background: radial-gradient(circle at 50% 45%, var(--c-accent-soft) 0%, transparent 68%);
+  filter: blur(10px);
+  opacity: 0.8;
+}
+
+.presence-orbit {
+  animation: presence-orbit 26s linear infinite;
+}
+
+.presence-avatar {
+  filter: drop-shadow(0 16px 20px rgba(0, 0, 0, 0.32));
+}
+
+@keyframes presence-orbit {
+  to {
+    transform: rotate(360deg);
   }
+}
+
+html[data-motion-mode='reduced'] .presence-orbit {
+  animation: none;
+}
 
 .display {
   font-family: var(--font-display);
   font-optical-sizing: auto;
-  font-weight: 500;
-  letter-spacing: -0.022em;
+  /* The Display cut ships at 600 only; anything else synthesises. */
+  font-weight: 600;
+  letter-spacing: -0.018em;
 }
 
 .serif-display {
@@ -830,6 +925,17 @@ textarea.field {
   min-height: 84px;
 }
 
+/** A field sized for the right-hand control column of a setting row. */
+.field-sm {
+  width: auto;
+  min-width: 8.5rem;
+  max-width: 14rem;
+  height: 1.5rem;
+  padding: 0 1.75rem 0 0.6rem;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
 select.field {
   appearance: none;
   background-image: linear-gradient(45deg, transparent 50%, var(--c-muted) 50%),
@@ -854,12 +960,13 @@ select.field {
   border-color: var(--c-line);
 }
 
+/* The fine dot field Qoder lays behind its profile page. */
 .settings-dots {
   background-image: radial-gradient(
-    color-mix(in srgb, var(--c-ink) 6.5%, transparent) 1px,
+    color-mix(in srgb, var(--c-ink) 9%, transparent) 1px,
     transparent 0
   );
-  background-size: 16px 16px;
+  background-size: 8px 8px;
   background-position: 0 0;
 }
 
@@ -1018,11 +1125,13 @@ select.field {
   border-radius: 0.75rem;
 }
 
+/* One breath, not a blink: the trough keeps most of the dot's body so the eye
+   reads a pulse rather than something switching off and on again. */
 @keyframes breathing {
   0%,
   100% {
-    opacity: 0.35;
-    transform: scale(0.85);
+    opacity: 0.45;
+    transform: scale(0.9);
   }
   50% {
     opacity: 1;
@@ -1034,13 +1143,13 @@ select.field {
   animation: breathing 1.8s ease-in-out infinite;
 }
 
-@keyframes blink {
+@keyframes caret-veil {
   0%,
   100% {
     opacity: 1;
   }
   50% {
-    opacity: 0;
+    opacity: 0.2;
   }
 }
 
@@ -1053,7 +1162,10 @@ select.field {
   vertical-align: -2px;
   border-radius: 1px;
   background: var(--c-accent);
-  animation: blink 1s step-end infinite;
+  /* A step-end strobe over a wall of streaming text is the one thing on screen
+     that pulls attention to itself. The veil keeps the caret legible at its
+     lowest point and lets the rhythm sit underneath the reading. */
+  animation: caret-veil 1.15s ease-in-out infinite;
 }
 
 @keyframes rise {
@@ -1068,30 +1180,40 @@ select.field {
 }
 
 .rise {
-  animation: rise 180ms ease-out both;
+  animation: rise var(--dur-enter) var(--ease-enter) both;
 }
 
+/* View-switch transition, modelled on the iPhone Duo cover open: the incoming
+   view starts soft and slightly displaced, then resolves into focus. Blur
+   follows the same ramp as the Duo's progressive lens (sharp at the settle,
+   diffuse at the start). Transform/opacity/filter only, so it stays on the
+   compositor; the reduced-motion wildcard below switches it off. The blur is
+   kept shallow: at 250ms a wider smear reads as a mistake rather than a lens. */
 @keyframes surface-in {
   from {
     opacity: 0;
-    transform: translateY(5px) scale(0.9985);
+    transform: translateY(8px) scale(0.996);
+    filter: blur(6px);
   }
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+    filter: blur(0);
   }
 }
 
 .surface-enter {
-  animation: surface-in 260ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation: surface-in var(--dur-surface) var(--ease-hero) both;
 }
 
+/* A message is the thing this app produces all day long. It settles into place
+   rather than arriving, and it never holds the reader waiting. */
 .message-in {
-  animation: rise 300ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation: rise 220ms var(--ease-enter) both;
 }
 
 .tab-enter {
-  animation: surface-in 200ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation: surface-in var(--dur-enter) var(--ease-enter) both;
 }
 
 @keyframes rail-in {
@@ -1106,7 +1228,7 @@ select.field {
 }
 
 .rail-in {
-  animation: rail-in 220ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation: rail-in var(--dur-pop) var(--ease-enter) both;
 }
 
 @keyframes drill-in {
@@ -1121,7 +1243,7 @@ select.field {
 }
 
 .drill-in {
-  animation: drill-in 220ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation: drill-in var(--dur-pop) var(--ease-enter) both;
 }
 
 @keyframes panel-in {
@@ -1136,7 +1258,7 @@ select.field {
 }
 
 .panel-in {
-  animation: panel-in 240ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation: panel-in var(--dur-surface) var(--ease-enter) both;
 }
 
 @keyframes run-in {
@@ -1151,7 +1273,53 @@ select.field {
 }
 
 .run-in {
-  animation: run-in 200ms ease-out both;
+  animation: run-in var(--dur-enter) var(--ease-enter) both;
+}
+
+/* One row of a batch that mounted together. --stagger-index is the row's place
+   in the batch; unset it and the delay is zero, so a row that joins a list
+   already on screen appears the instant it exists. The cap means a long list
+   finishes cascading before the reader scrolls past it. */
+.message-in,
+.rail-in,
+.drill-in,
+.run-in,
+.trail-step-in {
+  animation-delay: calc(min(var(--stagger-index, 0), var(--stagger-cap)) * var(--stagger-step));
+}
+
+/* The work trail's own step row: it settles two pixels and fades in. Nothing
+   larger, because these arrive one at a time while the agent is talking. */
+@keyframes trail-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.trail-step-in {
+  animation: trail-step-in var(--dur-enter) var(--ease-enter) both;
+}
+
+/* A note opening inside the trail. Meaning changes when this happens, so it
+   crossfades instead of popping, and the movement is only two pixels. */
+@keyframes trail-note-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.trail-note-in {
+  animation: trail-note-in var(--dur-enter) var(--ease-enter) both;
 }
 
 .send-haptic {
@@ -1160,7 +1328,9 @@ select.field {
   border-radius: 999px;
   border: 1px solid var(--c-accent);
   pointer-events: none;
-  animation: send-haptic 420ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  /* The ring is invisible by the time it finishes, so the only useful budget is
+     the part the user sees: keep it inside a quarter second. */
+  animation: send-haptic 260ms var(--ease-hero) forwards;
 }
 
 @keyframes send-haptic {
@@ -1202,14 +1372,119 @@ select.field {
   box-shadow: inset 0 1px 0 rgba(230, 228, 222, 0.035);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
+/*
+ * Motion tokens. One curve per interaction class, so the same kind of change
+ * always moves the same way and nobody has to re-invent it per component.
+ *
+ * --ease-enter   Strong deceleration. Anything arriving: rows, menus, panels,
+ *                carets. It starts fast, which is what makes it read as the
+ *                interface answering rather than hesitating.
+ * --ease-exit    Acceleration. Anything leaving has already been read; it gets
+ *                out of the way faster than it arrived.
+ * --ease-move    Symmetric, for something travelling between two known places.
+ * --ease-hero    The house signature, kept for the view switch and the send
+ *                ripple — the two moments that are allowed to be theatrical.
+ * --ease-hover   Colour and border changes. Deliberately the weak built-in:
+ *                these are never a performance, they are a temperature.
+ *
+ * Durations: interactive feedback under 200ms, entrances 180-250ms, and an exit
+ * always shorter than its enter. Nothing in a panel the user works in a hundred
+ * times a day passes 300ms.
+ */
+:root {
+  --ease-enter: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-hero: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-hover: ease;
+
+  --dur-feedback: 100ms;
+  --dur-enter: 180ms;
+  --dur-pop: 200ms;
+  --dur-surface: 250ms;
+  --dur-exit: 130ms;
+
+  /* A list that mounts as a batch announces itself one row at a time. The cap
+     keeps a long list from still cascading after the reader has moved on, and
+     --stagger-index defaults to zero so a row appended to a list that is
+     already on screen never waits behind a rehearsal. */
+  --stagger-step: 24ms;
+  --stagger-cap: 8;
+}
+
+/*
+ * Motion contract.
+ *
+ * The app resolves one motion mode at start-up and publishes it on the root
+ * as data-motion-mode="full|reduced". In reduced mode every CSS animation and
+ * transition is killed except two tiers that opt back in:
+ *
+ *   [data-motion='essential']  motion that carries the fact itself — the
+ *                              working loaders. It keeps moving, and declares
+ *                              its real duration through --motion-duration (and
+ *                              --motion-iteration if it loops).
+ *   [data-motion='state']      a state change that means something. It loses
+ *                              its displacement and keeps a short opacity
+ *                              crossfade, so it never hard-pops.
+ *
+ * Framer Motion is governed by <MotionConfig> in main.tsx from the same resolved
+ * mode, and its components read the mode rather than the media query.
+ *
+ * The mode is an attribute rather than a media query on purpose: the person
+ * chooses it, and a machine that reports "reduce" does not get to freeze the
+ * interface on its own. The operating system is still honoured — it is consulted
+ * by resolveMotion() whenever the preference is "system", and the resolved answer
+ * is what everything below keys off.
+ */
+html[data-motion-mode='reduced'] *,
+html[data-motion-mode='reduced'] *::before,
+html[data-motion-mode='reduced'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+html[data-motion-mode='reduced'] [data-motion='essential'],
+html[data-motion-mode='reduced'] [data-motion='essential']::before,
+html[data-motion-mode='reduced'] [data-motion='essential']::after,
+html[data-motion-mode='reduced'] [data-motion='essential'] *,
+html[data-motion-mode='reduced'] [data-motion='essential'] *::before,
+html[data-motion-mode='reduced'] [data-motion='essential'] *::after {
+  animation-duration: var(--motion-duration, 220ms) !important;
+  animation-iteration-count: var(--motion-iteration, 1) !important;
+  transition-duration: var(--motion-duration, 220ms) !important;
+}
+
+/*
+ * The second tier. [data-motion='essential'] is for motion that IS the message
+ * (a loader that stops is a lie). [data-motion='state'] is for a change that
+ * carries meaning but whose message is the change, not the movement: a step
+ * flipping from running to done, a glyph swapping shape, a status line settling.
+ * Killing those at 0.001ms leaves a hard pop, which is worse than slow motion —
+ * the reader cannot tell what changed. So in reduced mode they keep a short
+ * opacity crossfade and lose the displacement, by having their keyframes
+ * replaced with a plain fade.
+ */
+html[data-motion-mode='reduced'] [data-motion='state'],
+html[data-motion-mode='reduced'] [data-motion='state'] *,
+html[data-motion-mode='reduced'] [data-motion='state']::before,
+html[data-motion-mode='reduced'] [data-motion='state']::after {
+  animation-name: state-fade !important;
+  animation-duration: var(--motion-duration, 140ms) !important;
+  animation-iteration-count: 1 !important;
+  animation-timing-function: var(--ease-hover) !important;
+  animation-fill-mode: both !important;
+  transition-property: opacity, color, background-color, border-color, box-shadow, fill, stroke !important;
+  transition-duration: var(--motion-duration, 140ms) !important;
+}
+
+@keyframes state-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
@@ -1235,6 +1510,12 @@ select.field {
   font-size: 13px;
   color: var(--c-ink);
   text-align: left;
+  /* The tint was arriving instantly while everything else in the menu faded,
+     so the pointer read as a switch. 100ms is short enough to feel like the
+     row is already lit when the eye gets there. */
+  transition:
+    background-color var(--dur-feedback) var(--ease-hover),
+    color var(--dur-feedback) var(--ease-hover);
 }
 
 .menu-item:hover {
@@ -1243,4 +1524,254 @@ select.field {
 
 .menu-item[data-active='true'] {
   background: var(--c-surface-3);
+}
+
+/* ── Apple Intelligence Glow & Fluid Motion ───────────────────────── */
+@keyframes apple-glow-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes apple-pulse-scale {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+}
+
+@keyframes apple-ripple {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
+.apple-intelligence-glow-wrap {
+  position: relative;
+  isolation: isolate;
+}
+
+.apple-intelligence-glow {
+  position: absolute;
+  inset: -1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    #0096ff,
+    #9d4edd,
+    #f72585,
+    #ff9e00,
+    #0096ff
+  );
+  animation: apple-glow-rotate 6s linear infinite;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.85;
+  filter: blur(4px);
+}
+
+.apple-intelligence-glow-bloom {
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    #0096ff,
+    #9d4edd,
+    #f72585,
+    #ff9e00,
+    #0096ff
+  );
+  animation: apple-glow-rotate 6s linear infinite;
+  pointer-events: none;
+  z-index: -2;
+  opacity: 0.4;
+  filter: blur(18px);
+}
+
+.apple-ripple-circle {
+  animation: apple-ripple 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+
+/* Working loaders. The ring, the letters and the status light are the two
+   Uiverse loaders the house asked for, re-cut in the app's own palette: one
+   accent, one soft accent, one highlight. These carry the fact that work is
+   in flight, so they are marked essential and keep moving for readers who ask
+   for less motion — a frozen loader would say nothing at all. */
+
+/* The ring turns at a constant rate, so linear is the only honest curve here.
+   What used to ride along inside the same keyframes was a box-shadow
+   interpolation: shadows repaint on the main thread every frame, and this loader
+   is on screen for the whole of every task. The glow now lives on its own
+   layer and crossfades, which costs opacity instead of paint. */
+@keyframes work-ring-turn {
+  from {
+    transform: rotate(90deg);
+  }
+  to {
+    transform: rotate(450deg);
+  }
+}
+
+@keyframes work-ring-glow {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.work-ring {
+  --motion-duration: 1.5s;
+  --motion-iteration: infinite;
+  position: relative;
+  display: inline-block;
+  flex: none;
+  border-radius: 50%;
+  background-color: transparent;
+  box-shadow:
+    0 1px 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 3px 5px 0 var(--c-accent) inset,
+    0 4px 4px 0 color-mix(in srgb, var(--c-accent) 30%, transparent) inset;
+  animation: work-ring-turn 1.5s linear infinite;
+}
+
+.work-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--c-accent) 18%, transparent);
+  box-shadow:
+    0 1px 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 3px 5px 0 color-mix(in srgb, var(--c-accent) 75%, #ffffff) inset,
+    0 4px 4px 0 color-mix(in srgb, var(--c-accent) 45%, transparent) inset;
+  animation: work-ring-glow 1.5s ease-in-out infinite;
+}
+
+/* The letters lift and settle as a wave passes through the word. The rest
+   between lifts is what made this read as flickering rather than breathing, so
+   the cycle is short and the peak is small. */
+@keyframes bounce-letter {
+  0%,
+  55%,
+  100% {
+    opacity: 0.5;
+    transform: translateY(0) scale(1);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(0) scale(1.08);
+  }
+  36% {
+    opacity: 0.72;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.bounce-letter {
+  --motion-duration: 1.4s;
+  --motion-iteration: infinite;
+  display: inline-block;
+  opacity: 0.5;
+  animation: bounce-letter 1.4s ease-in-out infinite;
+}
+
+@keyframes status-light-breathe {
+  0%,
+  100% {
+    color: color-mix(in srgb, var(--c-accent) 20%, transparent);
+  }
+  50% {
+    color: var(--c-accent);
+  }
+}
+
+.status-light {
+  --motion-duration: 1.8s;
+  --motion-iteration: infinite;
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  color: color-mix(in srgb, var(--c-accent) 20%, transparent);
+  background-color: currentColor;
+  background-image: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.4) 1px, currentColor);
+  border: 2px dotted rgba(255, 255, 255, 0.35);
+  outline: 2px solid rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 0 2px 1px currentColor,
+    0 0 12px 0 currentColor,
+    0 0 20px 2px currentColor,
+    0 4px 8px 1px rgba(0, 0, 0, 0.35);
+  animation: status-light-breathe 1.8s ease-in-out infinite;
+}
+
+/* The shimmer is a light passing across the letters, not a blinking opacity:
+   the text keeps its colour and gains a moving highlight. Constant travel means
+   constant speed, so ease-in-out was wrong here — it made the highlight stall
+   at each end and dash through the middle of the word. */
+@keyframes shimmer-pass {
+  0% {
+    background-position: -140% 0;
+  }
+  100% {
+    background-position: 240% 0;
+  }
+}
+
+.shimmer-text {
+  --motion-duration: 2.2s;
+  --motion-iteration: infinite;
+  /* The travelling gradient is wider than the text and slides off both ends,
+     so the glyphs would fall back to nothing. The solid colour underneath
+     keeps the line readable while the highlight passes over it. */
+  background-color: var(--c-muted);
+  background-image: linear-gradient(
+    100deg,
+    var(--c-muted) 0%,
+    var(--c-ink) 42%,
+    var(--c-muted) 84%
+  );
+  background-size: 240% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-pass 2.2s linear infinite;
+}
+
+@keyframes status-message-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.status-message {
+  animation: status-message-in var(--dur-enter) var(--ease-enter) both;
 }

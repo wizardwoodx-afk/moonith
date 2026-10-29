@@ -8,25 +8,47 @@ import {
   protocol,
   Tray
 } from 'electron'
-import { mkdirSync, promises as fs } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  unlinkSync,
+  writeFileSync,
+  watch,
+  type FSWatcher
+} from 'node:fs'
 import { join } from 'node:path'
 import { getPaths, migrateLegacyUserData, taskWorkspace } from './paths'
 import { portableDataDir } from './portable'
 import { store } from './store'
 import { initSelfImpulseEngine } from './selfimpulse/bridge/facade'
 import { registerIpc } from './ipc'
-import { createMainWindow, getMainWindow, showMainWindow } from './window'
+import {
+  createMainWindow,
+  getMainWindow,
+  getWindowPresentation,
+  isMainWindowFocused,
+  onMainWindowPresentationChange,
+  planApprovalAttention,
+  showMainWindow
+} from './window'
 import { subscribeTaskEvents } from './emitter'
 import { mcpManager } from './services/mcp'
+import { agentRuntime } from './agent/runtime'
 import { scheduler } from './services/scheduler'
 import { browserService } from './services/browser'
 import { tableService } from './services/table'
 import { channelService } from './services/channels'
 import { approvals } from './approvals'
-import { isWithin } from './security'
+import {
+  KNIGHT_FILE_PRIVILEGES,
+  handleKnightFileRequest,
+  knightFileAllowedOrigins
+} from './fileProtocol'
 import { mimeForPath } from './services/documents'
 import { setBackendEventTarget } from './backend/ipc'
 import { aionOrchestrator } from './aion'
+import { kardiaHeartbeat } from './services/kardia'
+import { actionJournal } from './agent/gateway/actionJournal'
 import { APP_NAME, signatureLine } from '@shared/identity'
 
 // Fixed before anything resolves `userData`, including the single-instance lock.
@@ -46,23 +68,43 @@ let trayNoticeShown = false
 // events cannot stack a second listener on the same instance.
 let closeBehaviourWindow: BrowserWindow | null = null
 
+const TRAY_TOOLTIP_IDLE = APP_NAME
+const TRAY_TOOLTIP_WAITING = `${APP_NAME} - approval waiting`
+/* One balloon per pending request: the same decision re-reported by a stray
+ * focus or blur event must not nag. Cleared whenever the balloon is not the
+ * signal in play. */
+let balloonApprovalId: string | null = null
+
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'knight-file',
-    privileges: {
-      standard: true,
-      secure: true,
-      supportFetchAPI: true,
-      corsEnabled: true,
-      stream: true
-    }
+    privileges: KNIGHT_FILE_PRIVILEGES
+  },
+  {
+    scheme: 'selfimpulse-file',
+    privileges: KNIGHT_FILE_PRIVILEGES
   }
 ])
 
+/**
+ * The full brand lockup. It carries readable lettering, so it is only legible
+ * down to about 48px; anything drawn smaller wants `glyphIconPath()`.
+ */
 function iconPath(): string {
   return app.isPackaged
     ? join(process.resourcesPath, 'icon.png')
     : join(__dirname, '../../resources/icon.png')
+}
+
+/**
+ * The orbit glyph on its own, generated alongside the lockup by
+ * `scripts/brand-assets.mjs`. The tray and notifications draw at ~16px, where
+ * shrinking the lockup turns the wordmark into an unreadable smear.
+ */
+function glyphIconPath(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'tray.png')
+    : join(__dirname, '../../resources/tray.png')
 }
 
 function setupMenu(): void {
@@ -114,33 +156,124 @@ function setupMenu(): void {
 }
 
 function setupTray(): void {
-  const image = nativeImage.createFromPath(iconPath())
-  if (image.isEmpty()) {
-    console.warn('Tray icon missing at', iconPath())
-    return
-  }
-  tray = new Tray(image.resize({ width: 16, height: 16 }))
-  tray.setToolTip('SelfImpulse')
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Open SelfImpulse', click: () => showMainWindow() },
-      { type: 'separator' },
-      {
-        label: 'Quit',
-        click: () => {
-          isQuitting = true
-          app.quit()
+  try {
+    const iconFile = glyphIconPath()
+    if (!existsSync(iconFile)) {
+      console.warn('Tray icon missing at', iconFile)
+      return
+    }
+    const image = nativeImage.createFromPath(iconFile)
+    if (image.isEmpty()) {
+      console.warn('Tray icon missing or empty at', iconFile)
+      return
+    }
+    // tray.png is authored at 32px, twice the 1x tray cell, so the notification
+    // area downsamples from a source that still has detail in it.
+    tray = new Tray(image)
+    setTrayToolTip(TRAY_TOOLTIP_IDLE)
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: 'Open SelfImpulse', click: () => showMainWindow() },
+        { type: 'separator' },
+        {
+          label: 'Quit',
+          click: () => {
+            isQuitting = true
+            app.quit()
+          }
         }
-      }
-    ])
-  )
-  tray.on('click', () => showMainWindow())
-  tray.on('double-click', () => showMainWindow())
+      ])
+    )
+    tray.on('click', () => showMainWindow())
+    tray.on('double-click', () => showMainWindow())
+  } catch (err) {
+    console.warn('Could not initialize system tray:', err)
+    tray = null
+  }
+}
+
+function setTrayToolTip(text: string): void {
+  try {
+    tray?.setToolTip(text)
+  } catch {
+    // Not every desktop environment gives the tray somewhere to put a tooltip.
+  }
+}
+
+function flashMainWindow(on: boolean): void {
+  const win = getMainWindow()
+  if (!win) return
+  try {
+    win.flashFrame(on)
+  } catch {
+    // Taskbar flashing is not implemented on every platform.
+  }
+}
+
+function showTrayBalloon(content: string): void {
+  /* Inline tray notifications are a Windows affordance and the call throws
+   * elsewhere, so the other platforms keep the tooltip and the flash alone. */
+  if (!tray || process.platform !== 'win32') return
+  try {
+    tray.displayBalloon({ title: 'Approval waiting', content, iconType: 'info' })
+  } catch {
+    // A notification area that is missing or full is not worth failing a task over.
+  }
+}
+
+/**
+ * The approval dialog lives in the renderer, so a window nobody can see leaves
+ * the task blocked with nothing on screen to answer it — and closing to the
+ * tray is a normal state here, not an edge case. This puts whatever the platform
+ * does have onto the pending request and drops all of it again the moment the
+ * decision lands or the window comes back.
+ */
+function applyApprovalAttention(): void {
+  if (isQuitting) return
+  const pending = approvals.listPending()
+  const plan = planApprovalAttention({
+    hasPendingApproval: pending.length > 0,
+    presentation: getWindowPresentation(),
+    focused: isMainWindowFocused()
+  })
+
+  setTrayToolTip(plan.tooltipWaiting ? TRAY_TOOLTIP_WAITING : TRAY_TOOLTIP_IDLE)
+  flashMainWindow(plan.flash)
+
+  if (plan.balloon) {
+    const first = pending[0]
+    if (first && first.id !== balloonApprovalId) {
+      showTrayBalloon('Open SelfImpulse to answer')
+      balloonApprovalId = first.id
+    }
+  } else {
+    balloonApprovalId = null
+  }
+
+  // Last, so the dialog is painted against the window the user lands on.
+  if (plan.showWindow) showMainWindow()
+}
+
+/**
+ * The signal this process raised has to come down even after the quit flag has
+ * muted `applyApprovalAttention`, so quitting clears it by hand.
+ */
+function clearApprovalAttention(): void {
+  balloonApprovalId = null
+  setTrayToolTip(TRAY_TOOLTIP_IDLE)
+  flashMainWindow(false)
+}
+
+function setupApprovalAttention(): void {
+  approvals.onPendingChanged(applyApprovalAttention)
+  onMainWindowPresentationChange(applyApprovalAttention)
+  // A request left pending by an earlier state of the window is picked up here.
+  applyApprovalAttention()
 }
 
 function notify(title: string, body: string): void {
   if (!Notification.isSupported()) return
-  const notification = new Notification({ title, body, icon: iconPath() })
+  const notification = new Notification({ title, body, icon: glyphIconPath() })
   notification.on('click', () => showMainWindow())
   notification.show()
 }
@@ -175,39 +308,16 @@ function setupTaskNotifications(): void {
 }
 
 function registerFileProtocol(): void {
-  protocol.handle('knight-file', async (request) => {
-    try {
-      const url = new URL(request.url)
-      const segments = url.pathname
-        .split('/')
-        .filter(Boolean)
-        .map((segment) => decodeURIComponent(segment))
-      const taskId = segments.shift()
-      if (!taskId || !store.getTask(taskId)) {
-        return new Response('Not found', { status: 404 })
-      }
-      const workspace = taskWorkspace(taskId)
-      const target = join(workspace, ...segments)
-      if (!isWithin(workspace, target)) {
-        return new Response('Forbidden', { status: 403 })
-      }
-      const data = await fs.readFile(target)
-      const mime = mimeForPath(target) ?? 'application/octet-stream'
-      const headers: Record<string, string> = {
-        'content-type': mime,
-        'x-content-type-options': 'nosniff',
-        'cache-control': 'no-store',
-        'access-control-allow-origin': '*'
-      }
-      if (mime === 'text/html') {
-        headers['content-security-policy'] =
-          "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"
-      }
-      return new Response(new Uint8Array(data), { headers })
-    } catch {
-      return new Response('Not found', { status: 404 })
-    }
-  })
+  const handler = (request: Request) =>
+    handleKnightFileRequest(request, {
+      taskExists: (taskId) => Boolean(store.getTask(taskId)),
+      workspaceFor: taskWorkspace,
+      mimeTypeFor: mimeForPath,
+      allowedOrigins: () => knightFileAllowedOrigins(process.env['ELECTRON_RENDERER_URL'])
+    })
+
+  protocol.handle('knight-file', handler)
+  protocol.handle('selfimpulse-file', handler)
 }
 
 function setupWindowCloseBehavior(): void {
@@ -218,7 +328,9 @@ function setupWindowCloseBehavior(): void {
   win.on('close', (event) => {
     if (isQuitting) return
     const hasSchedules = store.listSchedules().some((schedule) => schedule.enabled)
-    if (hasSchedules) {
+    // Only hide to tray if schedules are active AND the system tray was successfully created.
+    // If tray is null, hiding the window would leave the process completely invisible and unreachable.
+    if (hasSchedules && tray) {
       event.preventDefault()
       win.hide()
       if (!trayNoticeShown) {
@@ -230,18 +342,73 @@ function setupWindowCloseBehavior(): void {
       }
     }
   })
+  win.on('closed', () => {
+    if (closeBehaviourWindow === win) {
+      closeBehaviourWindow = null
+    }
+  })
 }
 
 app.setAppUserModelId('com.selfimpulse.app')
 
+function wakeSignalPath(): string {
+  try {
+    return join(app.getPath('userData'), 'wake.signal')
+  } catch {
+    return ''
+  }
+}
+
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
+  // If lock is held (e.g. by an elevated or background instance), drop a wake signal file
+  // so the running instance wakes up immediately even across Windows UIPI / elevation boundaries.
+  try {
+    const signal = wakeSignalPath()
+    if (signal) {
+      writeFileSync(signal, Date.now().toString(), 'utf8')
+    }
+  } catch {
+    // Best-effort
+  }
   app.quit()
 } else {
+  let wakeWatcher: FSWatcher | null = null
+
+  function checkAndHandleWakeSignal(): void {
+    const signal = wakeSignalPath()
+    if (!signal) return
+    try {
+      if (existsSync(signal)) {
+        unlinkSync(signal)
+        showMainWindow()
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
   app.on('second-instance', () => showMainWindow())
 
   app.whenReady().then(async () => {
     try {
+      const signal = wakeSignalPath()
+      if (signal) {
+        try {
+          if (existsSync(signal)) unlinkSync(signal)
+        } catch {
+          // Clean stale signal
+        }
+        try {
+          wakeWatcher = watch(app.getPath('userData'), (_eventType, filename) => {
+            if (filename === 'wake.signal') {
+              checkAndHandleWakeSignal()
+            }
+          })
+        } catch {
+          // Watch fallback
+        }
+      }
       migrateLegacyUserData()
       await store.init()
       console.log(`[${APP_NAME.toLowerCase()}] ${signatureLine(app.getVersion())}`)
@@ -258,10 +425,26 @@ if (!gotLock) {
 
       createMainWindow()
       setupWindowCloseBehavior()
+      setupApprovalAttention()
       const mainWindow = getMainWindow()
       if (mainWindow) setBackendEventTarget(mainWindow)
 
       scheduler.init()
+      actionJournal.setPath(join(getPaths().root, 'action-journal.jsonl'))
+      kardiaHeartbeat.setContextProvider(async () => {
+        checkAndHandleWakeSignal()
+        return {
+          pendingApprovalsCount: approvals.listPending().length,
+          enabledSchedulesCount: store.listSchedules().filter((s) => s.enabled).length,
+          workspaces: store.listTasks().map((t) => taskWorkspace(t.id))
+        }
+      })
+      kardiaHeartbeat.setNotificationHandler((evaluation) => {
+        if (evaluation.summary) {
+          notify('SelfImpulse Proactive Notice', evaluation.summary)
+        }
+      })
+      kardiaHeartbeat.start()
       /* Neither service may take the app down if it fails to start: startup
        * continues, the failure is logged, and the service's own page reports
        * the state it is actually in. */
@@ -285,6 +468,17 @@ if (!gotLock) {
         })
         .catch((error) => {
           console.error('[aion] could not resume missions from the journal:', error)
+        })
+
+      /* Same honesty for ordinary tasks: a turn cut short by the previous
+       * process must not keep showing a live spinner. */
+      void agentRuntime
+        .reconcileInterrupted()
+        .then((cleared) => {
+          if (cleared) console.log(`[runtime] cleared ${cleared} interrupted task(s)`)
+        })
+        .catch((error) => {
+          console.error('[runtime] could not reconcile interrupted tasks:', error)
         })
 
       app.on('activate', () => {
@@ -316,8 +510,16 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     isQuitting = true
+    try {
+      wakeWatcher?.close()
+    } catch {
+      // Ignore
+    }
+    wakeWatcher = null
     scheduler.shutdown()
+    kardiaHeartbeat.stop()
     approvals.cancelAll()
+    clearApprovalAttention()
     browserService.disposeAll()
     tableService.dispose()
     channelService.dispose()

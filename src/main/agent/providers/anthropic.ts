@@ -7,6 +7,7 @@ import type {
 } from '../types'
 import type { ChatMessage, TokenUsage } from '@shared/types'
 import { safeJsonParse } from '../../util'
+import { formatAnthropicUserBlocks } from '../multimodal'
 
 type AnthropicMessage = Anthropic.MessageParam
 
@@ -26,8 +27,8 @@ function toAnthropicMessages(messages: ChatMessage[]): AnthropicMessage[] {
   for (const message of messages) {
     if (message.role === 'system') continue
     if (message.role === 'user') {
-      const text = message.content.trim()
-      if (text) push('user', [{ type: 'text', text }])
+      const userBlocks = formatAnthropicUserBlocks(message)
+      if (userBlocks.length) push('user', userBlocks)
       continue
     }
     if (message.role === 'assistant') {

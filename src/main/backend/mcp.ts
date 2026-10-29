@@ -9,6 +9,19 @@ import type { ChildProcessByStdio } from 'node:child_process'
 import type { Readable, Writable } from 'node:stream'
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js'
 import type { BackendMcpServer, BackendStore } from './store'
+import { npxCommand, npxEnvironment } from './npx'
+
+/**
+ * Third-party MCP servers are not trusted with the host's provider credentials.
+ * Scrub credential-shaped variables and loader hooks before spawning a server,
+ * matching the security policy of npx package executions.
+ */
+export function buildMcpStdioEnv(
+  userEnv: Record<string, string> = {},
+  baseEnv: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+  return { ...npxEnvironment(baseEnv), ...userEnv }
+}
 
 export interface McpServerInfo {
   name?: string
@@ -158,9 +171,17 @@ class McpStdioClient implements McpClient {
 
   async start(): Promise<void> {
     const stdio: ['pipe', 'pipe', 'pipe'] = ['pipe', 'pipe', 'pipe']
-    this.proc = spawn(this.command, this.args, {
-      env: { ...process.env, ...this.env },
-      stdio
+    const env = buildMcpStdioEnv(this.env)
+    /* On Windows `npx` is a cmd shim: spawning it pops a console window, and
+     * Node refuses to exec a .cmd without a shell. Run its JS entrypoint. */
+    const invocation =
+      process.platform === 'win32' && /^npx(?:\.cmd)?$/i.test(this.command)
+        ? npxCommand(this.args, env)
+        : { command: this.command, args: this.args, env }
+    this.proc = spawn(invocation.command, invocation.args, {
+      env: invocation.env,
+      stdio,
+      windowsHide: true
     })
     this.proc.stdout.on('data', (chunk: Buffer | string) => this._onData(chunk))
     this.proc.stderr.on('data', () => {})

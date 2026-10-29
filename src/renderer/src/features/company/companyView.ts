@@ -1,3 +1,4 @@
+import { agentName } from '../../lib/localProfile'
 import type {
   Artifact,
   PublicSettings,
@@ -47,7 +48,7 @@ const TONE: Record<TaskStatus, ActivityTone> = {
 
 const VERB: Record<TaskStatus, string> = {
   draft: 'Drafted',
-  running: 'Captain is working on',
+  running: `${agentName()} is working on`,
   waiting: 'Waiting on your key for',
   paused: 'Paused',
   done: 'Finished',
@@ -101,11 +102,13 @@ export function engineSummary(settings: PublicSettings | null): EngineSummary {
   const chosen =
     enabled.find((provider) => provider.id === settings.defaultProviderId) ?? enabled[0] ?? null
   const permission =
-    settings.defaultPermissionMode === 'manual'
-      ? 'Ask before tools'
-      : settings.defaultPermissionMode === 'auto'
-        ? 'Auto inside task folders'
-        : 'Integrated acceptance'
+    settings.defaultPermissionMode === 'plan'
+      ? 'Plans only, changes nothing'
+      : settings.defaultPermissionMode === 'manual'
+        ? 'Ask before tools'
+        : settings.defaultPermissionMode === 'auto'
+          ? 'Auto inside task folders'
+          : 'Accepts steps, asks for commands'
   return {
     ready: Boolean(chosen && chosen.models.length > 0),
     provider: chosen?.name ?? null,

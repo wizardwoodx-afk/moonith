@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw, ScrollText, ShieldCheck, Stamp } from 'lucide-react'
 import type { ReceiptSummaryView, ReceiptVerifyView, ReceiptView } from '@shared/types'
 import { Button, Spin } from '../../components/ui'
+import { agentName } from '../../lib/localProfile'
 import { errorMessage } from '../../lib/utils'
 import { SettingsSection } from './SettingsSection'
 import {
@@ -103,11 +104,11 @@ export function ReceiptsPane() {
   return (
     <SettingsSection
       title="Signed action receipts"
-      description="An intent before a high-impact action, a result after it — each sealed to the one before. Evidence an auditor can check without trusting this app."
+      
     >
       <div className="space-y-5">
         <PaneNote>
-          Whenever the Captain or the Crew does something that executes, changes files or carries
+          Whenever the {agentName()} or the Crew does something that executes, changes files or carries
           real risk, a signed intent receipt is written before it runs and a result receipt after.
           Each one is chained to the last and signed with a key sealed in your system keychain —
           edit, delete or reorder a line and verification fails and says where. Only digests are
@@ -186,9 +187,9 @@ export function ReceiptsPane() {
                       </Badge>
                     }
                     title={`${receipt.tool} — ${receipt.action}`}
-                    meta={`#${receipt.seq} · ${formatWhen(receipt.ts)} · ${receipt.agentId}${
-                      receipt.outcome ? ` · ${receipt.outcome}` : ''
-                    }`}
+                    meta={`#${receipt.seq} · ${formatWhen(receipt.ts)} · ${
+                      receipt.agentId === 'Captain' ? agentName() : receipt.agentId
+                    }${receipt.outcome ? ` · ${receipt.outcome}` : ''}`}
                     trailing={
                       receipt.signed ? (
                         <Badge tone="positive">signed</Badge>

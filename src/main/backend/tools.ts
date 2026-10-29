@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import type { Dirent } from 'node:fs'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { resolveSafePath } from '../security'
 import { scrubEnv } from './security'
 
 /**
@@ -14,6 +15,47 @@ import { scrubEnv } from './security'
 export type PermissionRule = 'allow' | 'deny' | 'ask'
 
 export type ToolPermissions = Record<string, PermissionRule | undefined>
+
+/**
+ * The integration surface: tool names that reach outside the workspace through
+ * somebody else's channel — an MCP server, a Connectors account, the desktop.
+ * These are default-deny. The model can always *request* one of them (their
+ * definitions come from the live integrations), so the question is what happens
+ * when no rule names the tool: an unlisted shell command is confined to the
+ * workspace, but an unlisted `computer_click` or `mcp_*` call is a real desktop
+ * click or a third-party write, and "no rule" must never mean "allowed".
+ * A rule that names the tool — exactly or by prefix — still decides, so a user
+ * can grant it deliberately.
+ */
+export const INTEGRATION_DENY_PREFIXES = ['mcp_', 'connectors_', 'computer_']
+
+export const INTEGRATION_DENY_NAMES: ReadonlySet<string> = new Set(['grounded_actions'])
+
+/** Is this name on the default-deny integration surface? */
+export function isIntegrationToolName(name: string): boolean {
+  return (
+    INTEGRATION_DENY_NAMES.has(name) ||
+    INTEGRATION_DENY_PREFIXES.some((prefix) => name.startsWith(prefix))
+  )
+}
+
+/**
+ * The rule for a name: an exact rule wins, then a `<prefix>*` rule (MCP and
+ * Connectors names are built at runtime from the server or tool name, so a
+ * fixed list can never cover them), then nothing.
+ */
+export function resolveRule(
+  permissions: ToolPermissions,
+  name: string
+): PermissionRule | undefined {
+  const exact = permissions[name]
+  if (exact) return exact
+  for (const [pattern, rule] of Object.entries(permissions)) {
+    if (!rule || !pattern.endsWith('*')) continue
+    if (name.startsWith(pattern.slice(0, -1))) return rule
+  }
+  return undefined
+}
 
 export interface ToolParameterSchema {
   type: 'string' | 'number' | 'boolean'
@@ -274,8 +316,20 @@ export class ToolRuntime {
     return target
   }
 
+  private async secureResolve(rel: string | undefined, mode: 'read' | 'write'): Promise<string> {
+    const target = this.resolve(rel)
+    if (!this.sandbox) return target
+    // Lexical containment does not stop a symlinked workspace child. Reuse
+    // the canonical realpath boundary used by the primary agent tools.
+    return resolveSafePath([this.workspace], target, { mode })
+  }
+
   async allowed(name: string): Promise<boolean> {
-    const rule = this.permissions[name] ?? 'allow'
+    // Explicit rule first, then default-deny for the integration surface, then
+    // the ordinary workspace default. An unlisted `mcp_*` / `connectors_*` /
+    // `computer_*` tool or `grounded_actions` is refused, not assumed allowed.
+    const rule =
+      resolveRule(this.permissions, name) ?? (isIntegrationToolName(name) ? 'deny' : 'allow')
     if (rule === 'allow') return true
     if (rule === 'deny') return false
     if (rule === 'ask') {
@@ -324,7 +378,7 @@ export class ToolRuntime {
   }
 
   async readFile({ path: rel, maxBytes = 200000 }: ReadFileArgs): Promise<ReadFileResult> {
-    const target = this.resolve(rel)
+    const target = await this.secureResolve(rel, 'read')
     const stat = await fs.stat(target)
     if (stat.isDirectory()) throw new Error(`${rel} is a directory`)
     const buf = await fs.readFile(target)
@@ -339,7 +393,7 @@ export class ToolRuntime {
   }
 
   async listDir({ path: rel = '.' }: ListDirArgs): Promise<ListDirResult> {
-    const target = this.resolve(rel)
+    const target = await this.secureResolve(rel, 'read')
     const entries = await fs.readdir(target, { withFileTypes: true })
     const out: DirEntry[] = []
     for (const e of entries) {
@@ -356,16 +410,20 @@ export class ToolRuntime {
   }
 
   async writeFile({ path: rel, content, append = false }: WriteFileArgs): Promise<WriteFileResult> {
-    const target = this.resolve(rel)
+    const target = await this.secureResolve(rel, 'write')
     await fs.mkdir(path.dirname(target), { recursive: true })
+    // Check again after parent creation; a pre-existing symlink must never be
+    // followed into an external directory on the write path.
+    if (this.sandbox) await resolveSafePath([this.workspace], target, { mode: 'write' })
     if (append) await fs.appendFile(target, content ?? '', 'utf8')
     else await fs.writeFile(target, content ?? '', 'utf8')
     return { ok: true, path: rel, bytes: (content ?? '').length }
   }
 
   async search({ pattern, path: rel = '.', maxResults = 120 }: SearchArgs): Promise<SearchResult> {
-    const root = this.resolve(rel)
+    const root = await this.secureResolve(rel, 'read')
     const source = String(pattern)
+    if (source.length > 512) throw new Error('Search pattern is too long.')
     let re: RegExp
     try {
       re = new RegExp(source, 'gi')
@@ -411,7 +469,8 @@ export class ToolRuntime {
       const child = spawn(command ?? '', {
         shell: true,
         cwd: this.workspace,
-        env: scrubEnv({ KNIGHT: '1' })
+        windowsHide: true,
+        env: scrubEnv({ SELFIMPULSE: '1', KNIGHT: '1' })
       })
       let stdout = ''
       let stderr = ''

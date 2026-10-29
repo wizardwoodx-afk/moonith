@@ -26,7 +26,7 @@ beforeEach(() => {
 
 describe('npxCommand', () => {
   it('keeps npx arguments in an argv array instead of a shell command line', () => {
-    const invocation = npxCommand(['-y', 'openclaw@latest', 'agent', '--prompt', PROMPT])
+    const invocation = npxCommand(['-y', 'selfimpulse-agent@latest', 'agent', '--prompt', PROMPT])
     expect(Array.isArray(invocation.args)).toBe(true)
     expect(invocation.args).toContain(PROMPT)
     expect(invocation.command).not.toMatch(/cmd(\.exe)?$/i)

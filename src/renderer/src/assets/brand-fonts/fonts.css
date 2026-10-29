@@ -1,0 +1,132 @@
+/* Pulsidian type system v1.0.0 */
+@font-face {
+  font-family: 'Pulsidian Serif';
+  src: url('./fonts/PulsidianSerif-Regular.woff2') format('woff2'), url('./fonts/PulsidianSerif-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pulsidian Serif';
+  src: url('./fonts/PulsidianSerif-Medium.woff2') format('woff2'), url('./fonts/PulsidianSerif-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pulsidian Serif';
+  src: url('./fonts/PulsidianSerif-SemiBold.woff2') format('woff2'), url('./fonts/PulsidianSerif-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pulsidian Serif';
+  src: url('./fonts/PulsidianSerif-Italic.woff2') format('woff2'), url('./fonts/PulsidianSerif-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pulsidian Serif Display';
+  src: url('./fonts/PulsidianSerifDisplay-SemiBold.woff2') format('woff2'), url('./fonts/PulsidianSerifDisplay-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pulsidian Sans';
+  src: url('./fonts/PulsidianSans-Regular.woff2') format('woff2'), url('./fonts/PulsidianSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pulsidian Sans';
+  src: url('./fonts/PulsidianSans-Medium.woff2') format('woff2'), url('./fonts/PulsidianSans-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pulsidian Sans';
+  src: url('./fonts/PulsidianSans-SemiBold.woff2') format('woff2'), url('./fonts/PulsidianSans-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pulsidian Sans';
+  src: url('./fonts/PulsidianSans-Bold.woff2') format('woff2'), url('./fonts/PulsidianSans-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+:root {
+  --font-display: 'Pulsidian Serif Display', 'Pulsidian Serif', Georgia, 'Times New Roman', serif;
+  --font-serif: 'Pulsidian Serif', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Pulsidian Sans', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+
+  --text-display: clamp(2.75rem, 6vw, 4.5rem);
+  --text-h1: clamp(2rem, 4vw, 3rem);
+  --text-h2: 1.75rem;
+  --text-h3: 1.25rem;
+  --text-body-serif: 1.125rem;
+  --text-body: 0.9375rem;
+  --text-small: 0.8125rem;
+  --text-label: 0.6875rem;
+  /* The floor of the scale. 10px is the smallest anything may render; a label
+     that needs to be smaller than this is a layout error, not a small label.
+     Every meta row in the app reads from here so the floor is one edit. */
+  --text-micro: 0.625rem;
+}
+
+/* ── Elevation ladder ───────────────────────────────────────────────────
+   Four levels, each one hairline plus one ambient shadow, consumed by the
+   `Elev` recipes in components/ui.tsx. The shadow colour is never a constant:
+   it is the palette's own darkest working tone, so a warm theme casts a warm
+   shadow and a cool theme a cool one, with no override for any of the themes
+   in styles.css.
+
+   `light-dark()` works as the theme switch because every theme block in
+   styles.css declares `color-scheme`. Light palettes need pigment — their
+   deepest canvas tone is too light to read as a shadow — while dark palettes
+   need the canvas pushed deeper still, because a light ink would bloom
+   instead of sinking.
+
+   Declared here rather than in styles.css because this is the brand token
+   sheet the renderer imports first and the only one in scope; the radius scale
+   it pairs with (`--r-card`, `--r-modal`) already lives beside it.
+*/
+:root {
+  --elev-shade: light-dark(
+    color-mix(in srgb, var(--c-ink) 26%, transparent),
+    color-mix(in srgb, var(--c-canvas-deep) 92%, transparent)
+  );
+  /* Lv2 raised card / control, Lv3 popover, Lv4 modal or drawer. Lv1 is the
+     hairline alone and therefore needs no shadow token. Lv3 and Lv4 keep the
+     geometry the app already shipped (`.dropdown-panel` in styles.css and the
+     dialog it was built from) so this is a token change, not a re-cut; only the
+     pigment is derived. */
+  --elev-raised: 0 2px 8px -4px var(--elev-shade);
+  --elev-floating: 0 24px 60px -24px var(--elev-shade);
+  --elev-overlay: 0 40px 100px -40px var(--elev-shade);
+}
+/* Layered as components so a Tailwind size utility on the same element
+   (`font-display text-[20px]`) wins. Unlayered rules beat every layer, which
+   used to force these brand sizes over the author's explicit choice. */
+@layer components {
+.font-display { font-family: var(--font-display); font-size: var(--text-display); font-weight: 600; line-height: 1.02; letter-spacing: -0.02em; }
+.font-h1 { font-family: var(--font-display); font-size: var(--text-h1); font-weight: 600; line-height: 1.08; letter-spacing: -0.018em; }
+.font-h2 { font-family: var(--font-serif); font-size: var(--text-h2); font-weight: 600; line-height: 1.18; letter-spacing: -0.012em; }
+/* --text-h3 carried a size with no class, so every view invented its own
+   section heading (18/20px, sans or display, ad-hoc tracking). This is the
+   chrome heading: smaller than the document title it sits above. */
+.font-h3 { font-family: var(--font-serif); font-size: var(--text-h3); font-weight: 600; line-height: 1.25; letter-spacing: -0.014em; }
+.font-serif-body { font-family: var(--font-serif); font-size: var(--text-body-serif); font-weight: 400; line-height: 1.65; letter-spacing: 0; }
+.font-ui { font-family: var(--font-sans); font-size: var(--text-body); font-weight: 400; line-height: 1.5; letter-spacing: -0.011em; }
+.font-ui-medium { font-family: var(--font-sans); font-weight: 500; }
+.font-label { font-family: var(--font-sans); font-size: var(--text-label); font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
+.font-data { font-family: var(--font-sans); font-feature-settings: 'tnum' 1, 'zero' 1; letter-spacing: -0.01em; }
+}

@@ -1,5 +1,5 @@
-import { promises as fs } from 'node:fs'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { promises as fs, existsSync, statSync } from 'node:fs'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
 export class PathAccessError extends Error {
   constructor(message: string) {
@@ -8,9 +8,50 @@ export class PathAccessError extends Error {
   }
 }
 
+function normPath(p: string): string {
+  const r = resolve(p)
+  return process.platform === 'win32' ? r.toLowerCase() : r
+}
+
 export function isWithin(parent: string, child: string): boolean {
-  const rel = relative(resolve(parent), resolve(child))
+  const normP = normPath(parent)
+  const normC = normPath(child)
+  const rel = relative(normP, normC)
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+}
+
+export function extractMentionedFolders(text: string): string[] {
+  if (!text) return []
+  const found = new Set<string>()
+  const winPattern = /[A-Za-z]:[\\/][^\s<>"'`*?|:]+/g
+  const unixPattern = /(?:^|\s)(\/(?:Users|home|root|var|etc|opt|tmp|projects?|dev|workspace)[^\s<>"'`*?|:]+)/g
+
+  let match: RegExpExecArray | null
+  while ((match = winPattern.exec(text)) !== null) {
+    const raw = match[0].replace(/[.,;:!?)\]}>"']+$/, '')
+    try {
+      if (existsSync(raw)) {
+        const stat = statSync(raw)
+        found.add(stat.isDirectory() ? resolve(raw) : resolve(dirname(raw)))
+      }
+    } catch {
+      // skip
+    }
+  }
+
+  while ((match = unixPattern.exec(text)) !== null) {
+    const raw = match[1].trim().replace(/[.,;:!?)\]}>"']+$/, '')
+    try {
+      if (existsSync(raw)) {
+        const stat = statSync(raw)
+        found.add(stat.isDirectory() ? resolve(raw) : resolve(dirname(raw)))
+      }
+    } catch {
+      // skip
+    }
+  }
+
+  return [...found]
 }
 
 async function realpathOrSelf(value: string): Promise<string> {
@@ -45,9 +86,33 @@ export async function resolveSafePath(
   opts: { mode?: 'read' | 'write' } = {}
 ): Promise<string> {
   if (!target || target.includes('\0')) throw new PathAccessError('Invalid path.')
-  const absolute = isAbsolute(target) ? resolve(target) : resolve(roots[0] ?? process.cwd(), target)
+  
+  let absolute: string
+  if (isAbsolute(target)) {
+    absolute = resolve(target)
+  } else {
+    let found = false
+    let candidate = resolve(roots[0] ?? process.cwd(), target)
+    for (const r of roots) {
+      if (!r) continue
+      const attempt = resolve(r, target)
+      try {
+        await fs.access(attempt)
+        candidate = attempt
+        found = true
+        break
+      } catch {
+        // continue
+      }
+    }
+    if (!found) {
+      candidate = resolve(roots[1] ?? roots[0] ?? process.cwd(), target)
+    }
+    absolute = candidate
+  }
 
-  if (!roots.some((root) => isWithin(root, absolute))) {
+  const inRoots = roots.some((root) => isWithin(root, absolute))
+  if (!inRoots) {
     throw new PathAccessError(`Path is outside the folders granted to this task: ${target}`)
   }
 

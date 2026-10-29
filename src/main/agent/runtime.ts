@@ -5,10 +5,12 @@ import type {
   Artifact,
   AttachmentRef,
   ChatMessage,
+  EditMessageInput,
   PlanItem,
   PublicSettings,
   SendMessageInput,
   StepRecord,
+  SubAgentRun,
   SubAgentStep,
   Task,
   ToolCallInfo
@@ -18,37 +20,89 @@ import { LOCAL_PRINCIPAL_ID, nomosGate } from '../nomos'
 import { digestOfValue, receiptService, requiresReceipt } from '../sphragis'
 import { sendTaskEvent, toast } from '../emitter'
 import { store } from '../store'
-import { ensureTaskWorkspace } from '../paths'
-import { isWithin } from '../security'
+import { resolveAgentName } from '@shared/identity'
+import { ensureTaskWorkspace, getPaths } from '../paths'
+import { isWithin, extractMentionedFolders } from '../security'
 import { newId, nowIso, truncate } from '../util'
-import { captainActionIds, governToolCall, registerCrewSeat } from './governed'
+import { captainActionIds, governToolCall } from './governed'
+import { toolExecutionGateway } from './gateway/gateway'
+import { createToolArgumentSnapshot } from './toolArgumentSnapshot'
+import { DurableStore, type DurableContext } from '../selfimpulse/durable/index'
+import { AtroposVirtualActor } from './durable/virtualActor'
+import { DaedalusCodingHarness } from './harness/daedalusHarness'
+import JSZip from 'jszip'
 import { addUsage } from './types'
 import { providerError } from './providers'
 import { buildSystemPrompt } from './prompt'
 import { getBuiltinTools } from './tools'
 import type { AgentTool, ToolContext } from './tools/types'
+import { isAllowedInPlanMode } from './tools/types'
+import { runTripwires, type TripwireVerdict } from './tripwires'
 import { artifactKindForPath, mimeForPath } from '../services/documents'
 import { mcpManager } from '../services/mcp'
 import { connectorsManager } from '../services/connectors'
 import { memoryService } from '../services/memory'
 import { skillService } from '../services/skills'
-import { subAgentService } from '../services/subagents'
+import { subAgentService, crewDisplayName, engineCrewAgents, type EngineCrewAgent } from '../services/subagents'
+import { learnFromTask } from './learning'
 import { usageService } from '../services/usage'
-import { runEngineTurn, type ToolOutcome } from './engine'
+import { governanceService, type GovernanceActor } from '../services/governance'
+import { authorizeTool, type PolicyTool } from '../selfimpulse/governance/policy'
+import { authorizeNativeTaskTool } from '../enterpriseControl/runtime'
+import { runEngineTurn, toEngineHistory, turnFailureMessage, type ToolOutcome } from './engine'
+import { prepareEngine, EngineUnavailable } from '../engine'
+import { runEngineTurn as runEngineLayerTurn, type EngineCrewUpdate, type EngineStepUpdate } from '../engine/run'
+import { toolBridge } from '../engine/bridge'
 import { getBackend } from '../backend'
 import { backendSkillsDir } from '../backend/paths'
 import { Provider, resolveConfig } from '../backend/provider'
-import type { ModelMessage } from '../backend/core/types'
+import type { ModelMessage, TurnResult } from '../backend/core/types'
+import { TurnInputQueue } from '../selfimpulse/impulseRuntime/index'
 
 interface RunState {
   taskId: string
   controller: AbortController
   stopped: boolean
-  pendingSteer: boolean
+  steering: TurnInputQueue<ChatMessage>
 }
 
 const MAX_ROUNDS = 50
 const MAX_STEPS = 500
+
+/**
+ * The policy shape of crew delegation. Delegation itself is the engine's own
+ * sub-agent tool now, so the task's role is asked through this name before the
+ * engine is configured — the crew either exists for the turn or is hidden.
+ */
+const CREW_POLICY_TOOL: PolicyTool = {
+  name: 'delegate_to_crew',
+  sideEffect: 'network',
+  risk: 'low'
+}
+
+/** Existing task-role RBAC and native enterprise policy are both mandatory. */
+async function enterpriseToolDenial(
+  task: Task,
+  actor: GovernanceActor,
+  tool: AgentTool
+): Promise<string | null> {
+  if (actor.actor === 'system') {
+    return 'Enterprise Control Plane has no agent identity for this action.'
+  }
+  try {
+    const decision = await authorizeNativeTaskTool({
+      taskId: task.id,
+      actor: actor.actor,
+      agentName: actor.actorId,
+      toolName: tool.name
+    })
+    return decision.allowed ? null : decision.reason
+  } catch (error) {
+    return `Enterprise Control Plane could not authorize the action; failing closed. ${
+      error instanceof Error ? error.message : String(error)
+    }`
+  }
+}
 
 function mergePlan(existing: PlanItem[], steps: string[]): PlanItem[] {
   const byText = new Map(existing.map((item) => [item.text, item]))
@@ -78,18 +132,46 @@ function attachmentManifest(attachments: AttachmentRef[]): string {
     (file) =>
       `- ${file.name} → ${file.relPath ?? file.path}${file.mimeType ? ` (${file.mimeType})` : ''}`
   )
-  return `The user attached these files. They are copied into the task workspace and can be read with file tools:\n${lines.join('\n')}`
+  return `The user attached these files and folders. They are available in the task workspace or granted folders and can be inspected, read, or unpacked with file and archive tools:\n${lines.join('\n')}`
+}
+
+/** The name the owner gave their agent, for prompts the agent reads about itself. */
+function agentLabel(): string {
+  try {
+    return resolveAgentName(store.getPublicSettings().agentName)
+  } catch {
+    return resolveAgentName()
+  }
 }
 
 class AgentRuntime {
   private runs = new Map<string, RunState>()
-  /** Live sub-agent runs per registered seat id. A seat is only revoked and
-   *  forgotten when the last run using it ends, so tearing one run down never
-   *  pulls the identity out from under a concurrent one. */
-  private crewSeats = new Map<string, number>()
 
   isRunning(taskId: string): boolean {
     return this.runs.has(taskId)
+  }
+
+  /**
+   * A process that died mid-turn leaves its task claiming to work forever, and
+   * nothing survives the restart to make that true. Cleared at startup so the
+   * board reports what is actually running.
+   */
+  async reconcileInterrupted(): Promise<number> {
+    let cleared = 0
+    for (const summary of store.listTasks()) {
+      if (summary.status !== 'running' && summary.status !== 'waiting') continue
+      if (this.runs.has(summary.id)) continue
+      const task = store.getTask(summary.id)
+      if (!task) continue
+      task.status = 'error'
+      task.error = 'Stopped when the app closed. Send a message to continue.'
+      const last = [...task.messages].reverse().find((message) => message.role === 'assistant')
+      if (last && !last.content.trim()) last.error = true
+      await store.saveTask(task)
+      this.publish(task)
+      cleared++
+    }
+    return cleared
   }
 
   async sendMessage(input: SendMessageInput): Promise<Task> {
@@ -106,10 +188,14 @@ class AgentRuntime {
       createdAt: nowIso(),
       attachments: attachments.length ? attachments : undefined
     }
-    task.messages.push(userMessage)
+    /* The manifest must come before the question. A turn is built from the last
+     * visible user message plus the history ahead of it, so a manifest pushed
+     * after the question reaches neither and the model never learns a file is
+     * attached. */
+    const incoming: ChatMessage[] = []
 
     if (attachments.length) {
-      task.messages.push({
+      incoming.push({
         id: newId('msg'),
         role: 'user',
         content: attachmentManifest(attachments),
@@ -117,10 +203,13 @@ class AgentRuntime {
         hidden: true
       })
     }
+    incoming.push(userMessage)
+    task.messages.push(...incoming)
 
-    if (active) {
-      active.pendingSteer = true
+    if (active && !active.controller.signal.aborted && !active.stopped) {
+      for (const message of incoming) active.steering.enqueue(message)
     } else {
+      if (active) this.runs.delete(task.id)
       task.status = 'running'
       task.error = undefined
       task.completedAt = undefined
@@ -128,7 +217,40 @@ class AgentRuntime {
     await store.saveTask(task)
     this.publish(task)
 
-    if (!active) this.launch(task.id)
+    if (!this.runs.has(task.id)) this.launch(task.id)
+    return task
+  }
+
+  async editMessage(input: EditMessageInput): Promise<Task> {
+    const task = this.requireTask(input.taskId)
+    const content = input.content.trim()
+    if (!content) throw new Error('Message content cannot be empty.')
+
+    if (this.runs.has(task.id)) {
+      await this.stop(task.id)
+    }
+
+    const messageIndex = task.messages.findIndex((m) => m.id === input.messageId)
+    if (messageIndex === -1) throw new Error('Message not found.')
+
+    // Update the message content
+    task.messages[messageIndex].content = content
+    task.messages[messageIndex].createdAt = nowIso()
+
+    // Truncate subsequent messages and purge corresponding steps
+    const keptMessages = task.messages.slice(0, messageIndex + 1)
+    const removedMessageIds = new Set(task.messages.slice(messageIndex + 1).map((m) => m.id))
+    task.messages = keptMessages
+    task.steps = task.steps.filter((s) => !s.messageId || !removedMessageIds.has(s.messageId))
+
+    task.status = 'running'
+    task.error = undefined
+    task.completedAt = undefined
+
+    await store.saveTask(task)
+    this.publish(task)
+
+    this.launch(task.id)
     return task
   }
 
@@ -177,7 +299,7 @@ class AgentRuntime {
       taskId,
       controller: new AbortController(),
       stopped: false,
-      pendingSteer: false
+      steering: new TurnInputQueue<ChatMessage>('all')
     }
     this.runs.set(taskId, state)
     void this.loop(taskId, state).catch((error) => {
@@ -197,8 +319,13 @@ class AgentRuntime {
 
       const settings = store.getPublicSettings()
       const provider = this.resolveEngineProvider(task, settings)
-      const tools = await this.collectTools(task, run, provider, settings)
-      const toolMap = new Map(tools.map((tool) => [tool.name, tool]))
+      const allTools = await this.collectTools(task, run, provider, settings)
+      const tools = governanceService
+        .permittedTools(task, allTools)
+        .filter((tool) => task.permissionMode !== 'plan' || isAllowedInPlanMode(tool))
+      /* Keep the complete map for the second, action-time check: the model
+       * may still name a tool filtered out of its list. */
+      const toolMap = new Map(allTools.map((tool) => [tool.name, tool]))
       const skills = await skillService.promptIndex().catch(() => '')
       const lastUser = [...task.messages]
         .reverse()
@@ -206,12 +333,21 @@ class AgentRuntime {
       const memory = await memoryService
         .promptIndex(`${task.title}\n${task.objective}\n${lastUser ?? ''}`, task.folders)
         .catch(() => '')
+      /* Delegation is the engine's own sub-agent tool, so the task's permission
+       * role answers before the engine is configured: a role that does not grant
+       * it leaves the tool hidden from the model rather than promised to it. */
+      const crew =
+        settings.engineMode === 'engine' &&
+        authorizeTool(task.agentRole, settings.governance, CREW_POLICY_TOOL).allowed
+          ? engineCrewAgents(skills)
+          : []
       const system = buildSystemPrompt({
         task,
         workspace: ensureTaskWorkspace(task.id),
         settings,
         skills,
-        memory
+        memory,
+        crew: crew.map((agent) => agent.id)
       })
 
       const backend = getBackend()
@@ -220,25 +356,13 @@ class AgentRuntime {
       // and the user message itself.
       const lastUserIndex = findLastUserIndex(task.messages)
       const userMessage = lastUserIndex >= 0 ? task.messages[lastUserIndex] : undefined
-      const history: ModelMessage[] = task.messages
-        .slice(0, lastUserIndex < 0 ? task.messages.length : lastUserIndex)
-        .filter((message) => message.role === 'user' || message.role === 'assistant')
-        .map((message) => ({
-          role: message.role as ModelMessage['role'],
-          content: message.content,
-          ...(message.toolCalls?.length
-            ? {
-                toolCalls: message.toolCalls.map((call) => ({
-                  id: call.id,
-                  name: call.name,
-                  args: (call.arguments ?? {}) as Record<string, unknown>
-                }))
-              }
-            : {})
-        }))
+      const history = toEngineHistory(
+        task.messages.slice(0, lastUserIndex < 0 ? task.messages.length : lastUserIndex)
+      )
 
       if (task.status !== 'running') {
         task.status = 'running'
+        task.stop = undefined
         this.publish(task)
       }
 
@@ -253,53 +377,121 @@ class AgentRuntime {
 
       const toolContext = this.createToolContext(task, settings)
       const context = [skills, memory].filter(Boolean).join('\n\n')
+      // Messages already represented by this initial history/userMessage pair
+      // must not be injected a second time at the first prepare checkpoint.
+      const representedSteering = run.steering.drain()
+      for (const message of representedSteering) run.steering.commit(message)
+      let drainedSteering: ChatMessage[] = []
 
-      const result = await runEngineTurn({
-        provider,
-        tools,
-        systemPrompt: system,
-        history,
-        userMessage: userMessage?.content ?? '',
-        context,
-        memoryStore: backend.store.memories,
-        skillsDir: backendSkillsDir(),
-        config: {
-          maxIterations: MAX_ROUNDS,
-          delegationMaxIterations: 12,
-          skillNudgeInterval: 10,
-          memoryNudgeInterval: 15,
-          verifyOnStop: true,
-          preVerifyContinue: true,
-          kanbanTerminalTool: false,
-          lateLspVerdicts: true,
-          backgroundReview: true,
-          temperature: 0.2,
-          maxOutputTokens: 4096,
-          reviewMaxIterations: 12
-        },
-        signal: run.controller.signal,
-        onText: (delta) => {
-          assistantMessage.content += delta
-          sendTaskEvent({
-            type: 'delta',
-            taskId: task.id,
-            messageId: assistantMessage.id,
-            delta
-          })
-        },
-        onTool: async (callId, name, args) =>
-          this.executeToolCall(
+      let durable: DurableContext | undefined
+      try {
+        const durableStore = new DurableStore(getPaths().durable)
+        durable = await durableStore.context(task.id, { signal: run.controller.signal })
+      } catch (err) {
+        console.warn('[runtime] could not construct durable context:', err)
+      }
+
+      const runInternal = (): Promise<TurnResult> =>
+        runEngineTurn({
+          provider,
+          durable,
+          tools,
+          systemPrompt: system,
+          history,
+          userMessage: userMessage?.content ?? '',
+          drainUserMessages: () => {
+            drainedSteering = run.steering.drain()
+            return toEngineHistory(drainedSteering)
+          },
+          commitUserMessages: () => {
+            for (const message of drainedSteering) run.steering.commit(message)
+            drainedSteering = []
+          },
+          restoreUserMessages: () => {
+            run.steering.restore()
+            drainedSteering = []
+          },
+          context,
+          memoryStore: backend.store.memories,
+          skillsDir: backendSkillsDir(),
+          config: {
+            maxIterations: MAX_ROUNDS,
+            delegationMaxIterations: 12,
+            skillNudgeInterval: 10,
+            memoryNudgeInterval: 15,
+            verifyOnStop: true,
+            preVerifyContinue: true,
+            kanbanTerminalTool: false,
+            lateLspVerdicts: true,
+            backgroundReview: true,
+            temperature: 0.2,
+            maxOutputTokens: 4096,
+            reviewMaxIterations: 12
+          },
+          signal: run.controller.signal,
+          protectModelMessages: (messages) =>
+            governanceService.protectModelMessages(
+              task,
+              { actor: 'captain', actorId: 'Captain', runId: `captain:${task.id}` },
+              messages
+            ),
+          onText: (delta) => {
+            assistantMessage.content += delta
+            sendTaskEvent({
+              type: 'delta',
+              taskId: task.id,
+              messageId: assistantMessage.id,
+              delta
+            })
+          },
+          onTool: async (callId, name, args, thoughtSignature) =>
+            this.executeToolCall(
+              task,
+              toolMap,
+              {
+                id: callId,
+                name,
+                arguments: args,
+                ...(thoughtSignature ? { thoughtSignature } : {})
+              },
+              run,
+              toolContext,
+              assistantMessage.id
+            ),
+          emit: (event, payload) => this.handleEngineEvent(task, event, payload)
+        })
+
+      let result: TurnResult
+      if (settings.engineMode === 'engine') {
+        try {
+          result = await this.runOnExecutionEngine({
             task,
-            toolMap,
-            { id: callId, name, arguments: args },
             run,
+            settings,
+            tools,
+            toolMap,
             toolContext,
-            assistantMessage.id
-          ),
-        emit: (event, payload) => this.handleEngineEvent(task, event, payload)
-      })
+            system,
+            history,
+            context,
+            crew,
+            assistantMessage
+          })
+        } catch (error) {
+          if (!(error instanceof EngineUnavailable)) throw error
+          toast('info', `${error.message} The built-in loop is handling this turn.`)
+          result = await runInternal()
+        }
+      } else {
+        result = await runInternal()
+      }
 
-      assistantMessage.content = result.finalResponse || assistantMessage.content
+      const guarded = runTripwires('output', result.finalResponse ?? '')
+      assistantMessage.content = guarded.text || assistantMessage.content
+      for (const finding of guarded.findings) this.recordTripwire(task, 'output', finding)
+      /* A run that stopped early used to be silent: the reason existed only in
+       * memory and then disappeared. Oversight reads this. */
+      task.stop = result.stopReason === 'final' ? undefined : { reason: result.stopReason, at: nowIso() }
       task.usage = addUsage(task.usage, {
         input: result.usage.prompt,
         output: result.usage.completion,
@@ -308,7 +500,7 @@ class AgentRuntime {
       await usageService
         .record({
           agentId: 'Captain',
-          providerId: provider.settings.providerId ?? 'knight',
+          providerId: provider.settings.providerId ?? 'selfimpulse',
           model: provider.settings.model ?? '',
           usage: {
             input: result.usage.prompt,
@@ -319,8 +511,15 @@ class AgentRuntime {
         .catch(() => undefined)
       await this.commit(task)
       if (run.stopped) return
+      const failure = turnFailureMessage(result)
+      if (failure) throw new Error(failure)
+      if (run.steering.hasItems()) return
       await this.finish(task, 'done')
     } catch (error) {
+      // Purge any empty assistant messages that never produced content or tools
+      task.messages = task.messages.filter(
+        (m) => m.role !== 'assistant' || m.content.trim() !== '' || Boolean(m.toolCalls?.length)
+      )
       if (run.stopped) {
         await this.commit(task).catch(() => undefined)
         return
@@ -331,11 +530,31 @@ class AgentRuntime {
       toast('error', task.error)
     } finally {
       this.runs.delete(taskId)
+      // Ensure lingering empty assistant messages without content are not persisted
+      task.messages = task.messages.filter(
+        (m) => m.role !== 'assistant' || m.content.trim() !== '' || Boolean(m.toolCalls?.length)
+      )
+      if (!run.stopped && run.steering.hasItems()) {
+        task.status = 'running'
+        task.error = undefined
+        task.completedAt = undefined
+        await store.saveTask(task).catch(() => undefined)
+        this.publish(task)
+        if (!this.runs.has(taskId)) this.launch(taskId)
+        return
+      }
       if (!run.stopped && task.status === 'running') {
         task.status = 'done'
         task.completedAt = nowIso()
         await store.saveTask(task).catch(() => undefined)
         this.publish(task)
+        /* Learning is a side effect of a finished turn, never part of it: a
+         * failure here must not change what the user already received. */
+        void learnFromTask(task)
+          .then((outcome) => {
+            if (outcome.recorded) console.log(`[learning] ${outcome.memory} / ${outcome.proposal} for ${task.id}`)
+          })
+          .catch((error) => console.error('[learning] could not learn from the finished task:', error))
       }
     }
   }
@@ -360,50 +579,6 @@ class AgentRuntime {
     }
 
     const base = [...getBuiltinTools(task.mode), ...mcpTools, ...connectorsTools]
-    const delegate: AgentTool = {
-      name: 'delegate_to_crew',
-      title: 'Delegate to a Crew sub-agent',
-      description:
-        'Hand a focused, self-contained job to a named Crew sub-agent. The sub-agent works with ' +
-        `${task.permissionMode === 'skip' ? 'read and write tools' : 'read-only tools'} in this task's workspace, ` +
-        'reports findings back to you, and never speaks to the user. Use it for independent research, ' +
-        'codebase inspection, or checking one specific question in parallel. Do not use it to ask the user anything.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          name: {
-            type: 'string',
-            description: 'Short role name for the sub-agent, for example "Docs Scout" or "Test Runner".'
-          },
-          instruction: {
-            type: 'string',
-            description:
-              'The complete job in one self-contained brief: what to inspect, what to do, and what to report back.'
-          }
-        },
-        required: ['name', 'instruction'],
-        additionalProperties: false
-      },
-      schema: z.object({
-        name: z.string().trim().min(1).max(60),
-        instruction: z.string().trim().min(1).max(8000)
-      }),
-      sideEffect: 'network',
-      risk: 'low',
-      approval: 'never',
-      execute: async (args: { name: string; instruction: string }, context) =>
-        this.runSubAgent(
-          task,
-          run,
-          provider,
-          args.name,
-          args.instruction,
-          [...base, readSkill],
-          context
-        ),
-      summarize: (args: { name: string; instruction: string }) =>
-        `${args.name} · ${truncate(args.instruction, 160)}`
-    }
     const readSkill: AgentTool = {
       name: 'read_skill',
       title: 'Read an installed skill',
@@ -424,240 +599,10 @@ class AgentRuntime {
     }
 
     const byName = new Map<string, AgentTool>()
-    for (const tool of [...base, readSkill, delegate]) {
+    for (const tool of [...base, readSkill]) {
       byName.set(tool.name, tool)
     }
     return [...byName.values()]
-  }
-
-  private async runSubAgent(
-    task: Task,
-    parent: RunState,
-    provider: Provider,
-    name: string,
-    instruction: string,
-    tools: AgentTool[],
-    context: ToolContext
-  ): Promise<{ content: string; isError?: boolean }> {
-    const run = await subAgentService.begin({
-      taskId: task.id,
-      taskTitle: task.title,
-      name,
-      instruction,
-      provider: provider.settings.providerId ?? 'knight',
-      model: provider.settings.model ?? ''
-    })
-    // Sub-agents never prompt, so 'always' tools are withheld from them entirely.
-    const allowed = tools.filter(
-      (tool) =>
-        tool.name !== 'delegate_to_crew' &&
-        (tool.approval === 'never' || (tool.approval === 'policy' && task.permissionMode === 'skip'))
-    )
-    /* Register the seat once, before any tool call: its authority is the
-     * narrowing of the Captain's scopes to exactly the tools this sub-agent
-     * was granted. If registration fails there is no seat to act under, so
-     * the job is refused here rather than letting every call fail later with
-     * nomos-identity-unknown. */
-    const seat = registerCrewSeat(name, allowed)
-    if (!seat.ok) {
-      const content = `The Crew seat “${name}” could not be registered (${seat.reason}). The job was not started.`
-      await subAgentService.finish(run, 'error', { error: content })
-      return { content, isError: true }
-    }
-    this.crewSeats.set(seat.agentId, (this.crewSeats.get(seat.agentId) ?? 0) + 1)
-    const toolMap = new Map(allowed.map((tool) => [tool.name, tool]))
-    const workspace = ensureTaskWorkspace(task.id)
-    const system = `You are ${name}, a Crew sub-agent inside SelfImpulse. The Captain delegated one focused job to you.
-Do the job with the tools you have, verify what you can, then reply with a compact report: findings, file paths, and anything the Captain must know.
-You never address the user directly, never ask questions, and never claim work you did not do.
-Workspace: ${workspace}
-Granted folders:
-${context.roots.map((root) => `- ${root}`).join('\n')}
-${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace.' : 'This job is read-only: do not modify files or run shell commands.'}`
-    const subContext: ToolContext = { ...context, setPlan: () => undefined }
-    const backend = getBackend()
-
-    try {
-      const result = await runEngineTurn({
-        provider,
-        tools: allowed,
-        systemPrompt: system,
-        history: [],
-        userMessage: instruction,
-        memoryStore: backend.store.memories,
-        skillsDir: backendSkillsDir(),
-        config: {
-          maxIterations: 8,
-          delegationMaxIterations: 0,
-          skillNudgeInterval: 10,
-          memoryNudgeInterval: 15,
-          backgroundReview: false,
-          temperature: 0.2,
-          maxOutputTokens: 4096
-        },
-        signal: parent.controller.signal,
-        onText: () => undefined,
-        onTool: async (callId, toolName, args) => {
-          if (parent.stopped) {
-            return { content: 'The parent task was stopped.', isError: true }
-          }
-          const tool = toolMap.get(toolName)
-          const stepId = newId('step')
-          if (!tool) {
-            run.steps.push({
-              id: stepId,
-              tool: toolName,
-              title: toolName,
-              status: 'error',
-              detail: 'Unknown tool',
-              at: nowIso()
-            })
-            await subAgentService.saveRun(run)
-            return { content: `Unknown tool "${toolName}".`, isError: true }
-          }
-          const record: SubAgentStep = {
-            id: stepId,
-            tool: tool.name,
-            title: tool.title,
-            detail: tool.summarize
-              ? tool.summarize(args)
-              : truncate(JSON.stringify(args), 240),
-            status: 'running',
-            at: nowIso()
-          }
-          run.steps.push(record)
-          await subAgentService.saveRun(run)
-
-          /* Every sub-agent tool call crosses the same gate as the
-           * Captain's, under the seat's delegated identity. Sub-agents
-           * never prompt, so a steer is a refusal here. */
-          const actionIds = {
-            runId: task.id,
-            taskId: task.id,
-            actionId: newId('act'),
-            /* The identity the registry actually created, never a name
-             * recomputed here: a seat id is the registry's to mint. */
-            agentId: seat.agentId,
-            principalId: LOCAL_PRINCIPAL_ID
-          }
-          const decision = await governToolCall({
-            ids: actionIds,
-            tool: tool.name,
-            args,
-            sideEffect: tool.sideEffect,
-            risk: tool.risk,
-            approval: tool.approval,
-            permissionMode: task.permissionMode
-          })
-          if (decision.decision !== 'allow') {
-            const reason =
-              decision.decision === 'steer' ? 'a sub-agent cannot ask for approval' : decision.reason
-            const content = `Blocked by the governance gate (${decision.rule}): ${reason}`
-            if (decision.decision === 'steer') {
-              // The action never ran because it was refused.
-              nomosGate().recordOutcome(actionIds.actionId, 'denied')
-            }
-            record.status = 'error'
-            record.detail = truncate(content, 400)
-            await subAgentService.saveRun(run)
-            return { content, isError: true }
-          }
-
-          let content = ''
-          let isError = false
-          let receiptOpen = false
-          try {
-            let parsedArgs: unknown = args
-            if (tool.schema) {
-              const parsed = tool.schema.safeParse(args)
-              if (!parsed.success) {
-                throw new Error(parsed.error.issues.map((issue) => issue.message).join('; '))
-              }
-              parsedArgs = parsed.data
-            }
-            /* The same receipt barrier as the Captain path: a high-impact
-             * sub-agent tool mints its intent before the effect and its
-             * result after it. A seat is never approved by a human, so the
-             * authorization is the gate's allow and nothing more. */
-            if (requiresReceipt({ sideEffect: tool.sideEffect, risk: tool.risk })) {
-              await receiptService().recordIntent({
-                ids: actionIds,
-                tool: tool.name,
-                action: decision.capability,
-                args,
-                authorization: {
-                  decision: decision.decision,
-                  rule: decision.rule,
-                  reason: decision.reason,
-                  approvedBy: null,
-                  approvedAt: null
-                }
-              })
-              receiptOpen = true
-            }
-            const toolOutcome = await tool.execute(parsedArgs, subContext)
-            content = truncate(toolOutcome.content, 30000)
-            isError = Boolean(toolOutcome.isError)
-          } catch (error) {
-            content = `Tool error: ${error instanceof Error ? error.message : String(error)}`
-            isError = true
-          }
-          if (receiptOpen) {
-            await receiptService().recordResult(decision.actionId, isError ? 'failure' : 'success', {
-              digest: digestOfValue({ content })
-            })
-          }
-          nomosGate().recordOutcome(decision.actionId, isError ? 'failure' : 'success')
-          record.status = isError ? 'error' : 'ok'
-          record.detail = isError ? truncate(content, 400) : record.detail
-          await subAgentService.saveRun(run)
-          return { content, isError }
-        },
-        emit: () => undefined
-      })
-
-      await usageService
-        .record({
-          agentId: `Crew · ${name}`,
-          providerId: provider.settings.providerId ?? 'knight',
-          model: provider.settings.model ?? '',
-          usage: {
-            input: result.usage.prompt,
-            output: result.usage.completion,
-            total: result.usage.total
-          }
-        })
-        .catch(() => undefined)
-
-      const summary =
-        (result.finalResponse ?? '').trim() || `${name} finished without a written report.`
-      run.summary = truncate(summary, 8000)
-      await subAgentService.finish(run, 'done', { summary: run.summary })
-      return { content: `Crew report from ${name}:\n\n${truncate(summary, 20000)}` }
-    } catch (error) {
-      if (parent.stopped) {
-        await subAgentService.finish(run, 'stopped', { error: 'The parent task was stopped.' })
-        return { content: `${name} stopped because the task was stopped.`, isError: true }
-      }
-      const message = error instanceof Error ? error.message : String(error)
-      await subAgentService.finish(run, 'error', { error: message })
-      return { content: `Crew sub-agent failed: ${message}`, isError: true }
-    } finally {
-      /* The seat's authority ends with the run. Revoke first — a call that
-       * slips through after the abort is then refused at the gate — and then
-       * forget it, so a long-lived process does not accumulate one identity
-       * per sub-agent run. A concurrent run on the same seat keeps it alive
-       * until it too finishes. */
-      const remaining = (this.crewSeats.get(seat.agentId) ?? 1) - 1
-      if (remaining > 0) {
-        this.crewSeats.set(seat.agentId, remaining)
-      } else {
-        this.crewSeats.delete(seat.agentId)
-        const identities = nomosGate().identities
-        identities.revokeAgent(seat.agentId, 'crew run finished')
-        identities.forgetAgent(seat.agentId)
-      }
-    }
   }
 
   /**
@@ -676,7 +621,7 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       throw new Error(`The provider “${stored.name}” is disabled. Enable it in Settings.`)
     }
     const apiKey = stored ? store.getProviderSecret(stored.id) : ''
-    if (stored && !apiKey) {
+    if (stored && !apiKey && stored.kind !== 'compatible') {
       throw new Error(`Add an API key for ${stored.name} in Settings.`)
     }
     const model = task.model || settings.defaultModel || stored?.models[0] || ''
@@ -696,6 +641,233 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       model: config.model,
       kind: stored?.kind === 'anthropic' ? 'anthropic' : 'openai'
     })
+  }
+
+  /**
+   * Runs one turn on the execution engine. The engine owns the loop, retries,
+   * compaction and subagents; every tool still executes here through the
+   * bridge, so governance, approvals, receipts and diff review are unchanged.
+   */
+  private async runOnExecutionEngine(input: {
+    task: Task
+    run: RunState
+    settings: PublicSettings
+    tools: AgentTool[]
+    toolMap: Map<string, AgentTool>
+    toolContext: ToolContext
+    system: string
+    history: ModelMessage[]
+    context: string
+    crew: EngineCrewAgent[]
+    assistantMessage: ChatMessage
+  }): Promise<TurnResult> {
+    const { task, run, tools, toolMap, toolContext, assistantMessage, crew } = input
+    const prepared = await prepareEngine({
+      providerId: task.providerId || input.settings.defaultProviderId,
+      model: task.model || input.settings.defaultModel,
+      permissionMode: task.permissionMode,
+      canDelegate: crew.length > 0
+    })
+
+    /* The engine spawns its own specialists now. Their sessions are the crew
+     * runs the team panel shows, so the two are keyed by the child session id. */
+    const crewRuns = new Map<string, SubAgentRun>()
+    const attribution = {
+      provider:
+        input.settings.providers.find((item) => item.id === prepared.providerId)?.name ??
+        prepared.providerId,
+      model: prepared.model
+    }
+    let crewLedger: Promise<void> = Promise.resolve()
+    const onCrew = (update: EngineCrewUpdate): void => {
+      crewLedger = crewLedger
+        .then(() => this.recordEngineCrew(task, attribution, update, crewRuns))
+        .catch(() => undefined)
+    }
+
+    const executeTool = async (
+      name: string,
+      args: Record<string, unknown>,
+      callId: string
+    ): Promise<ToolOutcome> =>
+      this.executeToolCall(
+        task,
+        toolMap,
+        { id: callId, name, arguments: args },
+        run,
+        toolContext,
+        assistantMessage.id
+      )
+
+    const scope = engineScope(task.id)
+    toolBridge.register(scope, {
+      listTools: () =>
+        tools.map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema as Record<string, unknown>
+        })),
+      callTool: (name, args) => executeTool(name, args, newId('call'))
+    })
+
+    /* The engine session starts empty. A task that held earlier conversation
+     * before its first engine turn gets that conversation once, as context. */
+    const seed = task.engineSessionId ? '' : renderSeedTranscript(input.history)
+    const lastUserIndex = findLastUserIndex(task.messages)
+    const manifest =
+      lastUserIndex > 0 && task.messages[lastUserIndex - 1]?.hidden
+        ? task.messages[lastUserIndex - 1].content
+        : ''
+    const userText =
+      [seed, manifest, task.messages[lastUserIndex]?.content ?? '']
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join('\n\n') || 'Continue.'
+
+    try {
+      return await runEngineLayerTurn(
+        {
+          systemPrompt: engineSystemPrompt(input.system),
+          userMessage: userText,
+          context: input.context,
+          signal: run.controller.signal,
+          onText: (delta) => {
+            assistantMessage.content += delta
+            sendTaskEvent({
+              type: 'delta',
+              taskId: task.id,
+              messageId: assistantMessage.id,
+              delta
+            })
+          }
+        },
+        {
+          taskId: task.id,
+          title: task.title,
+          workspace: toolContext.workspace,
+          permissionMode: task.permissionMode,
+          model: { providerId: prepared.providerId, model: prepared.model },
+          sessionId: task.engineSessionId,
+          onSession: (sessionId) => {
+            task.engineSessionId = sessionId
+          },
+          executeTool,
+          onThinking: (delta) => {
+            assistantMessage.thinking = (assistantMessage.thinking ?? '') + delta
+            sendTaskEvent({
+              type: 'thinking',
+              taskId: task.id,
+              messageId: assistantMessage.id,
+              delta
+            })
+          },
+          onStep: (step) => this.recordEngineStep(task, assistantMessage.id, step),
+          onCrew,
+          permission: (request) => this.askEnginePermission(task, request.action, request.resources)
+        },
+        prepared.client
+      )
+    } finally {
+      toolBridge.unregister(scope)
+      await crewLedger.catch(() => undefined)
+    }
+  }
+
+  /**
+   * One observable moment of a specialist the engine spawned, turned into the
+   * crew receipt the team panel reads. The engine session id is the run id, so
+   * a report always lands on the run that produced it.
+   */
+  private async recordEngineCrew(
+    task: Task,
+    attribution: { provider: string; model: string },
+    update: EngineCrewUpdate,
+    runs: Map<string, SubAgentRun>
+  ): Promise<void> {
+    const name = crewDisplayName(update.specialist)
+    let run = runs.get(update.sessionId)
+    if (!run) {
+      run = await subAgentService.begin({
+        id: update.sessionId,
+        taskId: task.id,
+        taskTitle: task.title,
+        name,
+        instruction: update.instruction || 'Work handed to a specialist by the engine.',
+        provider: attribution.provider,
+        model: attribution.model,
+        agentPath: [resolveAgentName(store.getPublicSettings().agentName), name],
+        depth: 1
+      })
+      runs.set(update.sessionId, run)
+    }
+    if (update.kind === 'started') return
+    if (update.kind === 'step' && update.step) {
+      const step: SubAgentStep = {
+        id: update.step.id,
+        tool: update.step.tool,
+        title: update.step.tool,
+        detail: update.step.detail ?? update.step.output ?? update.step.error,
+        status: update.step.status,
+        at: nowIso()
+      }
+      const known = run.steps.findIndex((item) => item.id === step.id)
+      if (known >= 0) run.steps[known] = step
+      else run.steps.push(step)
+      if (run.steps.length > MAX_STEPS) run.steps.splice(0, run.steps.length - MAX_STEPS)
+      await subAgentService.saveRun(run, {
+        type: step.status === 'running' ? 'tool_started' : 'tool_finished',
+        label: `${step.tool}${step.detail ? ` · ${truncate(step.detail, 120)}` : ''}`
+      })
+      return
+    }
+    if (update.kind === 'finished') {
+      await subAgentService.finish(run, update.error ? 'error' : 'done', {
+        ...(update.report ? { summary: truncate(update.report, 8000) } : {}),
+        ...(update.error ? { error: update.error } : {})
+      })
+      runs.delete(update.sessionId)
+    }
+  }
+
+  /** Step rows the engine reports for its own work (subagents included). */
+  private recordEngineStep(task: Task, messageId: string, update: EngineStepUpdate): void {
+    let step = task.steps.find((item) => item.id === update.id)
+    if (!step) {
+      step = {
+        id: update.id || newId('step'),
+        tool: update.tool,
+        title: update.detail ?? update.tool,
+        status: 'running',
+        messageId,
+        startedAt: nowIso()
+      }
+      task.steps.push(step)
+      if (task.steps.length > MAX_STEPS) task.steps.splice(0, task.steps.length - MAX_STEPS)
+    }
+    step.status = update.status
+    if (update.output !== undefined) step.output = truncate(update.output, 6000)
+    if (update.error !== undefined) step.error = truncate(update.error, 500)
+    if (update.status !== 'running') step.endedAt = nowIso()
+    this.publish(task)
+  }
+
+  private async askEnginePermission(
+    task: Task,
+    action: string,
+    resources: string[]
+  ): Promise<'once' | 'always' | 'reject'> {
+    const tool = `engine.${action}`
+    if (approvals.isAlwaysAllowed(task.id, tool)) return 'always'
+    const approved = await approvals.request(task.id, {
+      tool,
+      title: `Allow the engine to ${action}?`,
+      summary: truncate(resources.join('\n') || action, 240),
+      details: resources.join('\n'),
+      risk: action === 'shell' ? 'high' : 'medium',
+      allowAlways: true
+    })
+    if (!approved) return 'reject'
+    return approvals.isAlwaysAllowed(task.id, tool) ? 'always' : 'once'
   }
 
   /** ImpulseCore's own events, mapped onto the task surface the renderer sees. */
@@ -727,13 +899,35 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
 
   private createToolContext(task: Task, settings: PublicSettings): ToolContext {
     const workspace = ensureTaskWorkspace(task.id)
-    return {
+    const mentioned = extractMentionedFolders(
+      [task.objective, task.title, ...task.messages.map((m) => m.content)].join('\n')
+    )
+    let foldersChanged = false
+    for (const folder of mentioned) {
+      if (!task.folders.some((f) => isWithin(f, folder) && isWithin(folder, f))) {
+        task.folders.push(folder)
+        foldersChanged = true
+      }
+    }
+    if (foldersChanged) {
+      void store.saveTask(task).catch(() => undefined)
+    }
+    const roots = [...new Set([workspace, ...task.folders, ...mentioned])]
+    const actor = new AtroposVirtualActor(task.id)
+    const harness = new DaedalusCodingHarness(actor, workspace)
+    const context: ToolContext = {
       task,
       workspace,
-      roots: [...new Set([workspace, ...task.folders])],
+      roots,
+      readRoots: roots,
+      harness,
+      browserScope: task.id,
+      browserLabel: agentLabel(),
+      actor: 'captain',
       allowShell: settings.allowShell,
+      durableRunId: `captain:${task.id}`,
       addArtifact: (absPath, previewAbsPath) =>
-        this.registerArtifact(task, absPath, previewAbsPath),
+        this.registerArtifact(task, absPath, previewAbsPath, context.messageId),
       setBrowser: (state) => {
         task.browser = state
         sendTaskEvent({ type: 'browser', taskId: task.id, browser: state })
@@ -743,6 +937,7 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       },
       toast: (level, message) => toast(level, message)
     }
+    return context
   }
 
   private async executeToolCall(
@@ -755,9 +950,53 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
   ): Promise<ToolOutcome> {
     const tool = toolMap.get(call.name)
     const rawArgs = (call.arguments ?? {}) as Record<string, unknown>
+    const actor: GovernanceActor = {
+      actor: 'captain',
+      actorId: 'Captain',
+      runId: `captain:${task.id}`
+    }
+    const assistantMessage = task.messages.find(
+      (message) => message.id === messageId && message.role === 'assistant'
+    )
+    if (
+      assistantMessage &&
+      !(assistantMessage.toolCalls ?? []).some((item) => item.id === call.id)
+    ) {
+      assistantMessage.toolCalls = [...(assistantMessage.toolCalls ?? []), call]
+    }
 
     if (!tool) {
       const content = `Unknown tool "${call.name}".`
+      governanceService.audit(task, actor, 'tool.completed', 'error', call.name, content, {
+        callId: call.id
+      })
+      this.appendToolMessage(task, call, content, true)
+      await this.commit(task)
+      return { content, isError: true }
+    }
+
+    const policy = governanceService.authorize(task, actor, tool)
+    let denial = policy.allowed ? null : policy.reason
+    let denialSource = 'Denied by agent role or enterprise policy'
+    if (!denial) denial = await enterpriseToolDenial(task, actor, tool)
+    if (!denial && task.permissionMode === 'plan' && !isAllowedInPlanMode(tool)) {
+      denial = `Plan mode is read-only, so ${tool.name} does not run. Write the plan instead and let the user switch modes before anything changes.`
+      denialSource = 'Blocked by Plan mode'
+    }
+    if (denial) {
+      const content = `Policy denied ${tool.name}: ${denial} Do not retry or bypass this action.`
+      task.steps.push({
+        id: newId('step'),
+        tool: tool.name,
+        title: tool.title,
+        detail: denial,
+        status: 'error',
+        error: denialSource,
+        messageId,
+        startedAt: nowIso(),
+        endedAt: nowIso()
+      })
+      if (task.steps.length > MAX_STEPS) task.steps.splice(0, task.steps.length - MAX_STEPS)
       this.appendToolMessage(task, call, content, true)
       await this.commit(task)
       return { content, isError: true }
@@ -771,6 +1010,10 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
           .map((issue) => `${issue.path.join('.') || 'arguments'}: ${issue.message}`)
           .join('; ')
         const content = `Invalid arguments for ${tool.name}: ${issues}`
+        governanceService.audit(task, actor, 'tool.completed', 'error', tool.name, content, {
+          callId: call.id,
+          argsHash: governanceService.payloadHash(rawArgs)
+        })
         this.appendToolMessage(task, call, content, true)
         await this.commit(task)
         return { content, isError: true }
@@ -778,13 +1021,51 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       args = parsed.data
     }
 
+    let effectiveRawArgs: Record<string, unknown>
+    let displayArgs: Record<string, unknown>
+    let argumentBlockDetail = 'Blocked by data-loss prevention before tool execution'
+    try {
+      const protection = governanceService.protectToolArguments(
+        task,
+        actor,
+        tool,
+        args as Record<string, unknown>
+      )
+      argumentBlockDetail = 'Blocked by unsupported tool arguments before tool execution'
+      // Seal the parsed/DLP-protected action before any review can await or
+      // expose it. Every action consumer shares this snapshot, never UI data.
+      const snapshot = createToolArgumentSnapshot(protection.args)
+      args = snapshot.executionArgs
+      effectiveRawArgs = snapshot.executionArgs
+      displayArgs = snapshot.displayArgs
+    } catch (error) {
+      const content = error instanceof Error ? error.message : String(error)
+      task.steps.push({
+        id: newId('step'),
+        tool: tool.name,
+        title: tool.title,
+        detail: argumentBlockDetail,
+        status: 'error',
+        error: content,
+        messageId,
+        startedAt: nowIso(),
+        endedAt: nowIso()
+      })
+      if (task.steps.length > MAX_STEPS) task.steps.splice(0, task.steps.length - MAX_STEPS)
+      this.appendToolMessage(task, call, content, true)
+      await this.commit(task)
+      return { content, isError: true }
+    }
+
     const step: StepRecord = {
       id: newId('step'),
       tool: tool.name,
       title: tool.title,
-      detail: tool.summarize ? tool.summarize(args) : truncate(JSON.stringify(rawArgs), 240),
+      detail: tool.summarize
+        ? tool.summarize(args)
+        : truncate(JSON.stringify(effectiveRawArgs), 240),
       status: 'waiting',
-      args: rawArgs,
+      args: displayArgs,
       messageId,
       startedAt: nowIso()
     }
@@ -803,7 +1084,7 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
     const decision = await governToolCall({
       ids: actionIds,
       tool: tool.name,
-      args: rawArgs,
+      args: effectiveRawArgs,
       sideEffect: tool.sideEffect,
       risk: tool.risk,
       approval: tool.approval,
@@ -832,9 +1113,10 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
         tool: tool.name,
         title: tool.title,
         summary: step.detail || tool.title,
-        details: approvalDetails(tool, rawArgs),
+        details: approvalDetails(tool, effectiveRawArgs),
         risk: tool.risk,
-        allowAlways: true
+        allowAlways: tool.allowAlways !== false,
+        review: await tool.approvalReview?.(args, context)
       })
 
       if (run.stopped) {
@@ -881,7 +1163,7 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
         ids: actionIds,
         tool: tool.name,
         action: decision.capability,
-        args: rawArgs,
+        args: effectiveRawArgs,
         authorization: {
           decision: decision.decision,
           rule: decision.rule,
@@ -893,8 +1175,27 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
     }
 
     let outcome: ToolOutcome
+    /* Files this call writes are delivered under the turn that asked for them,
+     * not dumped in one block at the end of the conversation. */
+    context.messageId = assistantMessage?.id
     try {
-      const result = await tool.execute(args, context)
+      const gatewayRes = await toolExecutionGateway.execute({
+        ids: actionIds,
+        tool: {
+          name: tool.name,
+          sideEffect: tool.sideEffect,
+          risk: tool.risk,
+          approval: tool.approval
+        },
+        args: effectiveRawArgs,
+        execute: async () => {
+          return await tool.execute(args, { ...context, callId: call.id })
+        }
+      })
+      const result = {
+        content: gatewayRes.content,
+        isError: gatewayRes.isError
+      }
       step.status = result.isError ? 'error' : 'ok'
       step.output = truncate(result.content, 6000)
       if (result.isError) step.error = truncate(firstLine(result.content), 500)
@@ -905,11 +1206,24 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
         })
       }
       gate.recordOutcome(decision.actionId, result.isError ? 'failure' : 'success')
+      governanceService.audit(
+        task,
+        actor,
+        'tool.completed',
+        result.isError ? 'error' : 'ok',
+        tool.name,
+        firstLine(content),
+        {
+          callId: call.id,
+          stepId: step.id,
+          argsHash: governanceService.payloadHash(effectiveRawArgs)
+        }
+      )
       this.appendToolMessage(task, call, content, result.isError)
       outcome = {
         content,
         isError: result.isError,
-        mutatedPaths: mutatedPathsFor(tool.name, rawArgs)
+        mutatedPaths: mutatedPathsFor(tool.name, effectiveRawArgs)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -923,6 +1237,11 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
         })
       }
       gate.recordOutcome(decision.actionId, 'failure')
+      governanceService.audit(task, actor, 'tool.completed', 'error', tool.name, content, {
+        callId: call.id,
+        stepId: step.id,
+        argsHash: governanceService.payloadHash(effectiveRawArgs)
+      })
       this.appendToolMessage(task, call, content, true)
       outcome = { content, isError: true }
     }
@@ -931,16 +1250,42 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
     return outcome
   }
 
+  /** A tripwire that fires is a visible event, not a silent edit: the reason
+   *  lands in the activity trail so the user can see what was withheld or
+   *  marked, and so a false positive is debuggable. */
+  private recordTripwire(
+    task: Task,
+    point: 'content' | 'output',
+    finding: TripwireVerdict
+  ): void {
+    task.steps.push({
+      id: newId('step'),
+      tool: `tripwire:${point}`,
+      title: point === 'output' ? 'Answer checked before display' : 'Retrieved content marked',
+      detail: finding.reason,
+      status: 'ok',
+      startedAt: nowIso(),
+      endedAt: nowIso()
+    })
+    if (task.steps.length > MAX_STEPS) task.steps.splice(0, task.steps.length - MAX_STEPS)
+    this.publish(task)
+  }
+
   private appendToolMessage(
     task: Task,
     call: ToolCallInfo,
     content: string,
     isError?: boolean
   ): void {
+    /* Tool output is the widest untrusted-text surface the agent has: web
+     * pages, file contents and command logs all arrive here and go straight
+     * back to the model. Our own failures are left alone. */
+    const guarded = isError ? { text: content, findings: [] as TripwireVerdict[] } : runTripwires('content', content)
+    for (const finding of guarded.findings) this.recordTripwire(task, 'content', finding)
     task.messages.push({
       id: newId('msg'),
       role: 'tool',
-      content,
+      content: guarded.text,
       createdAt: nowIso(),
       toolCallId: call.id,
       name: call.name,
@@ -973,10 +1318,11 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
     }
   }
 
-  private async registerArtifact(
+  async registerArtifact(
     task: Task,
     absPath: string,
-    previewAbsPath?: string
+    previewAbsPath?: string,
+    messageId?: string
   ): Promise<Artifact | null> {
     const workspace = ensureTaskWorkspace(task.id)
     if (!isWithin(workspace, absPath)) return null
@@ -1001,7 +1347,8 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       kind: artifactKindForPath(absPath),
       mimeType: mimeForPath(absPath),
       size,
-      createdAt: existing?.createdAt ?? nowIso()
+      createdAt: existing?.createdAt ?? nowIso(),
+      messageId: messageId ?? existing?.messageId
     }
     task.artifacts = task.artifacts.filter((item) => item.relPath !== relPath)
     task.artifacts.push(artifact)
@@ -1022,15 +1369,56 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
       if (!ref.path) continue
       try {
         const stat = await fs.stat(ref.path)
+        const safeName = basename(ref.path).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
+
+        if (stat.isDirectory()) {
+          // Auto-grant folder to task roots if not already granted
+          if (!task.folders.some((f) => isWithin(f, ref.path) && isWithin(ref.path, f))) {
+            task.folders.push(ref.path)
+          }
+          const destination = join(dir, safeName)
+          await fs.cp(ref.path, destination, { recursive: true }).catch(() => undefined)
+          copied.push({
+            id: newId('attachment'),
+            name: ref.name?.trim() || basename(ref.path),
+            path: destination,
+            relPath: relative(workspace, destination).replace(/\\/g, '/'),
+            size: 0,
+            mimeType: 'inode/directory'
+          })
+          continue
+        }
+
         if (!stat.isFile()) continue
         let destination: string
         if (isWithin(workspace, ref.path)) {
           destination = ref.path
         } else {
-          const safeName = basename(ref.path).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
           destination = join(dir, `${newId('att').slice(0, 16)}-${safeName}`)
           await fs.copyFile(ref.path, destination)
         }
+
+        // If it's a zip archive, auto-unpack it alongside so its files are immediately readable
+        if (ref.path.toLowerCase().endsWith('.zip')) {
+          try {
+            const zipBuffer = await fs.readFile(destination)
+            const zip = await JSZip.loadAsync(zipBuffer)
+            const unpackDir = join(dir, `${basename(safeName, '.zip')}_unpacked`)
+            await fs.mkdir(unpackDir, { recursive: true })
+            for (const [relFile, zipEntry] of Object.entries(zip.files)) {
+              if (zipEntry.dir) {
+                await fs.mkdir(join(unpackDir, relFile), { recursive: true })
+              } else {
+                await fs.mkdir(join(unpackDir, relFile, '..'), { recursive: true })
+                const fileBuf = await zipEntry.async('nodebuffer')
+                await fs.writeFile(join(unpackDir, relFile), fileBuf)
+              }
+            }
+          } catch (zipErr) {
+            console.warn('[attachments] could not auto-unpack zip:', zipErr)
+          }
+        }
+
         copied.push({
           id: newId('attachment'),
           name: ref.name?.trim() || basename(ref.path),
@@ -1063,6 +1451,36 @@ ${task.permissionMode === 'skip' ? 'Write access is allowed inside the workspace
   private publish(task: Task): void {
     sendTaskEvent({ type: 'task', task })
   }
+}
+
+/** Bridge scopes pick a task out of the tool name the engine sends back. */
+function engineScope(taskId: string): string {
+  return `t${taskId.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`
+}
+
+/** The engine gets this as a session instruction; this adds its one rule. */
+function engineSystemPrompt(system: string): string {
+  return `${system}
+
+## Execution engine
+This session runs on SelfImpulse's execution engine. Every file, shell, web, MCP and integration action must use the selfimpulse_* tools, which run through SelfImpulse's governance, approvals and diff review. The engine's own edit, read and shell tools are disabled on purpose. The one exception is its subagent tool: handing a job to a specialist is the engine's own work, and the specialist uses those same selfimpulse_* tools inside this workspace.`
+}
+
+/** Conversation a task had before its first engine turn, sent once as context. */
+function renderSeedTranscript(history: ModelMessage[]): string {
+  const lines = history
+    .filter(
+      (message) =>
+        (message.role === 'user' || message.role === 'assistant') && message.content?.trim()
+    )
+    .map(
+      (message) =>
+        `${message.role === 'user' ? 'User' : 'Assistant'}: ${(message.content ?? '').trim()}`
+    )
+    .join('\n\n')
+  if (!lines) return ''
+  const tail = lines.length > 12_000 ? lines.slice(-12_000) : lines
+  return `<earlier-conversation>\n${tail}\n</earlier-conversation>`
 }
 
 function approvalDetails(tool: AgentTool, args: Record<string, unknown>): string {

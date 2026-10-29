@@ -28,6 +28,12 @@ export function sendApprovalRequest(request: ApprovalRequest): void {
   }
 }
 
+export function sendLibraryChanged(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send(IPC.eventLibrary)
+  }
+}
+
 export function toast(level: 'info' | 'success' | 'error', message: string): void {
   sendTaskEvent({ type: 'toast', level, message })
 }

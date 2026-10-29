@@ -293,7 +293,7 @@ export function registerBackendIpc(): void {
   })
 
   ipcMain.handle(IPC.backendRegistrySearch, async (_event, query: string) => {
-    const result = await backend.clawhub.search(query)
+    const result = await backend.skillHub.search(query)
     return result.items ?? []
   })
 

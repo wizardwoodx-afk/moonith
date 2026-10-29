@@ -1,0 +1,119 @@
+.agent-activity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--c-muted);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+/* The glyph is wrapped so the shape change and the breath can live on two
+   elements. One animation per element means no property fight and no restart
+   when the other one fires. */
+.agent-activity__glyph-wrap {
+  display: inline-flex;
+  flex: 0 0 18px;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center;
+  animation: agent-activity-settle var(--dur-enter, 180ms) var(--ease-enter, cubic-bezier(0.23, 1, 0.32, 1)) both;
+}
+
+.agent-activity__glyph {
+  color: var(--c-accent);
+  transform-origin: center;
+}
+
+.agent-activity__copy {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: agent-activity-fade 140ms var(--ease-hover, ease) both;
+}
+
+.agent-activity__label {
+  color: var(--c-ink);
+}
+
+.agent-activity__detail {
+  color: var(--c-muted);
+}
+
+.agent-activity__sheet,
+.agent-activity__stem {
+  stroke: var(--c-line);
+}
+
+.agent-activity[data-state='waiting'] .agent-activity__glyph,
+.agent-activity[data-state='complete'] .agent-activity__glyph,
+.agent-activity[data-state='error'] .agent-activity__glyph,
+.agent-activity[data-state='paused'] .agent-activity__glyph {
+  color: var(--c-muted);
+}
+
+/* One breath, on the whole glyph, and only while work is actually in flight.
+   There used to be three per-stroke loops stacked on top of each other (the
+   lines, the scan bar, the branches), which turned the calmest thing on the
+   screen into a spinner. A shape that only changes colour is steadier and says
+   the same thing. */
+.agent-activity[data-active='true'] .agent-activity__glyph {
+  animation: agent-activity-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes agent-activity-settle {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes agent-activity-breathe {
+  0%,
+  100% {
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes agent-activity-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Reduced mode: the decorative strokes never move at all, and the shape change
+   keeps a plain opacity fade so switching states is still legible. The fade
+   rule is written here rather than inherited from the global contract because
+   this file and styles.css are separate bundles and their order is not
+   guaranteed. */
+html[data-motion-mode='reduced'] .agent-activity__glyph,
+html[data-motion-mode='reduced'] .agent-activity__glyph *,
+.agent-activity[data-motion-mode='reduced'] .agent-activity__glyph,
+.agent-activity[data-motion-mode='reduced'] .agent-activity__glyph * {
+  animation: none !important;
+  transform: none !important;
+  opacity: 1;
+}
+
+html[data-motion-mode='reduced'] .agent-activity__glyph-wrap {
+  animation-name: agent-activity-fade !important;
+  animation-duration: 140ms !important;
+  animation-timing-function: ease !important;
+  animation-iteration-count: 1 !important;
+  animation-fill-mode: both !important;
+}
+
+html[data-motion-mode='reduced'] .agent-activity__copy {
+  animation-duration: 140ms !important;
+}

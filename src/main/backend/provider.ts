@@ -5,6 +5,8 @@
  * Ported from this app's `electron/backend/provider.js`.
  */
 
+import { readJsonLimited } from '../util'
+
 export interface ProviderDefinition {
   id: string
   name: string
@@ -66,7 +68,14 @@ export interface StreamOptions {
 
 export type ProviderEvent =
   | { type: 'text'; delta: string }
-  | { type: 'tool_call'; index: number; id: string; name: string; args: string }
+  | {
+      type: 'tool_call'
+      index: number
+      id: string
+      name: string
+      args: string
+      thoughtSignature?: string
+    }
   | { type: 'tool_delta'; index: number; args: string }
   | { type: 'usage'; usage: Record<string, number> }
   | { type: 'done' }
@@ -78,9 +87,41 @@ export interface WireMessage {
     id: string
     type: 'function'
     function: { name: string; arguments: string }
+    /** Google-only; see `ToolCall.thoughtSignature`. */
+    extra_content?: { google?: { thought_signature?: string } }
   }>
   tool_call_id?: string
   [key: string]: unknown
+}
+
+/**
+ * Gemini 3 rejects any replay that contains an unsigned function call, so a
+ * transcript written before signatures were stored would fail on every later
+ * turn. Signed calls are kept; unsigned ones and their tool results are
+ * dropped, which loses that step's context but keeps the task usable.
+ */
+export function dropUnsignedToolTurns(messages: WireMessage[]): WireMessage[] {
+  const dropped = new Set<string>()
+  const out: WireMessage[] = []
+  for (const message of messages) {
+    if (message.role === 'assistant' && message.tool_calls?.length) {
+      const signed = message.tool_calls.filter(
+        (call) => call.extra_content?.google?.thought_signature
+      )
+      if (signed.length !== message.tool_calls.length) {
+        for (const call of message.tool_calls) {
+          if (!call.extra_content?.google?.thought_signature) dropped.add(call.id)
+        }
+        if (signed.length) out.push({ ...message, tool_calls: signed })
+        continue
+      }
+    }
+    if (message.role === 'tool' && message.tool_call_id && dropped.has(message.tool_call_id)) {
+      continue
+    }
+    out.push(message)
+  }
+  return out
 }
 
 function readEnvConfig(): { baseUrl: string; apiKey: string; model: string } {
@@ -88,6 +129,29 @@ function readEnvConfig(): { baseUrl: string; apiKey: string; model: string } {
   const key = process.env.OPENAI_API_KEY || ''
   const model = process.env.OPENAI_MODEL || ''
   return { baseUrl: base.replace(/\/+$/, ''), apiKey: key, model }
+}
+
+/**
+ * Credentials are endpoint-bound. A provider edit must not silently reuse a
+ * stored key against a new origin, path or query (including an environment
+ * fallback).
+ */
+export function sameProviderEndpoint(left?: string, right?: string): boolean {
+  const normalize = (value?: string): string => {
+    const raw = value?.trim() ?? ''
+    if (!raw) return ''
+    try {
+      const url = new URL(raw)
+      /* The fragment never reaches the server, so it is not part of the
+       * identity. The query is: `?api-version=` routes to a different
+       * deployment on the same host. */
+      url.hash = ''
+      return `${url.origin.toLowerCase()}${url.pathname.replace(/\/+$/, '')}${url.search}`
+    } catch {
+      return raw.replace(/\/+$/, '')
+    }
+  }
+  return normalize(left) === normalize(right)
 }
 
 /**
@@ -168,7 +232,7 @@ export function resolveConfig(settings: ProviderSettings = {}): ResolvedProvider
     return {
       providerId: settings.providerId || 'custom',
       baseUrl: settings.baseUrl.replace(/\/+$/, ''),
-      apiKey: settings.apiKey || env.apiKey,
+      apiKey: settings.apiKey || (sameProviderEndpoint(settings.baseUrl, env.baseUrl) ? env.apiKey : ''),
       model: settings.model || env.model || '',
       kind: settings.kind
     }
@@ -231,31 +295,31 @@ export const MODEL_TIERS: ModelTier[] = [
     id: 'swift',
     name: 'Swift',
     desc: 'Short answers, fewest tokens, nothing wasted on deliberation.',
-    env: ['KNIGHT_FAST_MODEL']
+    env: ['SELFIMPULSE_FAST_MODEL', 'KNIGHT_FAST_MODEL']
   },
   {
     id: 'balanced',
     name: 'Balanced',
     desc: 'The everyday tier: capable, but not spending credits on extra thinking.',
-    env: ['KNIGHT_BALANCED_MODEL']
+    env: ['SELFIMPULSE_BALANCED_MODEL', 'KNIGHT_BALANCED_MODEL']
   },
   {
     id: 'deep',
     name: 'Deep',
     desc: 'Reasons before answering. Use it when the answer has to be right.',
-    env: ['KNIGHT_ULTIMATE_MODEL']
+    env: ['SELFIMPULSE_ULTIMATE_MODEL', 'KNIGHT_ULTIMATE_MODEL']
   },
   {
     id: 'agentic',
     name: 'Agentic',
     desc: 'Maximum reasoning depth, for the tasks that need the whole budget.',
-    env: ['KNIGHT_CANTUS_MODEL']
+    env: ['SELFIMPULSE_CANTUS_MODEL', 'KNIGHT_CANTUS_MODEL']
   },
   {
     id: 'lean',
     name: 'Lean',
     desc: 'The cheapest thing that still finishes the job.',
-    env: ['KNIGHT_EFFICIENT_MODEL']
+    env: ['SELFIMPULSE_EFFICIENT_MODEL', 'KNIGHT_EFFICIENT_MODEL']
   }
 ]
 
@@ -328,11 +392,11 @@ export class Provider {
     if (!res.ok) {
       throw new Error(`models request failed: ${res.status} ${(await res.text()).slice(0, 200)}`)
     }
-    const json = (await res.json()) as {
+    const json = await readJsonLimited<{
       data?: Array<{ id?: string; name?: string }>
       models?: Array<{ id?: string; name?: string }>
-    }
-    return (json.data || json.models || []).map((model) => ({
+    }>(res, 2_000_000)
+    return (json.data || json.models || []).slice(0, 500).map((model) => ({
       id: model.id || model.name || '',
       label: model.id || model.name || ''
     }))
@@ -396,7 +460,9 @@ export class Provider {
     messages: WireMessage[],
     options: StreamOptions & { onFirst?: () => void }
   ): AsyncGenerator<ProviderEvent, void, unknown> {
-    const timeout = AbortSignal.timeout(this.settings.requestTimeoutMs || 60000)
+    // Reasoning models routinely spend over a minute before the first token,
+    // so the ceiling is generous and streaming keeps the UI live meanwhile.
+    const timeout = AbortSignal.timeout(this.settings.requestTimeoutMs || 180000)
     const signal = options.signal
     const combined = signal ? AbortSignal.any([signal, timeout]) : timeout
 
@@ -419,9 +485,10 @@ export class Provider {
       return
     }
 
+    const google = /googleapis\.com/.test(cfg.baseUrl)
     const body = {
       model: cfg.model,
-      messages,
+      messages: google ? dropUnsignedToolTurns(messages) : messages,
       stream: true,
       stream_options: { include_usage: true },
       ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
@@ -446,7 +513,10 @@ export class Provider {
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
-    const toolCalls = new Map<number, { index: number; id: string; name: string; args: string }>()
+    const toolCalls = new Map<
+      number,
+      { index: number; id: string; name: string; args: string; signature?: string }
+    >()
 
     for (;;) {
       const { done, value } = await reader.read()
@@ -464,10 +534,13 @@ export class Provider {
           choices?: Array<{
             delta?: {
               content?: string
+              extra_content?: { google?: { thought_signature?: string } }
               tool_calls?: Array<{
                 index?: number
                 id?: string
                 function?: { name?: string; arguments?: string }
+                extra_content?: { google?: { thought_signature?: string } }
+                thought_signature?: string
               }>
             }
           }>
@@ -498,6 +571,14 @@ export class Provider {
             const record = toolCalls.get(index)!
             if (toolCall.id) record.id = toolCall.id
             if (toolCall.function?.name) record.name = toolCall.function.name
+            // Google has shipped the signature on the tool call, on the delta,
+            // and under a flat snake_case key across API revisions. Take it
+            // wherever it appears; without it Gemini 3 rejects the replay.
+            const signature =
+              toolCall.extra_content?.google?.thought_signature ||
+              toolCall.thought_signature ||
+              delta.extra_content?.google?.thought_signature
+            if (signature) record.signature = signature
             if (toolCall.function?.arguments) {
               record.args += toolCall.function.arguments
               yield { type: 'tool_delta', index, args: toolCall.function.arguments }
@@ -508,8 +589,63 @@ export class Provider {
       }
     }
 
+    /* Gemini's streaming shape has dropped the signature in some revisions.
+     * The next request cannot be replayed without it, so when a tool call came
+     * back unsigned, ask once more without streaming and lift the signature
+     * from that answer. Text has already been streamed, so it is not resent. */
+    if (google && toolCalls.size && [...toolCalls.values()].some((call) => !call.signature)) {
+      try {
+        const { stream_options: _streamOptions, ...rest } = body
+        const reaskDeadline = AbortSignal.timeout(this.settings.requestTimeoutMs || 180000)
+        const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: this.headers(cfg),
+          body: JSON.stringify({ ...rest, stream: false }),
+          signal: options.signal
+            ? AbortSignal.any([options.signal, reaskDeadline])
+            : reaskDeadline
+        })
+        if (res.ok) {
+          const json = (await res.json()) as {
+            choices?: Array<{
+              message?: {
+                tool_calls?: Array<{
+                  id?: string
+                  function?: { name?: string; arguments?: string }
+                  extra_content?: { google?: { thought_signature?: string } }
+                  thought_signature?: string
+                }>
+              }
+            }>
+          }
+          const signed = json.choices?.[0]?.message?.tool_calls ?? []
+          for (const [index, record] of toolCalls) {
+            const match =
+              signed.find((call) => call.id && call.id === record.id) ??
+              (signed.length === toolCalls.size ? signed[index] : undefined)
+            if (!match) continue
+            if (match.id) record.id = match.id
+            if (match.function?.name) record.name = match.function.name
+            if (match.function?.arguments) record.args = match.function.arguments
+            const signature =
+              match.extra_content?.google?.thought_signature || match.thought_signature
+            if (signature) record.signature = signature
+          }
+        }
+      } catch {
+        // Keep the unsigned calls: the turn still runs, only the replay degrades.
+      }
+    }
+
     for (const call of toolCalls.values()) {
-      yield { type: 'tool_call', id: call.id, name: call.name, args: call.args, index: call.index }
+      yield {
+        type: 'tool_call',
+        id: call.id,
+        name: call.name,
+        args: call.args,
+        index: call.index,
+        ...(call.signature ? { thoughtSignature: call.signature } : {})
+      }
     }
     yield { type: 'done' }
   }

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -227,6 +227,85 @@ describe('trust is a signal, never an authority', () => {
   })
 })
 
+describe('plan mode', () => {
+  it('denies a write instead of asking permission to make it', () => {
+    const { gate } = setup()
+    const decision = gate.govern(
+      request({
+        tool: 'write_file',
+        sideEffect: 'write',
+        risk: 'medium',
+        approval: 'policy',
+        permissionMode: 'plan'
+      })
+    )
+    expect(decision.decision).toBe('deny')
+    expect(decision.rule).toBe('nomos-plan-mode-is-read-only')
+  })
+
+  it('speaks before the approval rules, so no approve button can open it', () => {
+    const { gate } = setup()
+    const decision = gate.govern(
+      request({
+        tool: 'install_skill',
+        sideEffect: 'write',
+        risk: 'medium',
+        approval: 'always',
+        permissionMode: 'plan'
+      })
+    )
+    expect(decision.rule).toBe('nomos-plan-mode-is-read-only')
+  })
+
+  it('leaves reads, quiet browsing and the plan tool itself alone', () => {
+    const { gate } = setup()
+    for (const reading of [
+      { tool: 'read_file', sideEffect: 'read' as const, approval: 'never' as const },
+      { tool: 'web_search', sideEffect: 'network' as const, risk: 'low' as const, approval: 'policy' as const },
+      { tool: 'browser_read', sideEffect: 'network' as const, risk: 'low' as const, approval: 'never' as const },
+      { tool: 'update_plan', sideEffect: 'none' as const, approval: 'never' as const }
+    ]) {
+      const decision = gate.govern(request({ ...reading, permissionMode: 'plan' }))
+      expect(decision.decision).toBe('allow')
+    }
+  })
+
+  it('denies a network action that changes something outside the machine', () => {
+    const { gate } = setup()
+    const decision = gate.govern(
+      request({
+        tool: 'browser_stage',
+        sideEffect: 'network',
+        risk: 'medium',
+        approval: 'policy',
+        permissionMode: 'plan'
+      })
+    )
+    expect(decision.decision).toBe('deny')
+    expect(decision.rule).toBe('nomos-plan-mode-is-read-only')
+  })
+
+  it('denies a high-risk action in plan mode instead of offering it for approval', () => {
+    const { gate } = setup()
+    const decision = gate.govern(
+      request({ tool: 'run_command', sideEffect: 'execute', risk: 'high', approval: 'policy', permissionMode: 'plan' })
+    )
+    expect(decision.decision).toBe('deny')
+    expect(decision.rule).toBe('nomos-plan-mode-is-read-only')
+  })
+
+  it('still sends a high-risk action to a human outside plan mode', () => {
+    const { gate } = setup()
+    for (const mode of ['manual', 'auto', 'skip'] as const) {
+      const decision = gate.govern(
+        request({ tool: 'run_command', sideEffect: 'execute', risk: 'high', approval: 'policy', permissionMode: mode })
+      )
+      expect(decision.decision).toBe('steer')
+      expect(decision.rule).toBe('nomos-high-risk-requires-human')
+    }
+  })
+})
+
 describe('delegation narrows, never widens', () => {
   it('refuses a capability the parent does not hold', () => {
     const { gate, identities } = setup()
@@ -392,7 +471,174 @@ describe('the durable decision journal', () => {
       await recording.governAwait(request())
       const lines = readFileSync(file, 'utf8').trim().split('\n')
       expect(lines).toHaveLength(1)
-      expect(JSON.parse(lines[0]).actionId).toBe('act_1')
+      const parsed = JSON.parse(lines[0])
+      expect(parsed.actionId).toBe('act_1')
+      expect(parsed.hash).toBeDefined()
+      expect(parsed.prev).toBe('0'.repeat(64))
+      expect(parsed.seq).toBe(0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('forms a cryptographically verifiable hash chain across decisions and annotations', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'nomos-journal-chain-'))
+    try {
+      const file = join(dir, 'nomos', 'governance.jsonl')
+      const journal = new GovernanceJournal(file)
+
+      await journal.append({
+        actionId: 'act_1',
+        ts: new Date().toISOString(),
+        decision: 'allow',
+        rule: 'rule_allow',
+        reason: 'Allowed',
+        detail: 'Read /tmp/test.txt',
+        trust: 100,
+        capability: 'fs.read',
+        agentId: 'Captain',
+        principalId: 'local-user',
+        tool: 'files.read',
+        missionId: null,
+        approvedBy: null,
+        approvedAt: null,
+        outcome: null
+      })
+
+      await journal.annotate('act_1', {
+        approvedBy: 'human',
+        approvedAt: new Date().toISOString(),
+        outcome: 'success'
+      })
+
+      await journal.append({
+        actionId: 'act_2',
+        ts: new Date().toISOString(),
+        decision: 'deny',
+        rule: 'rule_deny',
+        reason: 'Denied',
+        detail: 'Execute rm -rf /',
+        trust: 80,
+        capability: 'shell.exec',
+        agentId: 'Captain',
+        principalId: 'local-user',
+        tool: 'shell.exec',
+        missionId: null,
+        approvedBy: null,
+        approvedAt: null,
+        outcome: 'denied'
+      })
+
+      const readLines = await GovernanceJournal.read(file)
+      expect(readLines).toHaveLength(3)
+
+      const verifyResult = await GovernanceJournal.verifyFile(file)
+      expect(verifyResult.valid).toBe(true)
+      expect(verifyResult.count).toBe(3)
+
+      const folded = GovernanceJournal.fold(readLines)
+      expect(folded).toHaveLength(2)
+      expect(folded[0].approvedBy).toBe('human')
+      expect(folded[0].outcome).toBe('success')
+      expect(folded[1].decision).toBe('deny')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('detects tampering when any decision line is edited', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'nomos-journal-tamper-'))
+    try {
+      const file = join(dir, 'nomos', 'governance.jsonl')
+      const journal = new GovernanceJournal(file)
+
+      await journal.append({
+        actionId: 'act_1',
+        ts: new Date().toISOString(),
+        decision: 'deny',
+        rule: 'high-risk',
+        reason: 'Dangerous action',
+        detail: 'Format drive',
+        trust: 50,
+        capability: 'shell.exec',
+        agentId: 'Captain',
+        principalId: 'local-user',
+        tool: 'shell.exec',
+        missionId: null,
+        approvedBy: null,
+        approvedAt: null,
+        outcome: 'denied'
+      })
+
+      await journal.append({
+        actionId: 'act_2',
+        ts: new Date().toISOString(),
+        decision: 'allow',
+        rule: 'low-risk',
+        reason: 'Safe action',
+        detail: 'Read /tmp',
+        trust: 100,
+        capability: 'fs.read',
+        agentId: 'Captain',
+        principalId: 'local-user',
+        tool: 'files.read',
+        missionId: null,
+        approvedBy: null,
+        approvedAt: null,
+        outcome: null
+      })
+
+      const originalText = readFileSync(file, 'utf8')
+      // Tamper with the decision: change 'deny' to 'allow'
+      const tamperedText = originalText.replace('"decision":"deny"', '"decision":"allow"')
+      writeFileSync(file, tamperedText, 'utf8')
+
+      const verifyResult = await GovernanceJournal.verifyFile(file)
+      expect(verifyResult.valid).toBe(false)
+      expect(verifyResult.brokenAtIndex).toBe(0)
+      expect(verifyResult.error).toContain('Tamper detected')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('detects tampering when a line is deleted or reordered', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'nomos-journal-reorder-'))
+    try {
+      const file = join(dir, 'nomos', 'governance.jsonl')
+      const journal = new GovernanceJournal(file)
+
+      for (let i = 1; i <= 3; i++) {
+        await journal.append({
+          actionId: `act_${i}`,
+          ts: new Date().toISOString(),
+          decision: 'allow',
+          rule: 'low-risk',
+          reason: `Action ${i}`,
+          detail: `Action detail ${i}`,
+          trust: 100,
+          capability: 'fs.read',
+          agentId: 'Captain',
+          principalId: 'local-user',
+          tool: 'files.read',
+          missionId: null,
+          approvedBy: null,
+          approvedAt: null,
+          outcome: null
+        })
+      }
+
+      const lines = readFileSync(file, 'utf8').trim().split('\n')
+      expect(lines).toHaveLength(3)
+
+      // Delete the middle line
+      const deletedLineText = [lines[0], lines[2]].join('\n') + '\n'
+      writeFileSync(file, deletedLineText, 'utf8')
+
+      const verifyDeleted = await GovernanceJournal.verifyFile(file)
+      expect(verifyDeleted.valid).toBe(false)
+      expect(verifyDeleted.brokenAtIndex).toBe(1)
+      expect(verifyDeleted.error).toContain('Hash chain broken')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -413,7 +659,7 @@ describe('the durable decision journal', () => {
       })
       const decision = await recording.governAwait(request())
       expect(decision.decision).toBe('deny')
-      expect(decision.rule).toBe('nomos-journal-unavailable')
+      expect(decision.rule).toBe('governance-journal-unavailable')
       expect(decision.reason).toContain('could not be written')
       /* The in-memory record agrees with what the caller was told. */
       expect(recording.recent(1)[0].decision).toBe('deny')

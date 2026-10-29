@@ -1,3 +1,4 @@
+import { mainStorage } from "../persist/mainStorage";
 /**
  * VH 11.11 SELF-EVOLVING — learning receipts.
  *
@@ -27,6 +28,8 @@ export interface LearningReceipt {
   missionId: string;
   lessons: LearningReceiptLesson[];
   strategyChange: string | null;
+  memoryCredit?: { lessonIds: string[]; verified: boolean; model: string };
+  evaluation?: { heldOut: boolean; evidenceLeak: boolean; costUsd: number | null; policyTokens: number | null };
   evidenceDigest: string;
   signature?: IssuerSignature;
   signatureNote?: string;
@@ -39,6 +42,8 @@ export function canonicalDigestInput(r: {
   missionId: string;
   lessons: LearningReceiptLesson[];
   strategyChange: string | null;
+  memoryCredit?: { lessonIds: string[]; verified: boolean; model: string };
+  evaluation?: { heldOut: boolean; evidenceLeak: boolean; costUsd: number | null; policyTokens: number | null };
 }): string {
   return JSON.stringify({
     lessons: r.lessons
@@ -46,6 +51,10 @@ export function canonicalDigestInput(r: {
       .sort((a, b) => a.id.localeCompare(b.id)),
     missionId: r.missionId,
     strategyChange: r.strategyChange,
+    memoryCredit: r.memoryCredit
+      ? { ...r.memoryCredit, lessonIds: [...r.memoryCredit.lessonIds].sort() }
+      : undefined,
+    evaluation: r.evaluation,
   }, (_k, v: unknown) => {
     if (v && typeof v === "object" && !Array.isArray(v)) {
       return Object.keys(v as Record<string, unknown>).sort()
@@ -67,6 +76,8 @@ export async function issueLearningReceipt(args: {
   missionId: string;
   lessons: LearningReceiptLesson[];
   strategyChange: string | null;
+  memoryCredit?: { lessonIds: string[]; verified: boolean; model: string };
+  evaluation?: { heldOut: boolean; evidenceLeak: boolean; costUsd: number | null; policyTokens: number | null };
   now?: number;
 }): Promise<LearningReceipt> {
   const now = args.now ?? Date.now();
@@ -80,6 +91,8 @@ export async function issueLearningReceipt(args: {
     missionId: args.missionId,
     lessons: args.lessons,
     strategyChange: args.strategyChange,
+    ...(args.memoryCredit ? { memoryCredit: args.memoryCredit } : {}),
+    ...(args.evaluation ? { evaluation: args.evaluation } : {}),
     evidenceDigest: digest,
   };
   if (signingSupported()) {
@@ -103,16 +116,13 @@ export async function verifyLearningReceipt(r: LearningReceipt): Promise<{ ok: b
 }
 
 export function loadLearningReceipts(): LearningReceipt[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) {
-      const p = JSON.parse(raw) as LearningReceipt[];
-      if (Array.isArray(p)) return p;
-    }
-  } catch { /* storage unavailable */ }
-  return [];
+  const raw = mainStorage().getItem(LS_KEY);
+  if (!raw) return [];
+  const parsed = JSON.parse(raw) as unknown;
+  if (!Array.isArray(parsed)) throw new Error("Persisted learning receipts are not an array; refusing to discard them.");
+  return parsed as LearningReceipt[];
 }
 
 export function saveLearningReceipts(list: LearningReceipt[]): void {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(list.slice(-LEARNING_RECEIPT_CAP))); } catch { /* ignore */ }
+  mainStorage().setItem(LS_KEY, JSON.stringify(list.slice(-LEARNING_RECEIPT_CAP)));
 }

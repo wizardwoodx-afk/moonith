@@ -234,11 +234,11 @@ export function CaptainComposer({
     {
       id: 'captain-command-rook-worker',
       kind: '/' as const,
-      label: 'ROOK: Autonomous Digital Worker',
+      label: 'Run an autonomous job',
       detail: 'Deploy dual-engine agent: GUI Vision Grounding + Software ADE + 360K+ skills',
       keywords: 'rook worker agent yolo autonomous build',
       icon: <Cpu size={13} />,
-      insert: 'ROOK Autonomous Task: '
+      insert: 'Autonomous job: '
     },
     {
       id: 'captain-command-rook-yolo',
@@ -255,20 +255,20 @@ export function CaptainComposer({
     {
       id: 'captain-command-rook-research',
       kind: '/' as const,
-      label: 'ROOK: Synthesize Research',
+      label: 'Synthesize research',
       detail: 'Formulate multi-source research report with citations and executive deliverable',
       keywords: 'research report sources synthesis deliverable',
       icon: <Sparkles size={13} />,
-      insert: 'ROOK Research Task: Synthesize in-depth report on '
+      insert: 'Research: in-depth report on '
     },
     {
       id: 'captain-command-rook-cr',
       kind: '/' as const,
-      label: 'ROOK: GitOps Change Request',
+      label: 'File a change request',
       detail: 'Execute modifications and package into reviewable Change Request',
       keywords: 'cr git pull request changerequest gitops',
       icon: <Command size={13} />,
-      insert: 'ROOK GitOps Task: Formulate Change Request for '
+      insert: 'Change request for '
     },
     ...PERMISSION_CHOICES.map((choice) => ({
       id: `captain-command-permission-${choice.value}`,
@@ -315,6 +315,7 @@ export function CaptainComposer({
           {commands.menu}
           <textarea
           ref={textareaRef}
+          aria-label={`Message ${name}`}
           value={draft}
           onChange={commands.onChange}
           onSelect={commands.onSelect}

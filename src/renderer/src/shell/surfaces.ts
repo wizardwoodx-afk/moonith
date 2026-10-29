@@ -1,7 +1,8 @@
 export const SURFACES = [
   { id: 'chat', label: 'Chat' },
   { id: 'company', label: 'Company' },
-  { id: 'table', label: 'Table' }
+  { id: 'table', label: 'Table' },
+  { id: 'library', label: 'Library' }
 ] as const
 
 export type Surface = (typeof SURFACES)[number]['id']
@@ -13,8 +14,4 @@ export function spaceForSurface(surface: Surface): Space {
 
 export function spaceClass(surface: Surface): string {
   return spaceForSurface(surface) === 'table' ? 'space-table' : 'space-study'
-}
-
-export function modeForSurface(surface: Surface): 'Self' | 'Collab' {
-  return surface === 'table' ? 'Collab' : 'Self'
 }

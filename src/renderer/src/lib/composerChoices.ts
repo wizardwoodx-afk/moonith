@@ -8,19 +8,43 @@ export interface PermissionChoice {
 
 export const PERMISSION_CHOICES: PermissionChoice[] = [
   {
+    value: 'plan',
+    label: 'Plan first',
+    blurb: 'Reads, researches, and writes you a plan. Touches no files, runs no commands.'
+  },
+  {
     value: 'manual',
-    label: 'Manual',
-    blurb: 'SelfImpulse asks before actions that change files or run commands.'
+    label: 'Ask every time',
+    blurb: 'Asks before anything that changes files or runs a command.'
   },
   {
     value: 'auto',
-    label: 'Auto',
-    blurb: 'Routine work runs freely. High-risk actions still ask first.'
+    label: 'Auto approve',
+    blurb: 'Routine work runs freely. Risky actions still ask first.'
   },
   {
     value: 'skip',
-    label: 'Integrated acceptance',
-    blurb: 'Accepts every step in this task without asking. Use only in folders you trust.'
+    label: 'Full access',
+    blurb: 'Each step runs without asking. Shell commands still need approval.'
+  }
+]
+
+export const ENGINE_CHOICES: Array<{
+  value: PublicSettings['engineMode']
+  label: string
+  blurb: string
+}> = [
+  {
+    value: 'engine',
+    label: 'Execution engine',
+    blurb:
+      'A dedicated engine runs the model loop, retries, context folding and parallel subagents. Every tool still runs here, under approvals, receipts and diff review.'
+  },
+  {
+    value: 'internal',
+    label: 'Built-in loop',
+    blurb:
+      'The original in-process loop. Same tools, approvals and review, without a separate engine process.'
   }
 ]
 

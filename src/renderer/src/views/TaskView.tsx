@@ -1,3 +1,4 @@
+import { agentName } from '../lib/localProfile'
 import { useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
@@ -12,21 +13,32 @@ import {
   Play,
   Trash2,
   Check,
-  MonitorUp
+  Copy,
+  MonitorUp,
+  Pencil,
+  ShieldCheck
 } from 'lucide-react'
-import { BrandMark } from '../components/BrandMark'
+import { BrandMark } from '../components/BrandMarks'
+import { confirmDialog } from '../components/Confirm'
+import { TaskChanges } from '../components/TaskChanges'
+import { OversightPanel } from '../features/oversight/OversightPanel'
 import { toast } from 'sonner'
 import type { AttachmentRef, ChatMessage, Task, TaskStatus } from '@shared/types'
+import { AGENT_ROLE_LABELS } from '@shared/governance'
+import { RolePicker } from '../motion/RolePicker'
 import { useApp } from '../store'
 import { cn, errorMessage, folderName, formatBytes, statusLabel, timeAgo } from '../lib/utils'
 import { resolveComposerModel } from '../lib/composerChoices'
 import { CaptainComposer } from '../features/captain/CaptainComposer'
 import { Markdown } from '../components/Markdown'
 import { PlanCard } from '../components/PlanCard'
-import { StepList } from '../components/Steps'
+import { WorkTrail } from '../components/WorkTrail'
 import { ArtifactChip, ArtifactPreview } from '../components/Artifacts'
 import { TaskPanel } from '../components/TaskPanel'
-import { Button, IconButton, Popover } from '../components/ui'
+import { Button, Elev, ElevShadow, IconButton, Popover } from '../components/ui'
+import { ReactionPicker } from '../motion/ReactionPicker'
+import { MessageFeedback } from '../components/MessageFeedback'
+import { ActionNodeCard } from '../motion/ActionNodeCard'
 
 const STATUS_STYLE: Record<TaskStatus, string> = {
   draft: 'border-line bg-surface-2 text-muted',
@@ -53,11 +65,14 @@ function AttachmentChips({ message }: { message: ChatMessage }) {
       {message.attachments.map((file) => (
         <span
           key={file.id}
-          className="inline-flex max-w-[230px] items-center gap-1.5 rounded-lg border border-line bg-surface/70 px-2 py-1 text-[10.5px] text-muted"
+          className={cn(
+            'inline-flex max-w-[230px] items-center gap-1.5 rounded-lg bg-surface px-2 py-1 text-[length:var(--text-micro)] text-muted',
+            Elev.hairline
+          )}
           title={file.path}
         >
           <FolderOpen size={11} className="shrink-0 text-accent" />
-          <span className="truncate">{file.name}</span>
+          <span className="min-w-0 truncate">{file.name}</span>
           {file.size ? <span className="text-faint">{formatBytes(file.size)}</span> : null}
         </span>
       ))}
@@ -65,23 +80,197 @@ function AttachmentChips({ message }: { message: ChatMessage }) {
   )
 }
 
-function ThinkingDots({ label }: { label: string }) {
+/** A provider failure arrives as quoted JSON. The reader gets one sentence; the
+ * payload stays available, untouched, behind the disclosure. */
+function providerSentence(payload: Record<string, unknown>): string {
+  const retry = findRetryDelay(payload)
+  if (retry) return `Rate limit reached — try again in ${retry}.`
+  const status = findStatus(payload)
+  if (status === 401) return 'The provider rejected this API key.'
+  if (status === 403) return 'This key is not allowed to use that model.'
+  if (status === 404) return 'That model or endpoint was not found.'
+  if (status === 429) return 'Rate limit reached — try again shortly.'
+  if (status !== null && status >= 500) return 'The model provider is unavailable right now.'
+  return 'The model provider rejected this request.'
+}
+
+/** Balanced-brace scan so a JSON body glued to prose still parses. */
+function parseJsonObject(text: string): Record<string, unknown> | null {
+  const start = text.indexOf('{')
+  if (start < 0) return null
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = start; index < text.length; index++) {
+    const char = text[index]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') inString = true
+    else if (char === '{' || char === '[') depth++
+    else if (char === '}' || char === ']') {
+      depth--
+      if (depth === 0) {
+        try {
+          const parsed = JSON.parse(text.slice(start, index + 1))
+          return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? (parsed as Record<string, unknown>)
+            : null
+        } catch {
+          return null
+        }
+      }
+    }
+  }
+  return null
+}
+
+function walkValues(payload: unknown, visit: (key: string, value: unknown) => boolean): boolean {
+  if (Array.isArray(payload)) return payload.some((item) => walkValues(item, visit))
+  if (!payload || typeof payload !== 'object') return false
+  for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+    if (visit(key, value)) return true
+    if (walkValues(value, visit)) return true
+  }
+  return false
+}
+
+function findRetryDelay(payload: Record<string, unknown>): string | null {
+  let found: string | null = null
+  walkValues(payload, (key, value) => {
+    if (found) return true
+    if (!/retrydelay|retry_after|retry-after/i.test(key)) return false
+    const raw = typeof value === 'number' ? `${value}s` : typeof value === 'string' ? value : ''
+    const match = raw.match(/^\s*(\d+(?:\.\d+)?)\s*(s|sec|secs|seconds)?\s*$/i)
+    if (!match) return false
+    found = `${match[1]} ${Number(match[1]) === 1 ? 'second' : 'seconds'}`
+    return true
+  })
+  return found
+}
+
+function findStatus(payload: Record<string, unknown>): number | null {
+  let found: number | null = null
+  walkValues(payload, (key, value) => {
+    if (found !== null) return true
+    if (!/^(code|status|statuscode|http_status)$/i.test(key)) return false
+    const numeric = typeof value === 'number' ? value : Number(value)
+    if (Number.isFinite(numeric) && numeric >= 100 && numeric < 600) found = numeric
+    return found !== null
+  })
+  return found
+}
+
+const MAX_SENTENCE = 180
+
+function describeTaskError(error: string): { sentence: string; raw: string | null } {
+  const text = error.trim()
+  const json = parseJsonObject(text)
+  if (json) return { sentence: providerSentence(json), raw: text }
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  const first = lines[0] ?? ''
+  if (!first) return { sentence: 'This task failed.', raw: text || null }
+  if (first.length > MAX_SENTENCE) {
+    return { sentence: `${first.slice(0, MAX_SENTENCE).trimEnd()}…`, raw: text }
+  }
+  const rest = lines.slice(1).join('\n')
+  return { sentence: first, raw: rest || null }
+}
+
+function TaskErrorBanner({
+  error,
+  onRetry,
+  onOpenSettings
+}: {
+  error: string
+  onRetry: () => void
+  onOpenSettings: () => void
+}) {
+  const [showRaw, setShowRaw] = useState(false)
+  const { sentence, raw } = describeTaskError(error)
   return (
-    <div className="flex items-center gap-2 py-1 text-[12px] text-muted">
-      <span className="flex items-center gap-1">
-        {[0, 1, 2].map((index) => (
-          <span
-            key={index}
-            className="h-1 w-1 rounded-full bg-accent breathing"
-            style={{ animationDelay: `${index * 0.18}s` }}
-          />
-        ))}
-      </span>
-      {label}
+    <div
+      role="alert"
+      className={cn(
+        'mb-3 rounded-[var(--r-card)] bg-danger/5 px-4 py-3',
+        ElevShadow.raised,
+        'border border-danger/30'
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <AlertCircle size={13} className="shrink-0 text-danger" />
+        <p className="min-w-0 flex-1 text-[12px] leading-relaxed text-danger">{sentence}</p>
+        {raw ? (
+          <button
+            type="button"
+            onClick={() => setShowRaw((value) => !value)}
+            aria-expanded={showRaw}
+            className="text-[11px] font-medium text-muted underline underline-offset-2"
+          >
+            {showRaw ? 'Hide details' : 'Details'}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={onRetry}
+          className="text-[11px] font-medium text-ink underline underline-offset-2"
+        >
+          Try again
+        </button>
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="text-[11px] font-medium text-muted underline underline-offset-2"
+        >
+          Settings
+        </button>
+      </div>
+      {showRaw && raw ? (
+        <pre className="scroll-thin mt-2 max-h-40 overflow-auto rounded-lg border border-danger/20 bg-canvas/70 px-3 py-2 font-mono text-[10px] leading-relaxed break-words whitespace-pre-wrap text-danger/90">
+          {raw}
+        </pre>
+      ) : null}
     </div>
   )
 }
 
+/** Copies a whole reply as plain text, with a visible confirmation. */
+function CopyMessage({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  if (!text.trim()) return null
+  const copy = (): void => {
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1600)
+      })
+      .catch(() => toast.error('Could not copy. Select the text and copy it yourself.'))
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copy reply"
+      aria-label="Copy this reply"
+      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-faint transition-colors hover:bg-surface-2 hover:text-ink"
+    >
+      {copied ? <Check size={11} /> : <Copy size={11} />}
+      <span>{copied ? 'Copied' : 'Copy'}</span>
+    </button>
+  )
+}
+
+/** Density rule shared by TaskView, LibraryView, PairingPanel and the surfaces
+ * in components/ui: a 4px grid, with one set value per role — rails and rows
+ * pad 8px vertically / 12px horizontally, cards and banners 16px horizontally
+ * and 12px vertically, chrome bands 24px, main content columns 32px, and one
+ * 24px gap between transcript turns. Elevation comes from the `Elev` ladder;
+ * state colours may replace the neutral hairline but never the shadow level.
+ * The two deliberate breaks are noted where they occur. */
 function TaskHeader({
   task,
   onTogglePanel,
@@ -99,6 +288,7 @@ function TaskHeader({
   const deleteTask = useApp((state) => state.deleteTask)
   const resumeCurrent = useApp((state) => state.resumeCurrent)
   const stopCurrent = useApp((state) => state.stopCurrent)
+  const updateCurrent = useApp((state) => state.updateCurrent)
 
   const provider = task.providerId
     ? settings?.providers.find((item) => item.id === task.providerId)
@@ -107,16 +297,19 @@ function TaskHeader({
   const running = task.status === 'running' || task.status === 'waiting'
 
   return (
-    <header className="flex h-[62px] shrink-0 items-center gap-3 border-b border-line/80 bg-canvas/85 px-5 backdrop-blur">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-canvas px-6">
       <IconButton onClick={goHome} aria-label="Back to home">
-        <ArrowLeft size={16} />
+        <ArrowLeft size={14} />
       </IconButton>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <h1 className="truncate text-[13.5px] font-semibold tracking-[-0.01em]">{task.title}</h1>
+          <h1 className="truncate text-[13px] font-semibold tracking-[-0.01em]" title={task.title}>
+            {task.title}
+          </h1>
           <span
+            role="status"
             className={cn(
-              'inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9.5px] font-medium',
+              'inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[length:var(--text-micro)] font-medium',
               STATUS_STYLE[task.status]
             )}
           >
@@ -124,16 +317,28 @@ function TaskHeader({
             {statusLabel(task.status)}
           </span>
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 truncate text-[10.5px] text-faint">
-          <span className="inline-flex items-center gap-1">
+        <div className="mt-0.5 flex items-center gap-1.5 truncate text-[length:var(--text-micro)] text-faint">
+          <button
+            type="button"
+            onClick={() => void updateCurrent({ mode: task.mode === 'cowork' ? 'chat' : 'cowork' })}
+            title={`Switch to ${task.mode === 'cowork' ? 'Chat' : 'Cowork'} mode`}
+            className="inline-flex items-center gap-1 hover:text-ink transition-colors cursor-pointer rounded px-1 py-0.5 hover:bg-surface-2"
+          >
             {task.mode === 'cowork' ? <BrandMark size={10} /> : <MessageCircle size={10} />}
-            {task.mode === 'cowork' ? 'Cowork' : 'Chat'}
+            <span className="font-medium underline decoration-dotted underline-offset-2">
+              {task.mode === 'cowork' ? 'Cowork' : 'Chat'}
+            </span>
+          </button>
+          <span>·</span>
+          <span className="min-w-0 truncate" title={model || 'No model'}>{model || 'No model'}</span>
+          <span>·</span>
+          <span className="inline-flex items-center gap-1">
+            <ShieldCheck size={10} />
+            {AGENT_ROLE_LABELS[task.agentRole ?? 'executor']}
           </span>
           <span>·</span>
-          <span className="truncate">{model || 'No model'}</span>
-          <span>·</span>
-          <span>
-            {task.folders.length ? folderName(task.folders[0]) : 'Task workspace'}
+          <span className="min-w-0 truncate" title={task.folders[0] || 'Task workspace'}>
+            {task.folders[0] ? folderName(task.folders[0]) : 'Task workspace'}
           </span>
         </div>
       </div>
@@ -152,22 +357,24 @@ function TaskHeader({
 
       <button
         onClick={onTogglePanel}
+        aria-pressed={panelOpen}
+        aria-label="Workspace panel"
         className={cn(
-          'flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11.5px] font-medium transition-colors',
+          'flex h-8 items-center gap-1.5 rounded-lg px-3 text-[11px] font-medium transition-colors',
           panelOpen
-            ? 'border-line-strong bg-surface text-ink'
-            : 'border-line bg-transparent text-muted hover:bg-surface-2 hover:text-ink'
+            ? cn(Elev.raised, 'bg-surface text-ink')
+            : cn(Elev.hairline, 'bg-transparent text-muted hover:bg-surface-2 hover:text-ink')
         )}
       >
         <PanelRightOpen size={13} />
-        <span className="hidden sm:inline">Work</span>
+        <span className="hidden sm:inline">Workspace</span>
         {liveCrew > 0 ? (
-          <span className="flex items-center gap-1 text-[9.5px] text-accent">
+          <span className="flex items-center gap-1 text-[length:var(--text-micro)] text-accent">
             <span className="breathing h-1 w-1 rounded-full bg-accent" />
             {liveCrew}
           </span>
         ) : task.artifacts.length > 0 ? (
-          <span className="rounded-full bg-accent-soft px-1.5 text-[9.5px] text-accent-ink">
+          <span className="rounded-full bg-accent-soft px-1.5 text-[length:var(--text-micro)] text-accent-ink">
             {task.artifacts.length}
           </span>
         ) : null}
@@ -178,18 +385,24 @@ function TaskHeader({
         side="bottom"
         trigger={(props) => (
           <IconButton {...props} aria-label="Task menu">
-            <MoreHorizontal size={16} />
+            <MoreHorizontal size={14} />
           </IconButton>
         )}
       >
         {(close) => (
-          <div className="w-[214px]">
+          <div className="w-[230px]">
+            <div className="border-b border-line px-2 py-2">
+              <RolePicker
+                value={task.agentRole ?? 'executor'}
+                onChange={(agentRole) => void updateCurrent({ agentRole })}
+              />
+            </div>
             {task.browser ? (
               <button
                 className="menu-item"
                 onClick={() => {
                   close()
-                  void window.knight.showBrowser(task.id).catch((error) => {
+                  void window.knight.showBrowser(task.id, task.browser?.scope).catch((error) => {
                     toast.error(errorMessage(error))
                   })
                 }}
@@ -214,13 +427,15 @@ function TaskHeader({
               className="menu-item text-danger"
               onClick={() => {
                 close()
-                if (
-                  window.confirm(
-                    'Delete this task and its workspace files? This cannot be undone.'
-                  )
-                ) {
-                  void deleteTask(task.id)
-                }
+                void (async () => {
+                  const confirmed = await confirmDialog({
+                    title: 'Delete this task?',
+                    body: 'The transcript and the files it wrote into the task workspace go with it. This cannot be undone.',
+                    confirmLabel: 'Delete task',
+                    danger: true
+                  })
+                  if (confirmed) await deleteTask(task.id)
+                })()
               }}
             >
               <Trash2 size={13} />
@@ -240,6 +455,9 @@ export function TaskView() {
   const approval = useApp((state) => state.approval)
   const settings = useApp((state) => state.settings)
   const sendToCurrent = useApp((state) => state.sendToCurrent)
+  const reactToMessage = useApp((state) => state.reactToMessage)
+  const rateMessage = useApp((state) => state.rateMessage)
+  const editMessage = useApp((state) => state.editMessage)
   const stopCurrent = useApp((state) => state.stopCurrent)
   const resumeCurrent = useApp((state) => state.resumeCurrent)
   const updateCurrent = useApp((state) => state.updateCurrent)
@@ -250,6 +468,32 @@ export function TaskView() {
   const stickRef = useRef(true)
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<AttachmentRef[]>([])
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState<string>('')
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+
+  const handleStartEdit = (msg: ChatMessage) => {
+    setEditingMessageId(msg.id)
+    setEditDraft(msg.content)
+  }
+
+  const handleSaveEdit = async (messageId: string) => {
+    if (!editDraft.trim() || isSavingEdit) return
+    setIsSavingEdit(true)
+    try {
+      await editMessage(messageId, editDraft.trim())
+      setEditingMessageId(null)
+    } catch (err) {
+      toast.error(errorMessage(err))
+    } finally {
+      setIsSavingEdit(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null)
+    setEditDraft('')
+  }
 
   const messages = task?.messages ?? []
   const visible = messages.filter(
@@ -313,34 +557,127 @@ export function TaskView() {
           }}
           className="scroll-thin relative min-h-0 flex-1 overflow-y-auto"
         >
-          <div className="mx-auto w-full max-w-[860px] px-8 pt-7 pb-8">
+          <div className="mx-auto w-full max-w-[860px] px-8 pt-6 pb-8">
+            <ActionNodeCard task={task} />
             <PlanCard plan={task.plan} live={running} />
 
             {visible.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-line bg-surface text-accent">
+                <div
+                  className={cn(
+                    'flex h-11 w-11 items-center justify-center rounded-[var(--r-card)] bg-surface text-accent',
+                    Elev.raised
+                  )}
+                >
                   <BrandMark size={19} />
                 </div>
-                <p className="mt-3 text-[13px] font-medium">SelfImpulse is getting ready</p>
-                <p className="mt-1 max-w-sm text-[12px] leading-relaxed text-faint">
-                  {task.objective || 'Send a message to begin this task.'}
-                </p>
+                <p className="mt-3 text-[13px] font-medium">Getting ready</p>
+                {task.objective ? (
+                  <p className="mt-1 max-w-sm text-[12px] leading-relaxed text-faint">{task.objective}</p>
+                ) : null}
               </div>
             ) : null}
 
-            <div className="space-y-7">
+            <div className="space-y-6">
               {visible.map((message, index) => {
                 if (message.role === 'user') {
+                  const isEditing = editingMessageId === message.id
                   return (
-                    <div key={message.id} className="message-in flex justify-end">
-                      <div className="max-w-[80%] rounded-[18px] rounded-br-md border border-line/80 bg-surface-2/85 px-4 py-2.5">
-                        {message.content ? (
-                          <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap text-ink">
-                            {message.content}
-                          </p>
-                        ) : null}
-                        <AttachmentChips message={message} />
+                    <div key={message.id} className="message-in group/msg flex flex-col items-end">
+                      <div
+                        className={cn(
+                          'max-w-[85%] sm:max-w-[80%] bg-surface-2 px-4 py-3 transition-all',
+                          /* Deliberate break from the radius scale: the bubble
+                           * takes --r-composer so it matches the box it was
+                           * typed in, and only the tail corner tightens, which
+                           * is what says "spoken by you". */
+                          Elev.hairline,
+                          'rounded-[var(--r-composer)] rounded-br-md'
+                        )}
+                      >
+                        {isEditing ? (
+                          <div className="flex min-w-[280px] sm:min-w-[420px] flex-col gap-3">
+                            <textarea
+                              value={editDraft}
+                              onChange={(e) => setEditDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                                  e.preventDefault()
+                                  void handleSaveEdit(message.id)
+                                } else if (e.key === 'Escape') {
+                                  e.preventDefault()
+                                  handleCancelEdit()
+                                }
+                              }}
+                              autoFocus
+                              rows={Math.min(8, Math.max(2, editDraft.split('\n').length))}
+                              aria-label="Edit your message"
+                              className={cn(
+                                'w-full resize-none rounded-lg bg-canvas px-3 py-2 text-[13px] leading-relaxed text-ink outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/40',
+                                Elev.hairline
+                              )}
+                              placeholder="Edit your message..."
+                            />
+                            <div className="flex items-center justify-between text-[11px] text-faint">
+                              <span>Ctrl+Enter to save & retry · Esc to cancel</span>
+                              <div className="flex items-center gap-1.5">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={handleCancelEdit}
+                                  disabled={isSavingEdit}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={() => void handleSaveEdit(message.id)}
+                                  disabled={isSavingEdit || !editDraft.trim()}
+                                >
+                                  {isSavingEdit ? (
+                                    <>
+                                      <Loader2 size={11} className="animate-spin" />
+                                      Saving
+                                    </>
+                                  ) : (
+                                    'Save & Retry'
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {message.content ? (
+                              <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap text-ink">
+                                {message.content}
+                              </p>
+                            ) : null}
+                            <AttachmentChips message={message} />
+                          </>
+                        )}
                       </div>
+
+                      {!isEditing && (
+                        <div className="flex items-center gap-1 mt-1 opacity-80 group-hover/msg:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEdit(message)}
+                            title="Edit message"
+                            aria-label="Edit this message"
+                            className="inline-flex items-center gap-1 text-[11px] text-faint hover:text-ink px-1.5 py-0.5 rounded hover:bg-surface-2 transition-colors cursor-pointer"
+                          >
+                            <Pencil size={11} />
+                            <span>Edit</span>
+                          </button>
+                          <ReactionPicker
+                            message={message}
+                            align="right"
+                            onReact={(emoji) => reactToMessage(message.id, emoji)}
+                          />
+                        </div>
+                      )}
                     </div>
                   )
                 }
@@ -348,6 +685,7 @@ export function TaskView() {
                 if (message.role !== 'assistant') return null
 
                 const steps = task.steps.filter((step) => step.messageId === message.id)
+                const delivered = task.artifacts.filter((artifact) => artifact.messageId === message.id)
                 const isLast = index === visible.length - 1
                 const streaming =
                   isLast &&
@@ -355,27 +693,73 @@ export function TaskView() {
                   !message.toolCalls?.length &&
                   lastVisible?.role === 'assistant'
 
+                const failed = Boolean(message.error)
+
                 return (
-                  <div key={message.id} className="message-in flex gap-3">
-                    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-accent">
+                  <div key={message.id} aria-busy={streaming} className="message-in flex gap-3">
+                    <div
+                      className={cn(
+                        'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-surface',
+                        failed ? 'border border-danger/40 text-danger' : cn(Elev.hairline, 'text-accent')
+                      )}
+                    >
                       <BrandMark size={12} />
                     </div>
                     <div className="min-w-0 flex-1 pt-0.5">
-                      <p className="mb-1.5 text-[10.5px] font-medium text-muted">Captain</p>
+                      {/* Two states live on this line alone, and they are the two
+                          that must never be confused: an answer arriving wears the
+                          accent and breathes, a finished answer is quiet. */}
+                      <p
+                        className={cn(
+                          'mb-2 flex items-center gap-1.5 text-[length:var(--text-micro)] font-medium',
+                          streaming ? 'text-accent-ink' : 'text-muted'
+                        )}
+                      >
+                        {agentName()}
+                        {streaming ? (
+                          <span className="breathing h-1 w-1 rounded-full bg-accent" aria-hidden />
+                        ) : null}
+                      </p>
+                      <WorkTrail
+                        thinking={message.thinking}
+                        steps={steps}
+                        live={running && isLast}
+                        taskId={task.id}
+                        taskStatus={isLast ? task.status : undefined}
+                        responding={Boolean(message.content)}
+                      />
                       {message.content ? (
                         <Markdown content={message.content} streaming={streaming} />
-                      ) : streaming ? (
-                        <ThinkingDots
-                          label={
-                            task.status === 'waiting'
-                              ? 'Waiting for your approval'
-                              : 'Captain is working through the task'
-                          }
-                        />
                       ) : null}
-                      <StepList steps={steps} live={running} />
-                      {message.error ? (
-                        <p className="mt-2 text-[11.5px] text-danger">This response was interrupted.</p>
+                      {failed ? (
+                        <div
+                          role="alert"
+                          className={cn(
+                            'mt-3 flex items-center gap-2 rounded-[var(--r-card)] bg-danger/5 px-4 py-3 text-[12px] font-medium text-danger',
+                            ElevShadow.raised,
+                            'border border-danger/30'
+                          )}
+                        >
+                          <AlertCircle size={13} className="shrink-0" />
+                          Response interrupted
+                        </div>
+                      ) : null}
+                      {delivered.length ? (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {delivered.map((artifact) => (
+                            <ArtifactChip key={artifact.id} artifact={artifact} taskId={task.id} />
+                          ))}
+                        </div>
+                      ) : null}
+                      {!streaming ? (
+                        <div className="mt-2 flex items-center gap-1">
+                          <CopyMessage text={message.content} />
+                          <MessageFeedback
+                            value={message.feedback?.vote}
+                            note={message.feedback?.note}
+                            onVote={(vote, reason) => void rateMessage(message.id, vote, reason)}
+                          />
+                        </div>
                       ) : null}
                     </div>
                   </div>
@@ -383,22 +767,29 @@ export function TaskView() {
               })}
             </div>
 
-            {!running && task.artifacts.length > 0 ? (
-              <div className="mt-8 rounded-xl border border-line bg-surface/50 p-3.5">
-                <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.13em] text-faint uppercase">
+            {/* Files recorded before deliveries were anchored to a turn. */}
+            {!running && task.artifacts.some((artifact) => !artifact.messageId) ? (
+              <div className={cn('mt-8 rounded-[var(--r-card)] bg-surface p-4', Elev.raised)}>
+                <p className="mb-2 flex items-center gap-1.5 text-[length:var(--text-micro)] font-semibold tracking-[0.13em] text-faint uppercase">
                   <FolderOpen size={11} />
                   Delivered files
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {task.artifacts.map((artifact) => (
-                    <ArtifactChip key={artifact.id} artifact={artifact} taskId={task.id} />
-                  ))}
+                  {task.artifacts
+                    .filter((artifact) => !artifact.messageId)
+                    .map((artifact) => (
+                      <ArtifactChip key={artifact.id} artifact={artifact} taskId={task.id} />
+                    ))}
                 </div>
               </div>
             ) : null}
 
+            <TaskChanges taskId={task.id} running={running} />
+
+            <OversightPanel task={task} />
+
             {!running && task.status === 'done' ? (
-              <div className="mt-6 flex items-center justify-center gap-1.5 text-[10.5px] text-faint">
+              <div className="mt-6 flex items-center justify-center gap-1.5 text-[length:var(--text-micro)] text-faint">
                 <Check size={11} className="text-positive" />
                 Finished {timeAgo(task.completedAt ?? task.updatedAt)}
                 {task.usage ? (
@@ -412,35 +803,20 @@ export function TaskView() {
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-line/60 bg-canvas px-8 pt-3 pb-5">
+        <div className="shrink-0 border-t border-line bg-canvas px-8 pt-3 pb-5">
           <div className="mx-auto w-full max-w-[860px]">
             {task.error ? (
-              <div className="mb-2.5 flex flex-wrap items-center gap-2 rounded-xl border border-danger/25 bg-danger/5 px-3 py-2">
-                <AlertCircle size={13} className="shrink-0 text-danger" />
-                <p className="min-w-0 flex-1 text-[11.5px] leading-relaxed text-danger/90">
-                  {task.error}
-                </p>
-                <button
-                  onClick={() => void resumeCurrent()}
-                  className="text-[11px] font-medium text-ink underline underline-offset-2"
-                >
-                  Try again
-                </button>
-                <button
-                  onClick={() => openSettings('providers')}
-                  className="text-[11px] font-medium text-muted underline underline-offset-2"
-                >
-                  Settings
-                </button>
-              </div>
+              <TaskErrorBanner
+                error={task.error}
+                onRetry={() => void resumeCurrent()}
+                onOpenSettings={() => openSettings('providers')}
+              />
             ) : null}
 
             {task.status === 'paused' ? (
-              <div className="mb-2.5 flex items-center gap-2 rounded-xl border border-line bg-surface/60 px-3 py-2">
+              <div className={cn('mb-3 flex items-center gap-2 rounded-[var(--r-card)] bg-surface px-4 py-3', Elev.raised)}>
                 <Pause size={12} className="text-muted" />
-                <p className="flex-1 text-[11.5px] text-muted">
-                  This task is paused. Resume when you are ready.
-                </p>
+                <p className="flex-1 text-[12px] text-muted">Paused</p>
                 <button
                   onClick={() => void resumeCurrent()}
                   className="text-[11px] font-medium text-accent underline underline-offset-2"
@@ -451,9 +827,16 @@ export function TaskView() {
             ) : null}
 
             {task.status === 'waiting' && approval?.taskId !== task.id ? (
-              <div className="mb-2.5 flex items-center gap-2 rounded-xl border border-warn/25 bg-warn/5 px-3 py-2 text-[11.5px] text-warn">
+              <div
+                role="status"
+                className={cn(
+                  'mb-3 flex items-center gap-2 rounded-[var(--r-card)] bg-warn/5 px-4 py-3 text-[12px] text-warn',
+                  ElevShadow.raised,
+                  'border border-warn/30'
+                )}
+              >
                 <Circle size={8} className="fill-current animate-pulse" />
-                Waiting for your permission to continue.
+                Waiting for your approval
               </div>
             ) : null}
 

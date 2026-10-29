@@ -8,9 +8,10 @@
  *
  * Ported from the earlier desktop shell.
  */
+import type { SecretStore } from './security'
 import type { BackendStore } from './store'
 
-export const API = 'https://backend.composio.dev/api/v3'
+export const API = 'https://backend.composio.dev/api/v3.1'
 
 type QueryValue = string | number | boolean | null | undefined
 
@@ -127,12 +128,16 @@ function truthyString(value: unknown): string | undefined {
 
 export class Connectors {
   readonly store: BackendStore
+  readonly secrets?: SecretStore
 
-  constructor(store: BackendStore) {
+  constructor(store: BackendStore, secrets?: SecretStore) {
     this.store = store
+    this.secrets = secrets
   }
 
   get apiKey(): string {
+    const sealed = this.secrets?.get('connectorsApiKey')
+    if (sealed) return sealed
     const raw = this.store.settings.all().connectorsApiKey
     return raw ? String(raw) : ''
   }
@@ -187,8 +192,16 @@ export class Connectors {
       items: items.map((t) => ({
         id: t.slug || t.key || t.name,
         name: t.name || t.slug,
-        description: t.description || '',
-        categories: t.categories || (t.category ? [t.category] : []),
+        description: t.description || String(t.meta?.description ?? ''),
+        categories: Array.isArray(t.categories)
+          ? t.categories.map((entry) =>
+              typeof entry === 'string'
+                ? entry
+                : String((entry as { name?: string }).name ?? '')
+            ).filter(Boolean)
+          : t.category
+            ? [t.category]
+            : [],
         meta: t.meta || {},
         connected: Boolean(t.connectedAccounts?.length || t.connected_accounts?.length)
       })),
@@ -200,7 +213,7 @@ export class Connectors {
   /** Live tool catalogue, optionally filtered by toolkit. */
   async tools({ toolkit, limit = 100, cursor }: ConnectorsToolsOptions = {}): Promise<ConnectorsToolPage> {
     const json = await this.request('/tools', {
-      query: { toolkitSlug: toolkit, limit, cursor, scopes: 'all' }
+      query: { toolkit_slug: toolkit, toolkit_versions: 'latest', limit, cursor }
     })
     const items = pickList<ConnectorsToolPayload>(json, ['items', 'tools', 'data'])
     const record = asRecord(json)
@@ -210,7 +223,7 @@ export class Connectors {
         toolkit: t.toolkit?.slug || t.appName || t.app_name || '',
         description: t.description || '',
         method: t.method || 'execute',
-        parameters: t.parameters || t.inputParameters || {}
+        parameters: t.parameters || t.inputParameters || {} 
       })),
       total: typeof record.total === 'number' ? record.total : items.length,
       nextCursor: truthyString(record.nextCursor) ?? truthyString(record.next_cursor) ?? null
@@ -218,10 +231,10 @@ export class Connectors {
   }
 
   /** Execute a Connectors tool on behalf of the agent. */
-  async execute({ tool, args = {}, entityId = 'default' }: ConnectorsExecuteOptions): Promise<ConnectorsExecuteResult> {
+  async execute({ tool, args = {}, entityId = 'selfimpulse-local' }: ConnectorsExecuteOptions): Promise<ConnectorsExecuteResult> {
     const json = await this.request(`/tools/execute/${encodeURIComponent(tool)}`, {
       method: 'POST',
-      body: { arguments: args, entity_id: entityId, connected_account_id: 'default' }
+      body: { arguments: args, user_id: entityId, version: 'latest' }
     })
     const record = asRecord(json)
     const successful = record.successful

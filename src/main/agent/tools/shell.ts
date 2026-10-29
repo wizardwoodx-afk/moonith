@@ -81,6 +81,30 @@ function sanitizedEnv(): NodeJS.ProcessEnv {
   return env
 }
 
+/**
+ * The only audited process spawn in the agent.
+ *
+ * Everything that needs to run a command goes through here — the model's
+ * `run_command` and the project's own checks alike — so the environment
+ * allowlist and the shell choice cannot drift into two different places. The
+ * sink scan in security-sinks.test.ts permits exactly this file to spawn a
+ * shell; adding a second one is the regression that guard exists to catch.
+ */
+export async function spawnAudited(
+  line: string,
+  cwd: string,
+  options: { timeout: number; env?: NodeJS.ProcessEnv }
+): Promise<{ stdout: string; stderr: string }> {
+  return execAsync(line, {
+    cwd,
+    timeout: options.timeout,
+    maxBuffer: 3 * 1024 * 1024,
+    windowsHide: true,
+    env: options.env ?? sanitizedEnv(),
+    shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash'
+  })
+}
+
 export const runCommandTool = defineTool({
   name: 'run_command',
   title: 'Run command',
@@ -104,14 +128,7 @@ export const runCommandTool = defineTool({
     try {
       const cwd = await resolveSafePath(ctx.roots, args.cwd ?? ctx.workspace, { mode: 'read' })
       const timeout = (args.timeout_seconds ?? 60) * 1000
-      const result = await execAsync(args.command, {
-        cwd,
-        timeout,
-        maxBuffer: 3 * 1024 * 1024,
-        windowsHide: true,
-        env: sanitizedEnv(),
-        shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash'
-      })
+      const result = await spawnAudited(args.command, cwd, { timeout })
       const output = [result.stdout, result.stderr].filter(Boolean).join('\n')
       return {
         content: `Exit code: 0\n\n${truncate(output || '(no output)', 20000)}`

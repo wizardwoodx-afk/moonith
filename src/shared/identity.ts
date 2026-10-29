@@ -12,6 +12,19 @@ export const APP_TAGLINE = 'The agent that never leaves your machine.'
 export const APP_AUTHOR = 'K.S. / SelfImpulse'
 
 /**
+ * The agent's name before its owner chooses one. It is a placeholder that reads
+ * correctly mid-sentence, because it appears in UI copy and in the system prompt
+ * — the two places must never disagree about what to call the agent.
+ */
+export const DEFAULT_AGENT_NAME = 'Impulse'
+
+/** Resolve a possibly-unset agent name to something speakable. */
+export function resolveAgentName(name?: string): string {
+  const trimmed = (name ?? '').trim()
+  return trimmed || DEFAULT_AGENT_NAME
+}
+
+/**
  * The build mark. Deliberately short and deliberately ours: it is what appears
  * in logs, crash reports and the About pane, so a build can be identified
  * without the user reading a version string.

@@ -236,8 +236,15 @@ export function toWireMessages(messages: ModelMessage[]): WireMessage[] {
         content: message.content ?? '',
         tool_calls: message.toolCalls.map((call) => ({
           id: call.id,
-          type: 'function',
-          function: { name: call.name, arguments: JSON.stringify(call.args || {}) }
+          type: 'function' as const,
+          function: { name: call.name, arguments: JSON.stringify(call.args || {}) },
+          ...(call.thoughtSignature
+            ? {
+                extra_content: {
+                  google: { thought_signature: call.thoughtSignature }
+                }
+              }
+            : {})
         }))
       })
       continue
@@ -403,7 +410,8 @@ export function makePorts(options: PortOptions): {
           response.toolCalls.push({
             id: event.id || `call_${response.toolCalls.length}`,
             name: event.name,
-            args
+            args,
+            ...(event.thoughtSignature ? { thoughtSignature: event.thoughtSignature } : {})
           })
         } else if (event.type === 'usage') {
           // the provider reports snake_case; the ImpulseCore core expects camelCase

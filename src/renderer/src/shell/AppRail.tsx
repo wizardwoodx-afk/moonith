@@ -3,22 +3,25 @@ import {
   Building2,
   CalendarClock,
   Handshake,
+  LibraryBig,
   MessageSquare,
   Plus,
   Search,
   Settings,
   X
 } from 'lucide-react'
-import { BrandMark } from '../components/BrandMark'
+import { BrandGlyph, BrandWordmark } from '../components/BrandMarks'
+import { Blobatar } from '@blobatar/react'
 import type { TaskStatus } from '@shared/types'
 import { useApp } from '../store'
 import { cn, taskGroup, timeAgo } from '../lib/utils'
 import { profileInitial, useLocalProfile } from '../lib/localProfile'
 import { startNewTask } from '../lib/navigation'
-import { SURFACES, modeForSurface, type Surface } from './surfaces'
+import { SURFACES, type Surface } from './surfaces'
 
 const ICONS: Record<Surface, typeof MessageSquare> = {
   chat: MessageSquare,
+  library: LibraryBig,
   company: Building2,
   table: Handshake
 }
@@ -30,61 +33,6 @@ const STATUS_DOT: Record<TaskStatus, string> = {
   paused: 'bg-faint',
   done: 'bg-positive',
   error: 'bg-danger'
-}
-
-function SwitchMode({ collapsed }: { collapsed: boolean }) {
-  const view = useApp((state) => state.view)
-  const openSurface = useApp((state) => state.openSurface)
-  const activeSurface = view.kind === 'surface' ? view.surface : 'chat'
-  const mode = modeForSurface(activeSurface)
-
-  const switchMode = (next: 'Self' | 'Collab'): void => {
-    if (next === mode) return
-    openSurface(next === 'Self' ? 'chat' : 'table')
-  }
-
-  if (collapsed) {
-    return (
-      <button
-        onClick={() => switchMode(mode === 'Self' ? 'Collab' : 'Self')}
-        title={`${mode} mode — switch`}
-        aria-label={`${mode} mode. Switch mode`}
-        className="mx-auto flex h-8 w-8 items-center justify-center"
-      >
-        <span
-          className={cn(
-            'h-2 w-2 rounded-full transition-colors',
-            mode === 'Collab' ? 'joint-marker' : 'bg-gold'
-          )}
-        />
-      </button>
-    )
-  }
-
-  return (
-    <div
-      className="relative flex h-[24px] items-center rounded-full bg-surface-2/70 p-[2px]"
-      aria-label="Workspace mode"
-    >
-      <span
-        className="absolute top-[2px] bottom-[2px] rounded-full bg-surface-3 shadow-[0_1px_2px_rgba(0,0,0,0.18)] transition-[left] duration-300"
-        style={{ left: mode === 'Self' ? 2 : '50%', width: 'calc(50% - 2px)' }}
-      />
-      {(['Self', 'Collab'] as const).map((value) => (
-        <button
-          key={value}
-          onClick={() => switchMode(value)}
-          aria-pressed={mode === value}
-          className={cn(
-            'relative z-10 h-full rounded-full px-2.5 text-[9.5px] font-medium transition-colors',
-            mode === value ? 'text-ink' : 'text-faint hover:text-muted'
-          )}
-        >
-          {value}
-        </button>
-      ))}
-    </div>
-  )
 }
 
 function RailNavRow({
@@ -108,17 +56,17 @@ function RailNavRow({
       className={cn(
         'group relative flex items-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent/30',
         collapsed
-          ? 'mx-auto h-9 w-9 justify-center rounded-xl'
-          : 'h-[34px] w-full gap-2.5 rounded-[9px] px-2.5',
+          ? 'mx-auto h-10 w-10 justify-center rounded-xl'
+          : 'h-[38px] w-full gap-3 rounded-[10px] px-3',
         active ? 'bg-surface-3/80 text-ink' : 'text-muted hover:bg-surface-2/60 hover:text-ink'
       )}
     >
       <Icon
-        size={15}
+        size={16.5}
         strokeWidth={1.7}
         className={cn('shrink-0 transition-colors', active ? 'text-accent' : 'text-faint group-hover:text-muted')}
       />
-      {collapsed ? null : <span className="flex-1 truncate text-left text-[12.5px]">{label}</span>}
+      {collapsed ? null : <span className="flex-1 truncate text-left text-[13px]">{label}</span>}
     </button>
   )
 }
@@ -138,7 +86,6 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
   const [searching, setSearching] = useState(false)
 
   const activeSurface = view.kind === 'surface' ? view.surface : null
-  const mode = modeForSurface(activeSurface ?? 'chat')
 
   const recent = useMemo(() => {
     const normalized = query.trim().toLowerCase()
@@ -166,7 +113,7 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
     <aside
       className={cn(
         'flex shrink-0 flex-col border-r border-line/70 bg-sidebar transition-[width] duration-300 ease-[cubic-bezier(0.22,0.61,0.36,1)]',
-        collapsed ? 'w-[62px]' : 'w-[252px]'
+        collapsed ? 'w-[64px]' : 'w-[272px]'
       )}
     >
       {collapsed ? (
@@ -177,11 +124,8 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
             aria-label="Home"
             className="flex h-9 w-9 items-center justify-center rounded-xl text-ink transition-colors hover:bg-surface-3/60"
           >
-            <BrandMark size={18} strokeWidth={1.7} />
+            <BrandGlyph height={18} />
           </button>
-          <div className="mt-1">
-            <SwitchMode collapsed />
-          </div>
           <div className="my-2 h-px w-6 bg-line" />
           <button
             onClick={startNewTask}
@@ -254,9 +198,9 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
               onClick={() => openSettings('profile')}
               title={profile.name}
               aria-label="Profile"
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface-2 text-[10px] font-semibold text-accent-ink transition-colors hover:border-line-strong"
+              className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-line bg-surface-2 shadow-xs transition-transform hover:scale-105 active:scale-95"
             >
-              {profileInitial(profile)}
+              <Blobatar name={profile.name} size={32} />
             </button>
             <button
               onClick={() => openSettings('general')}
@@ -270,34 +214,30 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
         </div>
       ) : (
         <>
-          <div className="flex items-center justify-between px-4 pt-4 pb-1">
+          <div className="px-4.5 pt-5 pb-1.5">
             <button
               onClick={goHome}
-              className="flex min-w-0 items-center gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+              className="flex min-w-0 items-center gap-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
               aria-label="SelfImpulse home"
             >
-              <BrandMark size={16} strokeWidth={1.8} className="shrink-0 text-ink" />
-              <span className="truncate text-[13px] font-semibold tracking-[-0.015em] text-ink">
-                SelfImpulse
-              </span>
+              <BrandWordmark height={19} className="shrink-0 text-ink" />
             </button>
-            <SwitchMode collapsed={false} />
           </div>
 
-          <div className="px-3 pt-3">
+          <div className="px-3.5 pt-3.5">
             <button
               onClick={startNewTask}
-              className="group flex h-[36px] w-full items-center gap-2 rounded-[10px] bg-ink-button px-3 text-[12.5px] font-medium text-on-ink transition-all duration-150 hover:brightness-110 active:scale-[0.985]"
+              className="group flex h-10 w-full items-center gap-2.5 rounded-[11px] bg-ink-button px-3.5 text-[13px] font-medium text-on-ink transition-all duration-150 hover:brightness-110 active:scale-[0.985]"
             >
-              <Plus size={15} strokeWidth={2.1} />
+              <Plus size={16} strokeWidth={2.1} />
               <span className="flex-1 text-left">New task</span>
-              <span className="text-[9.5px] text-on-ink/45 transition-opacity group-hover:text-on-ink/65">
+              <span className="text-[10px] text-on-ink/45 transition-opacity group-hover:text-on-ink/65">
                 Ctrl N
               </span>
             </button>
           </div>
 
-          <nav className="mt-2.5 px-2" aria-label="Spaces">
+          <nav className="mt-3.5 px-2.5" aria-label="Spaces">
             {SURFACES.map((item) => (
               <RailNavRow
                 key={item.id}
@@ -317,8 +257,8 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
             />
           </nav>
 
-          <div className="mt-5 flex items-center justify-between px-4 pb-1">
-            <span className="text-[10px] font-medium text-faint">Recent</span>
+          <div className="mt-6 flex items-center justify-between px-4.5 pb-1.5">
+            <span className="text-[11px] font-medium tracking-[0.02em] text-faint">Recent</span>
             <div className="flex items-center gap-1">
               {searching ? (
                 <button
@@ -369,7 +309,7 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
 
           <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-2 pt-0.5 pb-3">
             {recent.length === 0 ? (
-              <p className="px-2.5 pt-2 text-[11.5px] text-faint">
+              <p className="px-2.5 pt-2 text-[12.5px] text-faint">
                 {query.trim() ? 'Nothing matches.' : 'No tasks yet.'}
               </p>
             ) : (
@@ -385,7 +325,7 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
                       {showGroup ? (
                         <p
                           className={cn(
-                            'px-2.5 pb-1 text-[9.5px] text-faint/70',
+                            'px-2.5 pb-1 text-[10.5px] text-faint/70',
                             index === 0 ? 'pt-1' : 'pt-3'
                           )}
                         >
@@ -398,20 +338,20 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
                         aria-current={active ? 'page' : undefined}
                         style={{ animationDelay: `${Math.min(index, 8) * 18}ms` }}
                         className={cn(
-                          'rail-in group flex h-[30px] w-full items-center gap-2 rounded-[7px] px-2.5 text-left transition-colors',
+                          'rail-in group flex h-[34px] w-full items-center gap-2.5 rounded-lg px-2.5 text-left transition-colors',
                           active ? 'bg-surface-3/80' : 'hover:bg-surface-2/55'
                         )}
                       >
                         <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', STATUS_DOT[task.status])} />
                         <span
                           className={cn(
-                            'min-w-0 flex-1 truncate text-[12px]',
+                            'min-w-0 flex-1 truncate text-[13px]',
                             active ? 'font-medium text-ink' : 'text-ink/80 group-hover:text-ink'
                           )}
                         >
                           {task.title}
                         </span>
-                        <span className="shrink-0 text-[9.5px] text-faint opacity-0 transition-opacity group-hover:opacity-100">
+                        <span className="shrink-0 text-[10px] text-faint opacity-0 transition-opacity group-hover:opacity-100">
                           {timeAgo(task.updatedAt)}
                         </span>
                       </button>
@@ -422,21 +362,21 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
             )}
           </div>
 
-          <div className="border-t border-line/60 p-2.5">
+          <div className="border-t border-line/60 p-3">
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => openSettings('profile')}
-                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-left transition-colors hover:bg-surface-2/55"
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1.5 py-2 text-left transition-colors hover:bg-surface-2/55"
               >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-surface-2 text-[10px] font-semibold text-accent-ink">
-                  {profileInitial(profile)}
+                <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-surface-2 shadow-xs">
+                  <Blobatar name={profile.name} size={32} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[11.5px] leading-4 font-medium text-ink">
+                  <span className="block truncate text-[13px] leading-4.5 font-medium text-ink">
                     {profile.name}
                   </span>
-                  <span className="block truncate text-[9.5px] leading-3.5 text-faint">
-                    {mode} · local
+                  <span className="block truncate text-[10.5px] leading-4 text-faint">
+                    Local · this device
                   </span>
                 </span>
               </button>

@@ -1,26 +1,35 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { motion } from 'framer-motion'
 import {
-  ArrowUp,
+  AtSign,
   Check,
   ChevronDown,
+  Command,
   Cpu,
-  FileText,
   Folder,
   FolderPlus,
+  ListChecks,
   MessageCircle,
   Paperclip,
   Shield,
   CheckCheck,
-  Square,
   X,
   Zap
 } from 'lucide-react'
-import { BrandMark } from './BrandMark'
+import { BrandMark } from './BrandMarks'
+import { agentName } from '../lib/localProfile'
 import { toast } from 'sonner'
 import type { AttachmentRef, PermissionMode, TaskMode } from '@shared/types'
 import { useApp } from '../store'
-import { cn, errorMessage, folderName, formatBytes } from '../lib/utils'
-import { IconButton, Popover, Segmented, Spin } from './ui'
+import { cn, errorMessage, folderName } from '../lib/utils'
+import { PERMISSION_CHOICES } from '../lib/composerChoices'
+import { IconButton, Popover, Segmented } from './ui'
+import { ShimmerText } from '../motion/ShimmerText'
+import { BounceLetters } from '../motion/WorkRing'
+import { ComposerAttachments, mergeAttachments } from '../motion/ComposerAttachments'
+import { ComposerDropzone } from '../motion/ComposerDropzone'
+import { ComposerSendButton } from '../motion/ComposerSendButton'
+import { useComposerCommands, type ComposerCommand } from '../motion/ComposerCommands'
 
 interface ComposerProps {
   mode: TaskMode
@@ -47,31 +56,18 @@ interface ComposerProps {
   variant?: 'home' | 'task'
 }
 
-const PERMISSIONS: {
-  value: PermissionMode
-  label: string
-  icon: typeof Shield
-  description: string
-}[] = [
-  {
-    value: 'manual',
-    label: 'Manual',
-    icon: Shield,
-    description: 'SelfImpulse asks before actions that change files or run commands.'
-  },
-  {
-    value: 'auto',
-    label: 'Auto',
-    icon: Zap,
-    description: 'Routine work runs freely. High-risk actions still need approval.'
-  },
-  {
-    value: 'skip',
-    label: 'Integrated acceptance',
-    icon: CheckCheck,
-    description: 'Accepts every step in this task without asking.'
-  }
-]
+const PERMISSION_ICONS: Record<PermissionMode, typeof Shield> = {
+  plan: ListChecks,
+  manual: Shield,
+  auto: Zap,
+  skip: CheckCheck
+}
+
+const PERMISSIONS = PERMISSION_CHOICES.map((choice) => ({
+  ...choice,
+  icon: PERMISSION_ICONS[choice.value],
+  description: choice.blurb
+}))
 
 export function Composer({
   mode,
@@ -101,6 +97,7 @@ export function Composer({
   const openSettings = useApp((state) => state.openSettings)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [picking, setPicking] = useState(false)
+  const [pulse, setPulse] = useState(0)
 
   const providers = (settings?.providers ?? []).filter(
     (provider) => provider.enabled && provider.models.length > 0
@@ -132,6 +129,7 @@ export function Composer({
 
   const submit = (): void => {
     if (!canSend) return
+    setPulse((value) => value + 1)
     void onSubmit()
   }
 
@@ -160,19 +158,104 @@ export function Composer({
     }
   }
 
+  const commandItems: ComposerCommand[] = [
+    {
+      id: 'context-attach',
+      kind: '@',
+      label: 'Attach files',
+      detail: 'Add real files to this message',
+      icon: <Paperclip size={13} />,
+      run: () => void pickAttachments()
+    },
+    ...folders.map((folder, index) => ({
+      id: `context-folder-${index}`,
+      kind: '@' as const,
+      label: folderName(folder),
+      detail: folder,
+      keywords: 'folder workspace context',
+      icon: <Folder size={13} />,
+      insert: `${folder} `
+    })),
+    ...attachments.map((file) => ({
+      id: `context-file-${file.id}`,
+      kind: '@' as const,
+      label: file.name,
+      detail: 'Attached to this message',
+      keywords: 'attachment file context',
+      icon: <AtSign size={13} />,
+      insert: `${file.name} `
+    })),
+    {
+      id: 'command-folder',
+      kind: '/',
+      label: 'Add a working folder',
+      icon: <FolderPlus size={13} />,
+      run: () => void addFolder()
+    },
+    ...PERMISSIONS.map((option) => ({
+      id: `command-permission-${option.value}`,
+      kind: '/' as const,
+      label: `Permissions: ${option.label}`,
+      detail: option.description,
+      keywords: 'permission approval mode',
+      icon: <Command size={13} />,
+      run: () => onPermissionChange(option.value)
+    })),
+    ...providers.flatMap((provider) =>
+      provider.models.map((item) => ({
+        id: `command-model-${provider.id}-${item}`,
+        kind: '/' as const,
+        label: item,
+        detail: `Use ${provider.name} for this task`,
+        keywords: `model provider ${provider.name}`,
+        icon: <Cpu size={13} />,
+        run: () => onModelChange(provider.id, item)
+      }))
+    ),
+    ...(allowModeSwitch && onModeChange
+      ? (['chat', 'cowork'] as TaskMode[]).map((value) => ({
+          id: `command-mode-${value}`,
+          kind: '/' as const,
+          label: `Switch to ${value === 'chat' ? 'Chat' : 'Cowork'}`,
+          keywords: 'mode conversation work',
+          icon: <MessageCircle size={13} />,
+          run: () => onModeChange(value)
+        }))
+      : [])
+  ]
+  const commands = useComposerCommands({
+    textareaRef,
+    text,
+    onTextChange,
+    items: commandItems
+  })
+
   return (
-    <div className="w-full">
-      <div
-        className={cn(
-          'composer-shadow rounded-[22px] border border-line bg-surface transition-colors',
-          'focus-within:border-line-strong'
-        )}
-      >
-        <textarea
+    <ComposerDropzone
+      onFiles={(incoming) => onAttachmentsChange(mergeAttachments(attachments, incoming))}
+    >
+      <motion.div layout className="w-full">
+        <motion.div
+          layout
+          className={cn('composer-shell relative', running && 'apple-intelligence-glow-wrap')}
+        >
+          {running ? (
+            <>
+              <div className="apple-intelligence-glow" />
+              <div className="apple-intelligence-glow-bloom" />
+            </>
+          ) : null}
+          {commands.menu}
+          <textarea
           ref={textareaRef}
           value={text}
-          onChange={(event) => onTextChange(event.target.value)}
-          onKeyDown={onKeyDown}
+          onChange={commands.onChange}
+          onSelect={commands.onSelect}
+          onKeyDown={(event) => {
+            if (!commands.onKeyDown(event)) onKeyDown(event)
+          }}
+          aria-autocomplete="list"
+          aria-activedescendant={commands.activeId}
           placeholder={
             placeholder ??
             (running
@@ -185,32 +268,7 @@ export function Composer({
           className="scroll-thin block w-full resize-none overflow-y-auto bg-transparent px-4.5 pt-4 pb-1 text-[14.5px] leading-relaxed text-ink outline-none placeholder:text-faint"
         />
 
-        {attachments.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5 px-3.5 pt-2">
-            {attachments.map((file) => (
-              <span
-                key={file.id}
-                className="inline-flex max-w-[220px] items-center gap-1.5 rounded-lg border border-line bg-canvas py-1 pr-1.5 pl-2 text-[11.5px] text-muted"
-                title={file.path}
-              >
-                <FileText size={12} className="shrink-0 text-accent" />
-                <span className="truncate">{file.name}</span>
-                {file.size ? (
-                  <span className="shrink-0 text-[10px] text-faint">{formatBytes(file.size)}</span>
-                ) : null}
-                <button
-                  onClick={() =>
-                    onAttachmentsChange(attachments.filter((item) => item.id !== file.id))
-                  }
-                  className="rounded p-0.5 text-faint hover:bg-surface-2 hover:text-ink"
-                  aria-label={`Remove ${file.name}`}
-                >
-                  <X size={11} />
-                </button>
-              </span>
-            ))}
-          </div>
-        ) : null}
+        <ComposerAttachments files={attachments} onChange={onAttachmentsChange} />
 
         <div className="flex flex-wrap items-center gap-1.5 px-2.5 pt-2 pb-2.5">
           {allowModeSwitch && onModeChange ? (
@@ -440,46 +498,31 @@ export function Composer({
               )}
             </Popover>
 
-            {running && onStop ? (
-              <button
-                onClick={onStop}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface-2 text-ink transition-colors hover:border-line-strong"
-                title="Stop task"
-                aria-label="Stop task"
-              >
-                <Square size={11} className="fill-current" />
-              </button>
-            ) : null}
-
-            <button
-              onClick={submit}
-              disabled={!canSend}
-              className={cn(
-                'flex h-8 w-8 items-center justify-center rounded-full transition-all',
-                canSend
-                  ? 'bg-ink-button text-on-ink hover:opacity-90'
-                  : 'bg-surface-2 text-faint'
-              )}
-              title={running ? 'Send instructions' : 'Send'}
-              aria-label="Send message"
-            >
-              {submitting ? <Spin size={14} /> : <ArrowUp size={15} strokeWidth={2.2} />}
-            </button>
+            <ComposerSendButton
+              canSend={canSend}
+              submitting={submitting}
+              running={running}
+              pulse={pulse}
+              onSubmit={submit}
+              onStop={onStop}
+            />
           </div>
         </div>
-      </div>
+        </motion.div>
+      </motion.div>
       <div className="mt-2 flex items-center justify-between px-2 text-[10.5px] text-faint">
         <span>
           <span className="font-medium text-muted">Enter</span> to send ·{' '}
           <span className="font-medium text-muted">Shift + Enter</span> for a new line
         </span>
         {running ? (
-          <span className="flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent breathing" />
-            SelfImpulse is working
+          <span className="flex items-center gap-1.5 font-medium text-accent-ink">
+            <span className="h-2 w-2 rounded-full bg-gradient-to-r from-sky-400 via-purple-400 to-pink-400 animate-pulse" />
+            <BounceLetters text={agentName()} />
+            <ShimmerText>is thinking & working…</ShimmerText>
           </span>
         ) : null}
       </div>
-    </div>
+    </ComposerDropzone>
   )
 }

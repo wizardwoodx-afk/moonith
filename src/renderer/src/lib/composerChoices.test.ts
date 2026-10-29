@@ -21,15 +21,23 @@ function provider(overrides: Partial<ProviderPublic> = {}): ProviderPublic {
 }
 
 describe('permission choices', () => {
-  it('offers manual, auto and skip in order', () => {
-    expect(PERMISSION_CHOICES.map((item) => item.value)).toEqual(['manual', 'auto', 'skip'])
+  it('offers plan first, then the three execution tiers', () => {
+    expect(PERMISSION_CHOICES.map((item) => item.value)).toEqual(['plan', 'manual', 'auto', 'skip'])
   })
 
   it('maps each mode to a short label and a description', () => {
-    expect(permissionChoice('manual').label).toBe('Manual')
-    expect(permissionChoice('auto').label).toBe('Auto')
-    expect(permissionChoice('skip').label).toBe('Integrated acceptance')
-    expect(permissionChoice('skip').blurb).toContain('without asking')
+    expect(permissionChoice('plan').label).toBe('Plan first')
+    expect(permissionChoice('plan').blurb).toContain('Touches no files')
+    expect(permissionChoice('manual').label).toBe('Ask every time')
+    expect(permissionChoice('auto').label).toBe('Auto approve')
+    expect(permissionChoice('skip').label).toBe('Full access')
+    /* "Full access" is the label the user wanted; the blurb is what keeps it
+     * true — shell commands still reach a human. */
+    expect(permissionChoice('skip').blurb).toContain('Shell commands still need approval')
+  })
+
+  it('labels the mode it does not know as the safest one', () => {
+    expect(permissionChoice('nothing-seen' as never).value).toBe('plan')
   })
 })
 

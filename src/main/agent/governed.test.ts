@@ -445,7 +445,7 @@ describe('the governed execution path', () => {
       })
 
       expect(result.decision).toBe('deny')
-      expect(result.rule).toBe('nomos-journal-unavailable')
+      expect(result.rule).toBe('governance-journal-unavailable')
       expect(result.executed).toBe(false)
       expect(result.isError).toBe(true)
       expect(result.content).toContain('could not be written to the journal')

@@ -5,6 +5,7 @@ import type {
   Artifact,
   AttachmentRef,
   CreateTaskInput,
+  MessageVote,
   PermissionMode,
   PublicSettings,
   SettingsPatch,
@@ -15,6 +16,7 @@ import type {
   TaskSummary
 } from '@shared/types'
 import { errorMessage } from './lib/utils'
+import { getLocalProfile, hasLocalProfile, saveLocalProfile } from './lib/localProfile'
 import type { SettingsPaneId } from './lib/settingsNav'
 import type { Surface } from './shell/surfaces'
 
@@ -54,13 +56,19 @@ interface AppState {
   openSchedules: () => void
   openSettings: (tab?: SettingsTab) => void
   refreshTasks: () => Promise<void>
+  refreshSettings: () => Promise<PublicSettings | null>
   refreshSubAgents: () => Promise<void>
   startTask: (request: StartTaskRequest) => Promise<void>
   sendToCurrent: (text: string, attachments: AttachmentRef[]) => Promise<void>
   stopCurrent: () => Promise<void>
   resumeCurrent: () => Promise<void>
+  reactToMessage: (messageId: string, emoji: string) => Promise<void>
+  rateMessage: (messageId: string, vote: MessageVote | null, note?: string) => Promise<void>
+  editMessage: (messageId: string, content: string) => Promise<void>
   updateCurrent: (patch: {
+    mode?: TaskMode
     permissionMode?: PermissionMode
+    agentRole?: Task['agentRole']
     providerId?: string
     model?: string
     title?: string
@@ -114,11 +122,24 @@ export const useApp = create<AppState>((set, get) => ({
     if (bootPromise) return bootPromise
     bootPromise = (async () => {
       try {
-        const [settings, tasks, subagents] = await Promise.all([
+        const [settings, tasks, subagents, appInfo] = await Promise.all([
           window.knight.getSettings(),
           window.knight.listTasks(),
-          window.knight.listSubAgents().catch(() => [] as SubAgentRun[])
+          window.knight.listSubAgents().catch(() => [] as SubAgentRun[]),
+          window.knight.getAppInfo().catch(() => null)
         ])
+        if (appInfo?.userName) {
+          const current = getLocalProfile()
+          if (!hasLocalProfile() || current.name === 'You') {
+            const raw = appInfo.userName.trim()
+            const formatted =
+              raw.length > 1
+                ? raw.charAt(0).toUpperCase() +
+                  (raw === raw.toUpperCase() ? raw.slice(1).toLowerCase() : raw.slice(1))
+                : raw.toUpperCase()
+            saveLocalProfile({ name: formatted })
+          }
+        }
         set({ settings, tasks, subagents, ready: true })
       } catch (error) {
         set({ fatalError: errorMessage(error), ready: true })
@@ -165,6 +186,17 @@ export const useApp = create<AppState>((set, get) => ({
       set({ tasks })
     } catch (error) {
       toast.error(errorMessage(error))
+    }
+  },
+
+  refreshSettings: async () => {
+    try {
+      const settings = await window.knight.getSettings()
+      set({ settings })
+      return settings
+    } catch (error) {
+      toast.error(errorMessage(error))
+      return null
     }
   },
 
@@ -249,6 +281,49 @@ export const useApp = create<AppState>((set, get) => ({
       await window.knight.resumeTask(task.id)
     } catch (error) {
       toast.error(errorMessage(error))
+    }
+  },
+
+  reactToMessage: async (messageId, emoji) => {
+    const task = get().currentTask
+    if (!task) return
+    try {
+      const updated = await window.knight.reactToMessage({ taskId: task.id, messageId, emoji })
+      set((state) => ({
+        currentTask: state.currentTask?.id === updated.id ? updated : state.currentTask,
+        tasks: mergeSummary(state.tasks, updated)
+      }))
+    } catch (error) {
+      toast.error(errorMessage(error))
+    }
+  },
+
+  rateMessage: async (messageId, vote, note) => {
+    const task = get().currentTask
+    if (!task) return
+    try {
+      const updated = await window.knight.rateMessage({ taskId: task.id, messageId, vote, note })
+      set((state) => ({
+        currentTask: state.currentTask?.id === updated.id ? updated : state.currentTask,
+        tasks: mergeSummary(state.tasks, updated)
+      }))
+    } catch (error) {
+      toast.error(errorMessage(error))
+    }
+  },
+
+  editMessage: async (messageId, content) => {
+    const task = get().currentTask
+    if (!task) return
+    try {
+      const updated = await window.knight.editMessage({ taskId: task.id, messageId, content })
+      set((state) => ({
+        currentTask: state.currentTask?.id === updated.id ? updated : state.currentTask,
+        tasks: mergeSummary(state.tasks, updated)
+      }))
+    } catch (error) {
+      toast.error(errorMessage(error))
+      throw error
     }
   },
 
@@ -340,6 +415,20 @@ export const useApp = create<AppState>((set, get) => ({
       return
     }
 
+    if (event.type === 'thinking') {
+      set((state) => {
+        const task = state.currentTask
+        if (!task || task.id !== event.taskId) return state
+        const messages = task.messages.map((message) =>
+          message.id === event.messageId
+            ? { ...message, thinking: (message.thinking ?? '') + event.delta }
+            : message
+        )
+        return { ...state, currentTask: { ...task, messages } }
+      })
+      return
+    }
+
     if (event.type === 'delta') {
       set((state) => {
         const task = state.currentTask
@@ -371,11 +460,18 @@ export const useApp = create<AppState>((set, get) => ({
 
     if (event.type === 'subagent') {
       set((state) => {
+        const isNewRun = !state.subagents.some((run) => run.id === event.run.id)
         const rest = state.subagents.filter((run) => run.id !== event.run.id)
         return {
           subagents: [event.run, ...rest].sort((a, b) =>
             b.startedAt.localeCompare(a.startedAt)
-          )
+          ),
+          // Reveal newly delegated work once. Subsequent step events must not
+          // fight a user who intentionally closed the workspace panel.
+          panelOpen:
+            isNewRun && event.run.status === 'running' && state.currentTask?.id === event.run.taskId
+              ? true
+              : state.panelOpen
         }
       })
       return

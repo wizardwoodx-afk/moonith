@@ -15,12 +15,10 @@
  * reports `wired: false` with the reason and keeps running its local tools —
  * the model-planned step then refuses in words, which is the engine's contract.
  */
-import { BrowserWindow } from 'electron'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { Provider } from '../../backend/provider'
 import { store } from '../../store'
-import { IPC } from '@shared/ipc'
 import {
   setKnightChat,
   setEngineWorkspace,
@@ -36,10 +34,6 @@ import {
   updateProvider,
   type ProviderKind as EngineProviderKind
 } from '../selfimpulse/engine/providers'
-import {
-  selfimpulseSession,
-  subscribeSelfImpulse
-} from '../selfimpulse/engine/selfimpulse'
 import { knightToolContext, registerKnightTools } from './knightTools'
 
 /** The registry id the engine sees. SelfImpulse's own provider keeps its own id. */
@@ -55,7 +49,6 @@ export interface SelfImpulseEngineStatus {
 }
 
 let status: SelfImpulseEngineStatus | null = null
-let broadcasting = false
 
 function engineKind(kind: string): EngineProviderKind {
   if (kind === 'anthropic') return 'anthropic'
@@ -152,8 +145,7 @@ export function initSelfImpulseEngine(): SelfImpulseEngineStatus {
         'no default model provider is configured — the engine runs its local tools, and any model-planned step refuses in words until a provider, key and model are chosen in Settings.'
     }
     status = unwired
-    startSelfImpulseBroadcast()
-    return unwired
+      return unwired
   }
 
   const kind = engineKind(stored.kind)
@@ -191,8 +183,7 @@ export function initSelfImpulseEngine(): SelfImpulseEngineStatus {
       reason: keyWrite.refused ?? 'the provider key could not be stored in the OS keychain.'
     }
     status = refused
-    startSelfImpulseBroadcast()
-    return refused
+      return refused
   }
 
   setModelPrefs({
@@ -213,7 +204,6 @@ export function initSelfImpulseEngine(): SelfImpulseEngineStatus {
 
   const ready: SelfImpulseEngineStatus = { wired: true, providerId, model, tools, workspace, reason: null }
   status = ready
-  startSelfImpulseBroadcast()
   return ready
 }
 
@@ -240,18 +230,3 @@ export function selfImpulseEngineStatus(): SelfImpulseEngineStatus {
   )
 }
 
-/**
- * Push every session change to the renderer. The engine commits on each
- * decision, so the UI sees the same state the receipts describe — there is no
- * second copy to drift.
- */
-export function startSelfImpulseBroadcast(): void {
-  if (broadcasting) return
-  broadcasting = true
-  subscribeSelfImpulse(() => {
-    const session = selfimpulseSession()
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) win.webContents.send(IPC.eventSelfImpulse, session)
-    }
-  })
-}

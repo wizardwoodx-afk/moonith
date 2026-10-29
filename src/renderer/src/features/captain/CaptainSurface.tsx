@@ -1,6 +1,7 @@
+import { agentName } from '../../lib/localProfile'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { AttachmentRef, PermissionMode } from '@shared/types'
+import type { AttachmentRef, PermissionMode, TaskMode } from '@shared/types'
 import { useApp } from '../../store'
 import { errorMessage } from '../../lib/utils'
 import { resolveComposerModel, type ComposerModelState } from '../../lib/composerChoices'
@@ -18,6 +19,7 @@ export function CaptainSurface() {
   const [permissionMode, setPermissionMode] = useState<PermissionMode>(
     settings?.defaultPermissionMode ?? 'manual'
   )
+  const [mode, setMode] = useState<TaskMode>('chat')
   const [model, setModel] = useState<ComposerModelState>(() => resolveComposerModel(settings))
   const [sending, setSending] = useState(false)
   const hydrated = useRef(false)
@@ -56,7 +58,7 @@ export function CaptainSurface() {
     const text = draft.trim()
     if (!text && attachments.length === 0) return
     if (!model.providerId || !model.model) {
-      toast.error('Connect a model before messaging the Captain.')
+      toast.error(`Connect a model before messaging the ${agentName()}.`)
       openSettings('providers')
       return
     }
@@ -65,7 +67,7 @@ export function CaptainSurface() {
     try {
       await startTask({
         text,
-        mode: 'chat',
+        mode,
         permissionMode,
         folders: workspace ? [workspace] : [],
         attachments,
@@ -86,6 +88,8 @@ export function CaptainSurface() {
       tasks={tasks}
       model={model}
       permissionMode={permissionMode}
+      mode={mode}
+      onModeChange={setMode}
       draft={draft}
       attachments={attachments}
       workspace={workspace}

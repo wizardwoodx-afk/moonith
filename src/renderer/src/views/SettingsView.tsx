@@ -80,7 +80,7 @@ import {
 import { buildActivity } from '../lib/activity'
 import { agentName, profileInitial, saveLocalProfile, useLocalProfile } from '../lib/localProfile'
 import { startNewTask } from '../lib/navigation'
-import { APP_AUTHOR, APP_SIGNATURE, APP_TAGLINE, buildStamp } from '@shared/identity'
+import { APP_AUTHOR, APP_SIGNATURE, buildStamp } from '@shared/identity'
 import { BrandGlyph, BrandMark } from '../components/BrandMarks'
 import { confirmDialog } from '../components/Confirm'
 import { createPortal } from 'react-dom'
@@ -469,7 +469,6 @@ function GeneralPane({ settings }: { settings: PublicSettings }) {
             <SettingRow
               icon={<Plug size={14} />}
               title="Default provider"
-              description="Which service answers when nothing else is picked."
             >
               <select
                 className="field field-sm"
@@ -493,7 +492,6 @@ function GeneralPane({ settings }: { settings: PublicSettings }) {
             <SettingRow
               icon={<Sparkles size={14} />}
               title="Default model"
-              description="The model inside that provider."
             >
               <select
                 className="field field-sm"
@@ -607,7 +605,7 @@ function EngineStatusLine() {
         ? 'Starting…'
         : status.state === 'error'
           ? (status.error ?? 'The engine reported an error.')
-          : 'Starts on the first engine turn.'
+          : 'Idle'
 
   return (
     <div className="flex items-center gap-2 px-4 py-2.5 text-[11.5px]">
@@ -739,7 +737,7 @@ function PermissionsPane({ settings }: { settings: PublicSettings }) {
   )
 }
 
-function workspaceLabel(note: MemoryNote): string {
+function workspaceLabel(note: Pick<MemoryNote, 'scope' | 'scopeRef'>): string {
   if (note.scope === 'global' || !note.scopeRef) return 'All tasks'
   return note.scopeRef.split(/[\\/]/).filter(Boolean).pop() ?? note.scopeRef
 }
@@ -756,6 +754,8 @@ function InstructionsPane({
   const [saving, setSaving] = useState(false)
   const [notes, setNotes] = useState<MemoryNote[]>([])
   const [note, setNote] = useState('')
+  const [noteFolder, setNoteFolder] = useState<string | null>(null)
+  const [retentionDays, setRetentionDays] = useState('')
   const [adding, setAdding] = useState(false)
   const [composerOpen, setComposerOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -787,10 +787,15 @@ function InstructionsPane({
 
   const addNote = async (): Promise<void> => {
     const text = note.trim()
-    if (!text) return
+    if (!text || adding) return
     setAdding(true)
     try {
-      setNotes(await window.knight.addMemory({ text }))
+      setNotes(await window.knight.addMemory({
+        text,
+        scope: noteFolder ? 'workspace' : 'global',
+        scopeRef: noteFolder ?? undefined,
+        retentionDays: retentionDays ? Number(retentionDays) : undefined
+      }))
       setNote('')
       setComposerOpen(false)
       toast.success('Note saved.')
@@ -843,26 +848,53 @@ function InstructionsPane({
         </div>
 
         {composerOpen ? (
-          <div className="card mb-2 flex gap-2 p-3">
-            <input
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') void addNote()
-              }}
-              placeholder="Something worth remembering"
-              aria-label="New memory note"
-              className="field flex-1"
-            />
-            <Button
-              size="sm"
-              variant="primary"
-              loading={adding}
-              disabled={!note.trim()}
-              onClick={() => void addNote()}
-            >
-              Add
-            </Button>
+          <div className="card mb-2 space-y-3 p-3">
+            <div className="flex gap-2">
+              <input
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.nativeEvent.isComposing) void addNote()
+                }}
+                placeholder="Something worth remembering"
+                aria-label="New memory note"
+                maxLength={4000}
+                disabled={adding}
+                className="field min-w-0 flex-1"
+              />
+              <Button size="sm" variant="primary" loading={adding} disabled={!note.trim()} onClick={() => void addNote()}>
+                Add
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={adding}
+                title={noteFolder ?? 'Available to all tasks on this device'}
+                onClick={() => {
+                  void window.knight.pickFolder().then((folder) => {
+                    if (folder) setNoteFolder(folder)
+                  }).catch((error) => toast.error(errorMessage(error)))
+                }}
+              >
+                <Lock size={12} />
+                {noteFolder ? workspaceLabel({ scope: 'workspace', scopeRef: noteFolder }) : 'Limit to a workspace'}
+              </Button>
+              {noteFolder ? (
+                <Button size="sm" variant="ghost" disabled={adding} onClick={() => setNoteFolder(null)}>Use in all tasks</Button>
+              ) : <span className="text-[11px] text-faint">All tasks</span>}
+              <label className="ml-auto flex items-center gap-2 text-[11px] text-muted">
+                Keep for
+                <select aria-label="Memory retention" className="field w-auto" value={retentionDays} disabled={adding} onChange={(event) => setRetentionDays(event.target.value)}>
+                  <option value="">Until forgotten</option>
+                  <option value="7">7 days</option>
+                  <option value="30">30 days</option>
+                  <option value="90">90 days</option>
+                </select>
+              </label>
+            </div>
+            <p className="text-[11px] text-faint">Workspace notes are recalled only for tasks granted that folder. Expired notes are excluded from recall.</p>
           </div>
         ) : null}
 
@@ -883,7 +915,8 @@ function InstructionsPane({
                 description={[
                   workspaceLabel(item),
                   item.source === 'captain' ? `written by the ${agentName()}` : '',
-                  item.source === 'import' ? 'imported' : ''
+                  item.source === 'import' ? 'imported' : '',
+                  item.expiresAt ? `expires ${new Date(item.expiresAt).toLocaleDateString()}` : 'until forgotten'
                 ]
                   .filter(Boolean)
                   .join(' · ')}
@@ -919,6 +952,7 @@ function InstructionsPane({
         <textarea
           className="field"
           rows={7}
+          aria-label="Standing instructions"
           value={instructions}
           onChange={(event) => setInstructions(event.target.value)}
           placeholder="How you like work done"
@@ -948,6 +982,7 @@ function InstructionsPane({
         <textarea
           className="field"
           rows={10}
+          aria-label="Notes to import"
           value={importText}
           onChange={(event) => setImportText(event.target.value)}
           placeholder={'Prefers British spelling\nInvoices go to finance on Fridays'}
@@ -1154,7 +1189,7 @@ function ProvidersTab({
                     <span
                       key={model}
                       className={cn(
-                        'rounded-md border px-1.5 py-0.5 font-mono text-[10px]',
+                        'rounded-md border px-1.5 py-0.5 font-mono text-[10px] whitespace-nowrap',
                         isDefault && settings.defaultModel === model
                           ? 'border-accent/30 bg-accent-soft/50 text-accent-ink'
                           : 'border-line bg-canvas text-muted'
@@ -1326,7 +1361,6 @@ function ProviderModal({
       width="max-w-[560px]"
       icon={<Icon size={17} />}
       title={provider ? 'Edit provider' : 'Add a model provider'}
-      subtitle="SelfImpulse talks to providers directly from this device."
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -1563,6 +1597,7 @@ function McpTools({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Filter tools"
+          aria-label="Filter tools"
           className="h-6 min-w-0 flex-1 bg-transparent text-[11px] text-ink outline-none placeholder:text-faint"
         />
         <span className="text-[10px] text-faint">
@@ -1807,9 +1842,6 @@ function McpMarketBrowser({
           className={cn(marketplaceInputClass, 'pl-8')}
         />
       </div>
-      <p className="px-1 text-[11.5px] text-faint">
-        The community library, ready to browse. Nothing installs until you choose it.
-      </p>
 
       {loading ? (
         <div className="card flex items-center justify-center gap-2 py-12 text-[12px] text-faint">
@@ -2076,8 +2108,7 @@ function McpTab({ actionHost }: { actionHost: HTMLElement | null }) {
         <>
           <p className="flex items-center gap-1.5 text-[11.5px] text-faint">
             <Plug size={12} />
-            Servers run locally over stdio. Only add servers you trust — tool calls follow the same
-            permission rules as built-in tools.
+            Servers run locally. Add only servers you trust — their tool calls follow your permission rules.
           </p>
 
           <div className="rounded-2xl border border-accent/25 bg-accent-soft/25 p-4">
@@ -2209,7 +2240,6 @@ function McpServerModal({
       width="max-w-[560px]"
       icon={<Plug size={17} />}
       title={config ? 'Edit MCP server' : 'Add MCP server'}
-      subtitle="SelfImpulse launches the server over stdio and discovers its tools."
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -2397,6 +2427,7 @@ function ProfilePane({ settings }: { settings: PublicSettings }) {
           <FieldGroup label="Display name">
             <input
               className="field"
+              aria-label="Display name"
               value={draft.name}
               onChange={(event) =>
                 setDraft((current) => ({ ...current, name: event.target.value }))
@@ -2406,6 +2437,7 @@ function ProfilePane({ settings }: { settings: PublicSettings }) {
           <FieldGroup label="Role">
             <input
               className="field"
+              aria-label="Role"
               value={draft.role}
               onChange={(event) =>
                 setDraft((current) => ({ ...current, role: event.target.value }))
@@ -2415,6 +2447,7 @@ function ProfilePane({ settings }: { settings: PublicSettings }) {
           <FieldGroup label="Email or handle" className="sm:col-span-2">
             <input
               className="field"
+              aria-label="Email or handle"
               value={draft.email}
               onChange={(event) =>
                 setDraft((current) => ({ ...current, email: event.target.value }))
@@ -2602,9 +2635,7 @@ function TaskMonitorPane() {
                 Start a task
               </Button>
             }
-          >
-            When a task starts, its state and receipts appear here.
-          </EmptyPanel>
+          />
         ) : (
           <SettingList>
             {tasks.map((task) => (
@@ -2825,7 +2856,7 @@ function AgentPane({ settings }: { settings: PublicSettings }) {
           <SettingRow
             icon={<BrandMark size={14} />}
             title={agentName()}
-            description="The one agent you message. Holds the plan and signs every receipt."
+            description="Holds the plan and signs every receipt."
           >
             <StatusChip tone={ready ? 'positive' : 'warn'}>
               {ready ? 'Ready' : 'Needs a model'}
@@ -3074,10 +3105,7 @@ function AboutTab() {
               </span>
             ) : null}
           </div>
-          <p className="mt-1 max-w-[520px] text-[12px] leading-relaxed text-muted">
-            {APP_TAGLINE} One {agentName()}, one engine, your files on this machine.
-          </p>
-          <p className="mt-1.5 font-mono text-[10px] text-faint">
+          <p className="mt-1.5 font-mono text-[10px] whitespace-nowrap text-faint">
             {APP_SIGNATURE} · made by {APP_AUTHOR}
           </p>
         </div>
@@ -3087,15 +3115,12 @@ function AboutTab() {
         <SettingList>
           {rows.map((row) => (
             <SettingRow key={row.label} title={row.label}>
-              <span className="font-mono text-[11.5px] text-muted">{row.value}</span>
+              <span className="font-mono text-[11.5px] whitespace-nowrap text-muted">{row.value}</span>
             </SettingRow>
           ))}
-          <SettingRow
-            title="Data folder"
-            description="Where every task, note and receipt lives."
-          >
+          <SettingRow title="Data folder">
             <span
-              className="max-w-[240px] truncate font-mono text-[11px] text-muted"
+              className="max-w-[240px] truncate font-mono text-[11px] whitespace-nowrap text-muted"
               title={info?.userDataPath ?? 'Locating…'}
             >
               {info?.userDataPath ?? 'Locating…'}
@@ -3106,10 +3131,6 @@ function AboutTab() {
           </SettingRow>
         </SettingList>
       </SettingsSection>
-
-      <p className="px-1 text-[10.5px] leading-relaxed text-faint">
-        A local-first app. Not affiliated with any model provider.
-      </p>
     </div>
   )
 }

@@ -13,12 +13,12 @@ import { getPaths } from '../paths'
 import { isWithin } from '../security'
 import { slugify, truncate } from '../util'
 
-const MARKET_API = 'https://clawhub.ai/api/v1'
-const MARKET_SITE = 'https://clawhub.ai'
 const MARKETPLACE_CLI = '@lobehub/market-cli'
 const MARKETPLACE_SITE = 'https://lobehub.com/skills'
 const MANIFEST = '.installed.json'
 const SAFE_REF = /^@?[a-zA-Z0-9][a-zA-Z0-9._/-]{0,100}$/
+const CATALOG_UNREACHABLE = 'The catalog could not be reached. Check the connection and try again.'
+const INSTALL_FAILED = 'The skill could not be installed. Check the connection and try again.'
 
 interface InstalledEntry {
   id: string
@@ -94,7 +94,7 @@ async function walk(dir: string, depth = 0): Promise<Array<{ dir: string; file: 
 }
 
 class SkillService {
-  private marketplaceCache = new Map<string, { at: number; results: SkillMarketResult[] }>()
+  private catalogCache = new Map<string, { at: number; results: SkillMarketResult[] }>()
 
   private root(): string {
     return getPaths().skills
@@ -223,67 +223,25 @@ class SkillService {
     return this.list()
   }
 
-  async search(
-    query: string,
-    registry: SkillSource = 'registry'
-  ): Promise<SkillMarketResult[]> {
-    if (registry === 'marketplace') return this.searchMarketplace(query)
-    const url = new URL(`${MARKET_API}/search`)
-    if (query.trim()) url.searchParams.set('q', query.trim())
-    url.searchParams.set('limit', '24')
-    let response: Response
-    try {
-      response = await fetch(url, {
-        headers: { accept: 'application/json' },
-        signal: AbortSignal.timeout(20000)
-      })
-    } catch {
-      throw new Error('Could not reach the skill registry. Check your network connection.')
-    }
-    if (!response.ok) throw new Error(`SkillSource returned ${response.status}.`)
-    const json = (await response.json()) as {
-      results?: Array<Record<string, unknown>>
-      items?: Array<Record<string, unknown>>
-    }
-    const results = json.results ?? json.items ?? []
-    return results.map((item) => {
-      const install = item.install as { reference?: string } | undefined
-      const latest = item.latestVersion as { version?: string } | string | undefined
-      const stats = item.stats as { downloads?: number } | undefined
-      const canonical = typeof item.canonicalUrl === 'string' ? item.canonicalUrl : ''
-      return {
-        ref: install?.reference || canonical || String(item.id ?? ''),
-        name: String(item.displayName ?? item.name ?? item.id ?? 'Skill'),
-        summary: String(item.summary ?? item.description ?? ''),
-        author: String(item.ownerHandle ?? String(item.id ?? '').split(':')[1]?.split('/')[0] ?? ''),
-        version: typeof latest === 'string' ? latest : latest?.version ?? '',
-        downloads: stats?.downloads ?? 0,
-        url: canonical ? `${MARKET_SITE}${canonical}` : MARKET_SITE,
-        registry: 'registry'
-      }
-    })
-  }
-
-  private async searchMarketplace(query: string): Promise<SkillMarketResult[]> {
+  /** The single skill catalog; a failed search throws rather than returning nothing. */
+  async search(query: string, _source?: SkillSource): Promise<SkillMarketResult[]> {
     const clean = query
       .trim()
       .replace(/[^a-zA-Z0-9 _-]+/g, ' ')
       .replace(/\s+/g, ' ')
       .slice(0, 80)
-    const cached = this.marketplaceCache.get(clean)
+    const cached = this.catalogCache.get(clean)
     if (cached && Date.now() - cached.at < 60_000) return cached.results
 
-    const args = ['skills', 'search', '--page-size', '24', '--output', 'json']
+    const args = ['skills', 'search', '--page-size', '60', '--output', 'json']
     if (clean) args.push('--q', clean)
     const result = await this.runCli(MARKETPLACE_CLI, args)
-    if (result.code !== 0) {
-      throw new Error(this.cliMessage(result, 'Marketplace search failed'))
-    }
+    if (result.code !== 0) throw new Error(CATALOG_UNREACHABLE)
     let json: { items?: Array<Record<string, unknown>> }
     try {
       json = JSON.parse(result.stdout) as { items?: Array<Record<string, unknown>> }
     } catch {
-      throw new Error('Marketplace returned a response SelfImpulse could not read.')
+      throw new Error('The catalog returned a response that could not be read.')
     }
     const results = (json.items ?? []).map((item) => {
       const identifier = String(item.identifier ?? '')
@@ -299,71 +257,50 @@ class SkillService {
         registry: 'marketplace' as const
       }
     })
-    this.marketplaceCache.set(clean, { at: Date.now(), results })
+    this.catalogCache.set(clean, { at: Date.now(), results })
     return results
   }
 
-  async install(ref: string, registry: SkillSource = 'registry'): Promise<SkillSummary[]> {
+  async install(ref: string, _source?: SkillSource): Promise<SkillSummary[]> {
     const clean = ref.trim()
     if (!clean || !SAFE_REF.test(clean) || clean.includes('..')) {
       throw new Error('That skill reference is not valid.')
     }
     const before = new Set((await this.list()).map((skill) => skill.id))
-    const result =
-      registry === 'marketplace'
-        ? await this.runCli(MARKETPLACE_CLI, [
-            'skills',
-            'install',
-            clean,
-            '--dir',
-            getPaths().skills,
-            '--agent',
-            'codex'
-          ])
-        : await this.runCli('clawhub@latest', [
-            'install',
-            clean,
-            '--workdir',
-            getPaths().root,
-            '--dir',
-            'skills',
-            '--force',
-            '--no-input'
-          ])
+    const result = await this.runCli(MARKETPLACE_CLI, [
+      'skills',
+      'install',
+      clean,
+      '--dir',
+      getPaths().skills,
+      '--agent',
+      'codex'
+    ])
     if (result.code !== 0) {
-      const label = registry === 'marketplace' ? 'Marketplace' : 'Registry'
-      throw new Error(this.cliMessage(result, `${label} install failed`))
+      const reason = (result.stderr || result.stdout || '')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(-2)
+        .join(' ')
+        .slice(0, 180)
+      throw new Error(reason || INSTALL_FAILED)
     }
     const skills = await this.list()
     const installed = await this.manifest()
     const fresh = skills.filter((skill) => !before.has(skill.id)).map((skill) => skill.id)
     await this.saveManifest([
       ...installed,
-      ...fresh.map((id) => ({ id, registry }))
+      ...fresh.map((id) => ({ id, registry: 'marketplace' as const }))
     ])
     if (!fresh.length) {
-      const label = registry === 'marketplace' ? 'Marketplace' : 'Registry'
-      throw new Error(`${label} reported success but no SKILL.md bundle appeared in the library.`)
+      throw new Error('The catalog reported success but no skill bundle appeared in the library.')
     }
     return this.list()
   }
 
-  private cliMessage(
-    result: { stdout: string; stderr: string; code: number },
-    fallback: string
-  ): string {
-    return (
-      `${result.stdout}\n${result.stderr}`
-        .trim()
-        .split(/\r?\n/)
-        .filter(Boolean)
-        .slice(-4)
-        .join(' ') || `${fallback} (${result.code}).`
-    )
-  }
-
   /**
-   * Run a registry CLI with an argument array — never a shell string, so a
+   * Run the catalog CLI with an argument array — never a shell string, so a
    * skill reference can never turn into a command. On Windows the `npx` shim is
    * resolved to its JS entrypoint instead of going through cmd.exe, matching
    * `backend/marketplace.ts` and `backend/external-agent.ts`.

@@ -7,22 +7,22 @@ export function CaptainDoodle() {
         role="presentation"
       >
         <defs>
-          <radialGradient id="knight-sun" cx="50%" cy="44%" r="62%">
+          <radialGradient id="si-sun" cx="50%" cy="44%" r="62%">
             <stop offset="0%" stopColor="var(--c-gold)" stopOpacity="0.34" />
             <stop offset="62%" stopColor="var(--c-gold)" stopOpacity="0.1" />
             <stop offset="100%" stopColor="var(--c-gold)" stopOpacity="0" />
           </radialGradient>
-          <linearGradient id="knight-hill" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="si-hill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--c-accent)" stopOpacity="0.32" />
             <stop offset="100%" stopColor="var(--c-accent)" stopOpacity="0.04" />
           </linearGradient>
-          <linearGradient id="knight-piece" x1="0" y1="0" x2="1" y2="1">
+          <linearGradient id="si-piece" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stopColor="var(--c-accent-ink)" />
             <stop offset="100%" stopColor="var(--c-accent)" />
           </linearGradient>
         </defs>
 
-        <circle cx="112" cy="58" r="52" fill="url(#knight-sun)" />
+        <circle cx="112" cy="58" r="52" fill="url(#si-sun)" />
         <circle
           cx="112"
           cy="58"
@@ -36,7 +36,7 @@ export function CaptainDoodle() {
 
           <path
             d="M38 95c18-16 39-24 73-24 35 0 54 8 71 24l10 10H28l10-10Z"
-            fill="url(#knight-hill)"
+            fill="url(#si-hill)"
             opacity="0.7"
           />
         <path d="M38 105h144" stroke="var(--c-line-strong)" strokeOpacity="0.55" strokeLinecap="round" />
@@ -44,7 +44,7 @@ export function CaptainDoodle() {
         <g transform="translate(72 27)">
           <path
             d="M57 66c4-4 6-10 5-16 5-2 8-7 8-12 0-8-6-14-14-15l-9-1 7-9c2-3-1-7-4-5L26 25c-6 5-8 13-6 20l2 7 8-5c-1 6-4 10-9 13v7h36v-1Z"
-            fill="url(#knight-piece)"
+            fill="url(#si-piece)"
           />
           <path
             d="M48 24c-4 2-7 5-9 9M29 33l-1 8M33 57h31"

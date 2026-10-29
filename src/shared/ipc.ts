@@ -67,6 +67,9 @@ export const IPC = {
   skillsCreate: 'skills:create',
   skillsRemove: 'skills:remove',
 
+  knowledgeList: 'knowledge:list',
+  knowledgeDecide: 'knowledge:decide',
+
   marketspaceList: 'marketspace:list',
   marketspaceRead: 'marketspace:read',
   marketspaceInstall: 'marketspace:install',

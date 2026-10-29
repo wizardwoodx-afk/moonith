@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildAuditChain, deriveSealKey, verifyAuditChain } from './chain'
+import { buildAuditChain, verifyAuditChain } from './chain'
+import { auditVerifierFromPublicKey, testAuditIdentityFromPassphrase } from './identity'
 import type { AuditEntry } from '@shared/audit'
 
-/* A fixed fixture secret — these tests never touch the real keychain, and a
- * fixed timestamp set keeps the expected bytes reproducible. */
-const SEAL_KEY = deriveSealKey('unit-test-secret, never the keychain')
-const OTHER_KEY = deriveSealKey('a different machine’s secret')
+/* Fixed fixtures — these tests never touch the real keychain, and a fixed
+ * timestamp set keeps the expected bytes reproducible. */
+const IDENTITY = testAuditIdentityFromPassphrase('unit-test-secret, never the keychain')
+const OTHER_IDENTITY = testAuditIdentityFromPassphrase('a different machine’s secret')
 
 function fixtureEntries(): AuditEntry[] {
   return [
@@ -33,7 +34,7 @@ function fixtureEntries(): AuditEntry[] {
 }
 
 function exportedLines(): string[] {
-  return buildAuditChain(fixtureEntries(), SEAL_KEY)
+  return buildAuditChain(fixtureEntries(), IDENTITY)
 }
 
 describe('buildAuditChain', () => {
@@ -49,23 +50,23 @@ describe('buildAuditChain', () => {
     expect(parsed[4].trailer).toBe(true)
     expect(parsed[4].entries).toBe(4)
     expect(parsed[4].head).toBe(parsed[3].hash)
-    expect(parsed[4].sig).toMatch(/^[0-9a-f]{64}$/)
+    expect(parsed[4].sig).toMatch(/^[0-9a-f]{128}$/)
   })
 
   it('is deterministic: the same entries produce identical bytes', () => {
-    expect(buildAuditChain(fixtureEntries(), SEAL_KEY)).toEqual(exportedLines())
+    expect(buildAuditChain(fixtureEntries(), IDENTITY)).toEqual(exportedLines())
   })
 
   it('exports an empty record as a trailer-only file', () => {
-    const lines = buildAuditChain([], SEAL_KEY)
+    const lines = buildAuditChain([], IDENTITY)
     expect(lines).toHaveLength(1)
-    expect(verifyAuditChain(lines, SEAL_KEY)).toEqual({ ok: true, entries: 0 })
+    expect(verifyAuditChain(lines, IDENTITY)).toEqual({ ok: true, entries: 0 })
   })
 })
 
 describe('verifyAuditChain', () => {
   it('verifies an untampered export', () => {
-    expect(verifyAuditChain(exportedLines(), SEAL_KEY)).toEqual({ ok: true, entries: 4 })
+    expect(verifyAuditChain(exportedLines(), IDENTITY)).toEqual({ ok: true, entries: 4 })
   })
 
   it('detects a modified line at that line', () => {
@@ -74,7 +75,7 @@ describe('verifyAuditChain', () => {
     ;(tampered.entry as Record<string, unknown>).data = { id: 'r1', mission: 'rewritten', signed: true }
     lines[1] = JSON.stringify(tampered)
 
-    const report = verifyAuditChain(lines, SEAL_KEY)
+    const report = verifyAuditChain(lines, IDENTITY)
     expect(report.ok).toBe(false)
     expect(report.line).toBe(2)
     expect(report.reason).toContain('modified')
@@ -84,7 +85,7 @@ describe('verifyAuditChain', () => {
     const lines = exportedLines()
     lines.splice(1, 1) // drop the second entry
 
-    const report = verifyAuditChain(lines, SEAL_KEY)
+    const report = verifyAuditChain(lines, IDENTITY)
     expect(report.ok).toBe(false)
     expect(report.line).toBe(2) // the following entry now carries a stale prev
   })
@@ -95,7 +96,7 @@ describe('verifyAuditChain', () => {
     lines[0] = lines[1]
     lines[1] = first
 
-    const report = verifyAuditChain(lines, SEAL_KEY)
+    const report = verifyAuditChain(lines, IDENTITY)
     expect(report.ok).toBe(false)
     expect(report.line).toBe(1)
   })
@@ -104,29 +105,52 @@ describe('verifyAuditChain', () => {
     const lines = exportedLines()
     lines.splice(3, 1) // drop the final entry, keep the trailer
 
-    const report = verifyAuditChain(lines, SEAL_KEY)
+    const report = verifyAuditChain(lines, IDENTITY)
     expect(report.ok).toBe(false)
     expect(report.reason).toContain('truncated')
   })
 
   it('rejects a file truncated past the trailer', () => {
-    const report = verifyAuditChain(exportedLines().slice(0, -1), SEAL_KEY)
+    const report = verifyAuditChain(exportedLines().slice(0, -1), IDENTITY)
     expect(report.ok).toBe(false)
     expect(report.reason).toContain('trailer')
   })
 
   it('rejects an empty file', () => {
-    const report = verifyAuditChain([], SEAL_KEY)
+    const report = verifyAuditChain([], IDENTITY)
     expect(report.ok).toBe(false)
   })
 
   it('rejects a file whose chain was rebuilt under a different key', () => {
     /* The hashes themselves are keyless, so a forged chain verifies up to
-     * the seal — the HMAC is what makes the export unforgeable. */
-    const forged = buildAuditChain(fixtureEntries(), OTHER_KEY)
-    const report = verifyAuditChain(forged, SEAL_KEY)
+     * the signature — the Ed25519 signature is what makes the export
+     * unforgeable without the sealed seed. */
+    const forged = buildAuditChain(fixtureEntries(), OTHER_IDENTITY)
+    const report = verifyAuditChain(forged, IDENTITY)
     expect(report.ok).toBe(false)
     expect(report.line).toBeNull()
     expect(report.reason).toContain('signature')
+  })
+
+  it('verifies with the public key alone — no signing secret required', () => {
+    /* The whole point of going asymmetric: an auditor holding nothing but the
+     * published public key can prove the file is intact and genuinely signed,
+     * and still cannot forge a single line. */
+    const verifier = auditVerifierFromPublicKey(IDENTITY.publicKey)
+    const lines = exportedLines()
+    expect(verifyAuditChain(lines, verifier)).toEqual({ ok: true, entries: 4 })
+    expect(verifyAuditChain(lines, auditVerifierFromPublicKey(OTHER_IDENTITY.publicKey)).ok).toBe(
+      false
+    )
+    expect(() => verifier.sign('anything')).toThrow(/cannot sign/)
+  })
+
+  it('detects a trailer whose entry count was edited under a valid-looking chain', () => {
+    const lines = exportedLines()
+    const trailer = JSON.parse(lines[4]) as Record<string, unknown>
+    lines[4] = JSON.stringify({ ...trailer, entries: 3 })
+    const report = verifyAuditChain(lines, IDENTITY)
+    expect(report.ok).toBe(false)
+    expect(report.reason).toContain('added after the export was signed')
   })
 })

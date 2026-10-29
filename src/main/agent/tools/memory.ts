@@ -15,7 +15,9 @@ const remember = defineTool({
       .enum(['global', 'workspace'])
       .default('global')
       .describe('Global notes apply everywhere. Workspace notes apply only in this task’s first granted folder.'),
-    tags: z.array(z.string().trim().min(1).max(32)).max(8).optional()
+    tags: z.array(z.string().trim().min(1).max(32)).max(8).optional(),
+    retentionDays: z.number().int().min(1).max(3650).optional()
+      .describe('Expire after this many days. Omit to retain until explicitly removed.')
   }),
   sideEffect: 'write',
   risk: 'low',
@@ -29,7 +31,7 @@ const remember = defineTool({
       }
     }
     const notes = await memoryService.add(
-      { text: args.text, scope: args.scope, scopeRef, tags: args.tags },
+      { text: args.text, scope: args.scope, scopeRef, tags: args.tags, retentionDays: args.retentionDays },
       'captain'
     )
     return {

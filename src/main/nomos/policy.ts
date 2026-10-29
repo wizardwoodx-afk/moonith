@@ -30,8 +30,17 @@ export const CAPABILITY_BY_TOOL: Record<string, Capability> = {
   list_files: 'fs.read',
   read_file: 'fs.read',
   search_files: 'fs.read',
+  read_file_chunk: 'fs.read',
+  outline_symbols: 'fs.read',
+  read_document: 'fs.read',
+  list_archive: 'fs.read',
+  extract_archive: 'fs.write',
+  list_library_pages: 'fs.read',
+  read_library_page: 'fs.read',
   write_file: 'fs.write',
   edit_file: 'fs.write',
+  apply_changes: 'fs.write',
+  apply_code_patch: 'fs.write',
   make_directory: 'fs.write',
   move_path: 'fs.write',
   delete_path: 'fs.delete',
@@ -49,16 +58,29 @@ export const CAPABILITY_BY_TOOL: Record<string, Capability> = {
   browser_back: 'browser.control',
   browser_wait: 'browser.control',
   browser_show: 'browser.control',
+  stage_act: 'browser.control',
+  stage_observe: 'browser.control',
+  stage_extract: 'browser.control',
+  stage_navigate: 'browser.control',
   create_document: 'document.create',
   create_spreadsheet: 'document.create',
   create_presentation: 'document.create',
   create_pdf: 'document.create',
+  convert_document: 'document.create',
   /* studio_commands spawns an external CLI too (to read its command
    * registry); it is not a filesystem read. Classifying it as shell.exec is
    * the truthful scope, and capabilityForTool() derives the same from its
    * 'execute' side effect. */
   studio_commands: 'shell.exec',
   studio_run: 'studio.run',
+  studio_stage_scene: 'studio.run',
+  studio_compose_image: 'studio.run',
+  studio_spreadsheet_op: 'studio.run',
+  studio_design_vector: 'studio.run',
+  studio_sequence_video: 'studio.run',
+  studio_mix_audio: 'studio.run',
+  studio_draft_cad: 'studio.run',
+  studio_manipulate_pdf: 'studio.run',
   remember: 'memory.write',
   recall_memory: 'memory.read',
   update_plan: 'tool.other',
@@ -151,13 +173,32 @@ export const highRiskRule: PolicyRule = ({ request }) =>
       )
     : null
 
-/** Rule 5 — the tool's own always-approval contract. */
+/** Rule 5 — Plan mode denies rather than asks. A task the user set to plan
+ *  has said "decide nothing yet", so offering an approve button on the way to
+ *  the plan would undo that. Quiet reads and plain browsing pass; anything that
+ *  changes the machine, a page or an outside system does not — a network action
+ *  is only read-only here when nothing about it says otherwise. */
+export const planModeRule: PolicyRule = ({ request }) => {
+  if (request.permissionMode !== 'plan') return null
+  const readOnly =
+    request.sideEffect === 'none' ||
+    request.sideEffect === 'read' ||
+    (request.sideEffect === 'network' && request.risk === 'low')
+  if (readOnly && request.approval !== 'always') return null
+  return verdict(
+    'deny',
+    'nomos-plan-mode-is-read-only',
+    `"${request.tool}" changes something, and this task is in Plan mode. Deliver the plan instead — the user switches the mode when they want it carried out.`
+  )
+}
+
+/** Rule 6 — the tool's own always-approval contract. */
 export const alwaysApprovalRule: PolicyRule = ({ request }) =>
   request.approval === 'always'
     ? verdict('steer', 'nomos-tool-requires-approval', `"${request.tool}" always requires approval before it runs`)
     : null
 
-/** Rule 6 — policy tools ask in manual mode, or when trust is low. */
+/** Rule 7 — policy tools ask in manual mode, or when trust is low. */
 export const policyApprovalRule: PolicyRule = ({ request, context }) => {
   if (request.approval !== 'policy') return null
   const manual = request.permissionMode === 'manual'
@@ -170,11 +211,14 @@ export const policyApprovalRule: PolicyRule = ({ request, context }) => {
 }
 
 /** The ordered rule set. Order is part of the policy: the kill switch and
- *  identity speak before anything else, and high-risk outranks trust. */
+ *  identity speak before anything else, and Plan mode speaks before the
+ *  approval rules — a plan-mode action that reaches an approval rule would be
+ *  offered for approval, which is exactly what Plan mode refuses. */
 export const DEFAULT_RULES: readonly PolicyRule[] = [
   killSwitchRule,
   identityRule,
   capabilityRule,
+  planModeRule,
   highRiskRule,
   alwaysApprovalRule,
   policyApprovalRule

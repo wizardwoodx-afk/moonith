@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { promises as fs } from 'node:fs'
+import { existsSync, promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { ToolContext } from './types'
@@ -8,7 +8,7 @@ import { resolveSafePath } from '../../security'
 import { truncate } from '../../util'
 
 /**
- * THE STUDIO — fourteen desktop engines driven headlessly, under our own names.
+ * THE STUDIO — thirteen desktop engines driven headlessly, under our own names.
  *
  * Each upstream app publishes its whole feature surface as commands in one
  * registry and ships a `{name}-cli` binary that runs them without a GUI. We call
@@ -17,12 +17,13 @@ import { truncate } from '../../util'
  * The internal ids are Greek and deliberately ours. The upstream projects are
  * MIT OR Apache-2.0, which permits rebranding, but their names and marks are
  * not ours to use — PdfCraft states plainly that its trademarks are excluded
- * from the licence. So the alias is the product name and `upstream` exists only
- * to attribute the work and to name the download in an error message.
- * See docs/third-party-notices.md.
+ * from the licence. So `upstream` exists only to attribute the work and to
+ * name the download in an error message. See docs/third-party-notices.md.
  *
  * The binaries keep their real names. Renaming an executable we did not build
  * would be a lie to the filesystem and would break the app's own resources.
+ * They live in the Studio tools folder (`studio` under the profile directory),
+ * then fall back to PATH; `SELFIMPULSE_STUDIO_<ID>` overrides both.
  */
 
 export interface StudioApp {
@@ -36,33 +37,27 @@ export interface StudioApp {
   upstream: string
   /** GitHub repository under github.com/storytold. */
   repo: string
-  /** Binary name on PATH. */
+  /** Binary name (without extension) in the Studio tools folder or on PATH. */
   bin: string
   /** Environment variable that overrides the binary path. */
   env: string
-  /**
-   * `true` when the CLI and its Windows build were confirmed; `false` when the
-   * app follows the same architecture but its CLI has not been checked.
-   */
-  verified: boolean
 }
 
 export const STUDIO_APPS: Record<string, StudioApp> = {
-  techne: { label: 'Techne', greek: 'τέχνη', role: 'generative canvas', upstream: 'ArtCraft', repo: 'artcraft', bin: 'artcraft-cli', env: 'SELFIMPULSE_STUDIO_TECHNE', verified: false },
-  agora: { label: 'Agora', greek: 'ἀγορά', role: 'app launcher', upstream: 'ArtCraft Launcher', repo: 'craft-launcher', bin: 'craft-launcher-cli', env: 'SELFIMPULSE_STUDIO_AGORA', verified: false },
-  eikon: { label: 'Eikon', greek: 'εἰκών', role: 'raster image editor', upstream: 'PhotoCraft', repo: 'photocraft', bin: 'photocraft-cli', env: 'SELFIMPULSE_STUDIO_EIKON', verified: true },
-  phos: { label: 'Phos', greek: 'φῶς', role: 'photo workflow', upstream: 'LightCraft', repo: 'lightcraft', bin: 'lightcraft-cli', env: 'SELFIMPULSE_STUDIO_PHOS', verified: false },
-  kinema: { label: 'Kinema', greek: 'κίνημα', role: 'video editor', upstream: 'FilmCraft', repo: 'filmcraft', bin: 'filmcraft-cli', env: 'SELFIMPULSE_STUDIO_KINEMA', verified: false },
-  schema: { label: 'Schema', greek: 'σχῆμα', role: 'page layout', upstream: 'DesignCraft', repo: 'designcraft', bin: 'designcraft-cli', env: 'SELFIMPULSE_STUDIO_SCHEMA', verified: false },
-  gramme: { label: 'Gramme', greek: 'γραμμή', role: 'vector illustration', upstream: 'VectorCraft', repo: 'vectorcraft', bin: 'vectorcraft-cli', env: 'SELFIMPULSE_STUDIO_GRAMME', verified: true },
-  chartes: { label: 'Chartes', greek: 'χάρτης', role: 'document and forms', upstream: 'PdfCraft', repo: 'pdfcraft', bin: 'pdfcraft-cli', env: 'SELFIMPULSE_STUDIO_CHARTES', verified: true },
-  drama: { label: 'Drama', greek: 'δρᾶμα', role: 'motion and effects', upstream: 'EffectCraft', repo: 'effectcraft', bin: 'effectcraft-cli', env: 'SELFIMPULSE_STUDIO_DRAMA', verified: false },
-  logos: { label: 'Logos', greek: 'λόγος', role: 'word processor', upstream: 'WordCraft', repo: 'wordcraft', bin: 'wordcraft-cli', env: 'SELFIMPULSE_STUDIO_LOGOS', verified: true },
-  skene: { label: 'Skene', greek: 'σκηνή', role: 'presentations', upstream: 'DeckCraft', repo: 'deckcraft', bin: 'deckcraft-cli', env: 'SELFIMPULSE_STUDIO_SKENE', verified: true },
-  pinax: { label: 'Pinax', greek: 'πίναξ', role: 'spreadsheet', upstream: 'GridCraft', repo: 'gridcraft', bin: 'gridcraft-cli', env: 'SELFIMPULSE_STUDIO_PINAX', verified: true },
-  techton: { label: 'Techton', greek: 'τέκτων', role: 'CAD and drafting', upstream: 'CADCraft', repo: 'cadcraft', bin: 'cadcraft-cli', env: 'SELFIMPULSE_STUDIO_TECHTON', verified: true },
-  echo: { label: 'Echo', greek: 'ἠχώ', role: 'audio production', upstream: 'SoundCraft', repo: 'soundcraft', bin: 'soundcraft-cli', env: 'SELFIMPULSE_STUDIO_ECHO', verified: false },
-  eidos: { label: 'Eidos', greek: 'εἶδος', role: 'interface design', upstream: 'FigCraft', repo: 'figcraft', bin: 'figcraft-cli', env: 'SELFIMPULSE_STUDIO_EIDOS', verified: false }
+  theatron: { label: 'Theatron', greek: 'θέατρον', role: 'scene staging and blocking', upstream: 'ArtCraft', repo: 'artcraft', bin: 'artcraft-cli', env: 'SELFIMPULSE_STUDIO_THEATRON' },
+  eikon: { label: 'Eikon', greek: 'εἰκών', role: 'raster image editor', upstream: 'PhotoCraft', repo: 'photocraft', bin: 'photocraft-cli', env: 'SELFIMPULSE_STUDIO_EIKON' },
+  phos: { label: 'Phos', greek: 'φῶς', role: 'photo workflow', upstream: 'LightCraft', repo: 'lightcraft', bin: 'lightcraft-cli', env: 'SELFIMPULSE_STUDIO_PHOS' },
+  kinema: { label: 'Kinema', greek: 'κίνημα', role: 'video editor', upstream: 'FilmCraft', repo: 'filmcraft', bin: 'filmcraft-cli', env: 'SELFIMPULSE_STUDIO_KINEMA' },
+  schema: { label: 'Schema', greek: 'σχῆμα', role: 'page layout', upstream: 'DesignCraft', repo: 'designcraft', bin: 'designcraft-cli', env: 'SELFIMPULSE_STUDIO_SCHEMA' },
+  gramme: { label: 'Gramme', greek: 'γραμμή', role: 'vector illustration', upstream: 'VectorCraft', repo: 'vectorcraft', bin: 'vectorcraft-cli', env: 'SELFIMPULSE_STUDIO_GRAMME' },
+  chartes: { label: 'Chartes', greek: 'χάρτης', role: 'document and forms', upstream: 'PdfCraft', repo: 'pdfcraft', bin: 'pdfcraft-cli', env: 'SELFIMPULSE_STUDIO_CHARTES' },
+  drama: { label: 'Drama', greek: 'δρᾶμα', role: 'motion and effects', upstream: 'EffectCraft', repo: 'effectcraft', bin: 'effectcraft-cli', env: 'SELFIMPULSE_STUDIO_DRAMA' },
+  logos: { label: 'Logos', greek: 'λόγος', role: 'word processor', upstream: 'WordCraft', repo: 'wordcraft', bin: 'wordcraft-cli', env: 'SELFIMPULSE_STUDIO_LOGOS' },
+  skene: { label: 'Skene', greek: 'σκηνή', role: 'presentations', upstream: 'DeckCraft', repo: 'deckcraft', bin: 'deckcraft-cli', env: 'SELFIMPULSE_STUDIO_SKENE' },
+  pinax: { label: 'Pinax', greek: 'πίναξ', role: 'spreadsheet', upstream: 'GridCraft', repo: 'gridcraft', bin: 'gridcraft-cli', env: 'SELFIMPULSE_STUDIO_PINAX' },
+  techton: { label: 'Techton', greek: 'τέκτων', role: 'CAD and drafting', upstream: 'CADCraft', repo: 'cadcraft', bin: 'cadcraft-cli', env: 'SELFIMPULSE_STUDIO_TECHTON' },
+  echo: { label: 'Echo', greek: 'ἠχώ', role: 'audio production', upstream: 'SoundCraft', repo: 'soundcraft', bin: 'soundcraft-cli', env: 'SELFIMPULSE_STUDIO_ECHO' },
+  eidos: { label: 'Eidos', greek: 'εἶδος', role: 'interface design', upstream: 'FigCraft', repo: 'figcraft', bin: 'figcraft-cli', env: 'SELFIMPULSE_STUDIO_EIDOS' }
 }
 
 export type StudioAppId = keyof typeof STUDIO_APPS
@@ -89,6 +84,7 @@ export type CliShape = 'inline' | 'separate' | 'keyvalue' | 'export-only'
  * the control channel, so we say so rather than invent arguments.
  */
 export const CLI_SHAPE: Record<string, CliShape> = {
+  theatron: 'inline',
   pinax: 'inline',
   logos: 'inline',
   skene: 'inline',
@@ -96,8 +92,6 @@ export const CLI_SHAPE: Record<string, CliShape> = {
   eikon: 'separate',
   chartes: 'keyvalue',
   gramme: 'export-only',
-  techne: 'inline',
-  agora: 'inline',
   phos: 'inline',
   kinema: 'inline',
   schema: 'inline',
@@ -113,6 +107,7 @@ const AUTOMATION_ROOTS = new Set(['logos', 'skene'])
 const ROOT_CONFINED = new Set(['chartes'])
 
 const DOC_FLAG: Record<string, '--save' | '--out' | '--export'> = {
+  theatron: '--out',
   pinax: '--out',
   logos: '--save',
   skene: '--save',
@@ -131,10 +126,24 @@ function cliEnv(): NodeJS.ProcessEnv {
   return env
 }
 
-export function resolveStudioBinary(app: StudioApp): string {
+export function resolveStudioBinary(app: StudioApp, studioDir?: string): string {
   const override = process.env[app.env]
   if (override && override.trim()) return override.trim()
+  if (studioDir) {
+    const candidate = join(studioDir, process.platform === 'win32' ? `${app.bin}.exe` : app.bin)
+    if (existsSync(candidate)) return candidate
+  }
   return app.bin
+}
+
+/**
+ * Command ids and parameter keys are placed into argv verbatim, so a value
+ * that starts with `-` would read as a flag and whitespace or control bytes
+ * could split one logical token into several. Allow a conservative id
+ * grammar instead of trying to neutralize hostile values.
+ */
+export function safeCommandToken(token: string): boolean {
+  return token.length > 0 && token.length <= 128 && /^[A-Za-z0-9][A-Za-z0-9._:@-]*$/.test(token)
 }
 
 /** The argv that lists an app's command registry. */
@@ -183,6 +192,17 @@ export function buildRunArgs(
   const app = STUDIO_APPS[appId]
   if (!app) return `Unknown studio app: ${appId}.`
   const shape = CLI_SHAPE[appId]
+
+  for (const command of request.commands) {
+    if (!safeCommandToken(command.id)) {
+      return `"${command.id}" is not a valid command id. Use the ids studio_commands lists.`
+    }
+    for (const key of Object.keys(command.params ?? {})) {
+      if (!safeCommandToken(key)) {
+        return `"${key}" is not a valid parameter name.`
+      }
+    }
+  }
 
   if (shape === 'export-only') {
     return (
@@ -238,17 +258,28 @@ function runCli(
 }
 
 function missingBinary(app: StudioApp): string {
-  const base = `${app.label} (${app.upstream}) needs ${app.bin} on PATH, or set ${app.env} to its full path.`
-  if (!app.verified) {
-    return `${base} This app's command-line tool has not been confirmed to ship yet — check github.com/storytold/${app.repo} before relying on it.`
-  }
-  return `${base} Install it from github.com/storytold/${app.repo}.`
+  const name = process.platform === 'win32' ? `${app.bin}.exe` : app.bin
+  return (
+    `${app.label} (${app.upstream}) needs its command-line binary. Put ${name} in the ` +
+    `Studio tools folder, put it on PATH, or set ${app.env} to its full path. ` +
+    `The portable build at github.com/storytold/${app.repo} ships it.`
+  )
 }
 
 function describeApps(): string {
   return Object.entries(STUDIO_APPS)
-    .map(([id, app]) => `${id} — ${app.label} (${app.greek}), ${app.role}${app.verified ? '' : ', unverified'}`)
+    .map(([id, app]) => `${id} — ${app.label} (${app.greek}), ${app.role}`)
     .join('\n')
+}
+
+/** The Studio tools folder under the profile; undefined keeps tests electron-free. */
+async function studioDir(): Promise<string | undefined> {
+  try {
+    const { getPaths } = await import('../../paths')
+    return getPaths().studio
+  } catch {
+    return undefined
+  }
 }
 
 export const studioCommandsTool = defineTool({
@@ -274,7 +305,7 @@ export const studioCommandsTool = defineTool({
     const app = STUDIO_APPS[args.app]
     if (!app) return { content: `Unknown engine "${args.app}".\n\n${describeApps()}`, isError: true }
     try {
-      const result = await runCli(resolveStudioBinary(app), buildListArgs(args.app, args.search), {
+      const result = await runCli(resolveStudioBinary(app, await studioDir()), buildListArgs(args.app, args.search), {
         timeoutMs: 30_000
       })
       if (!result.ok) {
@@ -293,7 +324,7 @@ export const studioRunTool = defineTool({
   name: 'studio_run',
   title: 'Run studio commands',
   description:
-    'Run commands headlessly in a Studio desktop engine (spreadsheet, word processor, presentations, CAD, PDF, image, vector) and save the result. Give an input document, an output path, or both, inside the task workspace. Use studio_commands first to discover command ids.',
+    'Run commands headlessly in a Studio desktop engine (CAD, PDF, image, vector, specialized media). For standard Word docs, Excel spreadsheets, or slide decks, use create_document, create_spreadsheet, or create_presentation directly. Use studio_commands first to check engine availability and command ids.',
   schema: z.object({
     app: z.string().describe('Engine id, for example "pinax" for spreadsheets.'),
     input: z.string().optional().describe('Existing document to open, relative to the workspace.'),
@@ -329,7 +360,7 @@ export const studioRunTool = defineTool({
       })
       if (typeof argv === 'string') return { content: argv, isError: true }
 
-      const result = await runCli(resolveStudioBinary(app), argv, {
+      const result = await runCli(resolveStudioBinary(app, await studioDir()), argv, {
         cwd: ctx.workspace,
         timeoutMs: 180_000
       })

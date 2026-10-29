@@ -225,6 +225,7 @@ function previewDocument(title: string, body: string, accent = '#b4512b'): strin
   table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.92rem; }
   th, td { border: 1px solid #ddd4c6; padding: 0.5rem 0.65rem; text-align: left; vertical-align: top; }
   th { background: #efe9de; }
+  img { max-width: 100%; height: auto; }
   .sheet-title { font-family: Georgia, serif; font-size: 1.5rem; margin: 1.6rem 0 0.6rem; }
   .slide { background: #f7f3ea; border: 1px solid #e2d9ca; border-radius: 14px; padding: 32px 36px; margin: 18px 0; aspect-ratio: 16/9; overflow: hidden; }
   .slide h2 { margin: 0 0 0.8rem; font-family: Georgia, serif; font-size: 1.7rem; }
@@ -493,9 +494,18 @@ export async function generatePdf(workspace: string, spec: DocSpec): Promise<Gen
   const html = previewDocument(
     spec.title || basename(target),
     (spec.title ? `<h1>${escapeHtml(spec.title)}</h1>` : '') + blocksToBody(blocks)
-  ).replace('</style>', ' @page { size: A4; margin: 16mm; } body { padding: 0; } </style>')
+  )
+  await printHtmlToPdf(target, html)
+  return { filePath: target, kind: 'pdf' }
+}
+
+async function printHtmlToPdf(target: string, html: string): Promise<void> {
+  const printable = html.replace(
+    '</style>',
+    ' @page { size: A4; margin: 16mm; } body { padding: 0; } </style>'
+  )
   const source = `${target}.source.html`
-  await fs.writeFile(source, html, 'utf8')
+  await fs.writeFile(source, printable, 'utf8')
   const win = new BrowserWindow({
     show: false,
     webPreferences: { sandbox: true, javascript: false, contextIsolation: true }
@@ -508,6 +518,47 @@ export async function generatePdf(workspace: string, spec: DocSpec): Promise<Gen
     win.destroy()
     await fs.rm(source, { force: true })
   }
+}
+
+export interface ConvertSpec {
+  sourcePath: string
+  filename?: string
+}
+
+/**
+ * Converts a document the user already has instead of retyping it. Word files
+ * go through mammoth's HTML conversion, so headings, lists, and tables survive;
+ * the HTML is printed with the same pipeline as generated PDFs.
+ */
+export async function convertDocumentToPdf(
+  workspace: string,
+  spec: ConvertSpec
+): Promise<GeneratedFile> {
+  const ext = extname(spec.sourcePath).toLowerCase()
+  /* Attachment storage prefixes the real name with an id (`att_<id>-`); a
+   * deliverable should carry the name the user knows, not that prefix. */
+  const stem =
+    (basename(spec.sourcePath, ext) || 'document').replace(/^att_[0-9a-f]{8}-[0-9a-f]{3}-/i, '') ||
+    'document'
+  const target = await artifactTarget(workspace, spec.filename || `${stem}.pdf`, 'document', '.pdf')
+
+  let body: string
+  if (ext === '.docx') {
+    const mammoth = await import('mammoth')
+    const converted = await mammoth.convertToHtml({ path: spec.sourcePath })
+    body = converted.value?.trim() || '<p>(empty document)</p>'
+  } else if (ext === '.md' || ext === '.markdown') {
+    body = blocksToBody(parseMarkdown(await fs.readFile(spec.sourcePath, 'utf8')))
+  } else if (ext === '.txt') {
+    const text = await fs.readFile(spec.sourcePath, 'utf8')
+    body = `<p>${escapeHtml(text).replace(/\r?\n/g, '<br>')}</p>`
+  } else {
+    throw new Error(
+      `Cannot convert ${ext || 'this file'} to PDF. Supported formats: .docx, .md, .txt.`
+    )
+  }
+
+  await printHtmlToPdf(target, previewDocument(stem, body))
   return { filePath: target, kind: 'pdf' }
 }
 
@@ -549,4 +600,59 @@ export function mimeForPath(filePath: string): string | undefined {
     '.ico': 'image/x-icon'
   }
   return map[ext]
+}
+
+export async function extractDocumentContent(filePath: string): Promise<string> {
+  const ext = extname(filePath).toLowerCase()
+  if (ext === '.docx' || ext === '.doc') {
+    const mammoth = await import('mammoth')
+    const result = await mammoth.extractRawText({ path: filePath })
+    return result.value?.trim() || '(empty document)'
+  }
+  if (ext === '.pdf') {
+    const buffer = await fs.readFile(filePath)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfModule = (await import('pdf-parse')) as any
+    const ParserClass = pdfModule.PDFParse ?? pdfModule.default ?? pdfModule
+    const parser = new ParserClass({ data: buffer })
+    try {
+      if (typeof parser.load === 'function') await parser.load()
+      const text = typeof parser.getText === 'function' ? await parser.getText() : await parser(buffer)
+      return (typeof text === 'string' ? text : text?.text)?.trim() || '(empty PDF)'
+    } finally {
+      if (typeof parser.destroy === 'function') await parser.destroy()
+    }
+  }
+  if (ext === '.xlsx' || ext === '.xls') {
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.readFile(filePath)
+    const sections: string[] = []
+    workbook.eachSheet((worksheet) => {
+      const rows: string[] = []
+      rows.push(`### Sheet: ${worksheet.name}`)
+      worksheet.eachRow({ includeEmpty: false }, (row) => {
+        const values = Array.isArray(row.values)
+          ? row.values.slice(1).map((v) => (v === null || v === undefined ? '' : String(v).trim()))
+          : []
+        if (values.length) {
+          rows.push(`| ${values.join(' | ')} |`)
+        }
+      })
+      if (rows.length > 1) {
+        sections.push(rows.join('\n'))
+      }
+    })
+    return sections.length ? sections.join('\n\n') : '(empty workbook)'
+  }
+  if (ext === '.zip') {
+    const JSZip = (await import('jszip')).default
+    const buffer = await fs.readFile(filePath)
+    const zip = await JSZip.loadAsync(buffer)
+    const list: string[] = []
+    zip.forEach((relPath, file) => {
+      list.push(`${file.dir ? '[DIR]' : '[FILE]'} ${relPath}`)
+    })
+    return `Archive: ${basename(filePath)} (${list.length} files)\n\nFiles:\n${list.slice(0, 100).join('\n')}${list.length > 100 ? `\n...and ${list.length - 100} more` : ''}`
+  }
+  return await fs.readFile(filePath, 'utf8')
 }

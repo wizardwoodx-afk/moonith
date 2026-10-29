@@ -7,13 +7,20 @@ import { streamAnthropic } from './anthropic'
 import { streamOpenAI } from './openai'
 
 export async function streamCompletion(request: CompletionRequest): Promise<CompletionResult> {
-  if (!request.apiKey) throw new Error('No API key configured for this provider.')
+  if (!request.apiKey && request.kind !== 'compatible') {
+    throw new Error('No API key configured for this provider.')
+  }
   if (request.kind === 'anthropic') return streamAnthropic(request)
   return streamOpenAI(request)
 }
 
 function resolveKey(input: ProviderInput): string | undefined {
   return input.apiKey?.trim() || (input.id ? store.getProviderSecret(input.id) : undefined)
+}
+
+/** Local servers (Ollama, LM Studio) speak the OpenAI shape but do not authenticate. */
+function needsKey(input: ProviderInput): boolean {
+  return input.kind !== 'compatible'
 }
 
 function friendlyError(error: unknown): string {
@@ -31,15 +38,15 @@ function friendlyError(error: unknown): string {
   return String(error)
 }
 
-async function listModels(input: ProviderInput, key: string): Promise<string[]> {
+async function listModels(input: ProviderInput, key: string | undefined): Promise<string[]> {
   if (input.kind === 'anthropic') {
-    const client = new Anthropic({ apiKey: key, baseURL: input.baseUrl || undefined })
+    const client = new Anthropic({ apiKey: key || '', baseURL: input.baseUrl || undefined })
     const result = await client.models.list({ limit: 100 })
     return result.data.map((model) => model.id)
   }
 
   if (input.kind === 'openai') {
-    const client = new OpenAI({ apiKey: key, baseURL: input.baseUrl || undefined })
+    const client = new OpenAI({ apiKey: key || '', baseURL: input.baseUrl || undefined })
     const result = await client.models.list()
     return result.data.map((model) => model.id).sort()
   }
@@ -47,7 +54,7 @@ async function listModels(input: ProviderInput, key: string): Promise<string[]> 
   const base = (input.baseUrl || '').replace(/\/+$/, '')
   if (!base) throw new Error('A base URL is required for chat-completion providers.')
   const response = await fetch(`${base}/models`, {
-    headers: { Authorization: `Bearer ${key}` }
+    headers: key ? { Authorization: `Bearer ${key}` } : undefined
   })
   if (!response.ok) throw new Error(`Models request failed (${response.status}).`)
   const json = (await response.json()) as { data?: Array<{ id?: string }> }
@@ -56,7 +63,7 @@ async function listModels(input: ProviderInput, key: string): Promise<string[]> 
 
 export async function verifyProvider(input: ProviderInput): Promise<TestProviderResult> {
   const key = resolveKey(input)
-  if (!key) return { ok: false, message: 'Add an API key first.' }
+  if (!key && needsKey(input)) return { ok: false, message: 'Add an API key first.' }
   if (input.kind === 'compatible' && !input.baseUrl?.trim()) {
     return { ok: false, message: 'Add a base URL for this provider.' }
   }
@@ -76,7 +83,7 @@ export async function verifyProvider(input: ProviderInput): Promise<TestProvider
 
 export async function fetchProviderModels(input: ProviderInput): Promise<string[]> {
   const key = resolveKey(input)
-  if (!key) throw new Error('Add an API key first.')
+  if (!key && needsKey(input)) throw new Error('Add an API key first.')
   return listModels(input, key)
 }
 

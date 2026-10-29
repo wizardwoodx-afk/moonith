@@ -19,6 +19,21 @@ import {
 import { toast } from 'sonner'
 import { cn } from '../../lib/utils'
 
+const MODE_LABEL = { plan: 'Plan', build: 'Build', yolo: 'Full access' } as const
+
+const MODE_SUMMARY = {
+  plan: 'Read only',
+  build: 'Edits allowed, shells ask first',
+  yolo: 'Runs everything without asking'
+} as const
+
+const CR_STATUS = {
+  applied: 'Applied',
+  approved: 'Approved',
+  pending_review: 'Awaiting review',
+  rejected: 'Rejected'
+} as Record<string, string>
+
 export function RookWorkerPanel() {
   const [status, setStatus] = useState<{
     ready: boolean
@@ -65,40 +80,40 @@ export function RookWorkerPanel() {
   const handleSetPermission = async (mode: 'plan' | 'build' | 'yolo') => {
     try {
       await window.knight.rookSetPermission(mode)
-      toast.success(`Permission switched to ${mode.toUpperCase()}`)
+      toast.success(`Access set to ${MODE_LABEL[mode]}`)
       await refreshAll()
-    } catch (err: any) {
-      toast.error(`Failed to set mode: ${err.message}`)
+    } catch {
+      toast.error('Could not change the access level.')
     }
   }
 
   const handleReviewCr = async (id: string, decision: 'approved' | 'rejected') => {
     try {
       await window.knight.rookReviewChangeRequest(id, decision)
-      toast.success(`Change Request ${decision}`)
+      toast.success(decision === 'approved' ? 'Approved' : 'Rejected')
       await refreshAll()
-    } catch (err: any) {
-      toast.error(`Review failed: ${err.message}`)
+    } catch {
+      toast.error('Could not record your answer.')
     }
   }
 
   const handleApplyCr = async (id: string) => {
     try {
       await window.knight.rookApplyChangeRequest(id)
-      toast.success('Change Request applied to workspace!')
+      toast.success('Applied to the workspace.')
       await refreshAll()
-    } catch (err: any) {
-      toast.error(`Apply failed: ${err.message}`)
+    } catch {
+      toast.error('Could not apply this change.')
     }
   }
 
   const handleResolveGate = async (gateId: string, option: string) => {
     try {
       await window.knight.rookResolveGate(gateId, { selectedOption: option, userAnswer: option })
-      toast.success(`Responded: ${option}`)
+      toast.success(`Answer sent: ${option}`)
       await refreshAll()
-    } catch (err: any) {
-      toast.error(`Gate resolution error: ${err.message}`)
+    } catch {
+      toast.error('Could not send your answer.')
     }
   }
 
@@ -119,23 +134,23 @@ export function RookWorkerPanel() {
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/15 text-accent">
               <Cpu size={13} />
             </span>
-            <div>
-              <h3 className="text-[11.5px] font-semibold text-ink">ROOK Autonomous Engine</h3>
-              <p className="text-[10px] text-faint">Vision Grounding + Software ADE + Digital Worker</p>
-            </div>
+            <h3 className="text-[11.5px] font-semibold text-ink">Autonomous worker</h3>
           </div>
-          <span className="inline-flex items-center gap-1 rounded-full bg-positive/10 px-2 py-0.5 text-[9.5px] font-medium text-positive">
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-positive/10 px-2 py-0.5 text-[10px] font-medium text-positive">
             <span className="h-1.5 w-1.5 rounded-full bg-positive animate-pulse" /> Active
           </span>
         </div>
 
         <div className="mt-3">
-          <label className="text-[10px] font-medium text-muted block mb-1.5">Permission Regime</label>
-          <div className="grid grid-cols-3 gap-1 rounded-lg border border-line bg-canvas/60 p-0.5">
+          <span id="worker-access-level" className="text-[10px] font-medium text-muted block mb-1.5">
+            Access level
+          </span>
+          <div className="grid grid-cols-3 gap-1 rounded-lg border border-line bg-canvas/60 p-0.5" role="group" aria-labelledby="worker-access-level">
             <button
-              onClick={() => handleSetPermission('plan')}
+              onClick={() => void handleSetPermission('plan')}
+              aria-pressed={status?.permissionMode === 'plan'}
               className={cn(
-                'flex items-center justify-center gap-1.5 rounded-md py-1 text-[10.5px] font-medium transition-all',
+                'flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md py-1 text-[10.5px] font-medium transition-all',
                 status?.permissionMode === 'plan'
                   ? 'bg-surface text-ink shadow-xs border border-line'
                   : 'text-muted hover:text-ink'
@@ -144,9 +159,10 @@ export function RookWorkerPanel() {
               <BookOpen size={11} /> Plan
             </button>
             <button
-              onClick={() => handleSetPermission('build')}
+              onClick={() => void handleSetPermission('build')}
+              aria-pressed={status?.permissionMode === 'build'}
               className={cn(
-                'flex items-center justify-center gap-1.5 rounded-md py-1 text-[10.5px] font-medium transition-all',
+                'flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md py-1 text-[10.5px] font-medium transition-all',
                 status?.permissionMode === 'build'
                   ? 'bg-amber-500/15 text-amber-400 shadow-xs border border-amber-500/30'
                   : 'text-muted hover:text-ink'
@@ -155,22 +171,21 @@ export function RookWorkerPanel() {
               <Wrench size={11} /> Build
             </button>
             <button
-              onClick={() => handleSetPermission('yolo')}
+              onClick={() => void handleSetPermission('yolo')}
+              aria-pressed={status?.permissionMode === 'yolo'}
               className={cn(
-                'flex items-center justify-center gap-1.5 rounded-md py-1 text-[10.5px] font-medium transition-all',
+                'flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md py-1 text-[10.5px] font-medium transition-all',
                 status?.permissionMode === 'yolo'
                   ? 'bg-rose-500/15 text-rose-400 shadow-xs border border-rose-500/30'
                   : 'text-muted hover:text-ink'
               )}
             >
-              <Flame size={11} /> YOLO
+              <Flame size={11} /> Full access
             </button>
           </div>
-          <p className="mt-1.5 text-[9.5px] text-faint">
-            {status?.permissionMode === 'plan' && 'Read-only mode. Analyses & formulates execution plan without modifying files.'}
-            {status?.permissionMode === 'build' && 'Safe interactive mode. Non-destructive edits permitted; raw shells require sign-off.'}
-            {status?.permissionMode === 'yolo' && 'Full autonomous execution. Unrestricted patching, building, and delivery.'}
-          </p>
+          {status ? (
+            <p className="mt-1.5 text-[10px] text-faint">{MODE_SUMMARY[status.permissionMode]}</p>
+          ) : null}
         </div>
       </div>
 

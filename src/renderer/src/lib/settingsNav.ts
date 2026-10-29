@@ -217,7 +217,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   },
   {
     id: 'rook',
-    label: 'ROOK Worker',
+    label: 'Autonomous worker',
     group: 'Agents',
     summary: 'Autonomous digital worker, GitOps Change Requests, and 360K+ skills.',
     keywords: ['rook', 'worker', 'yolo', 'build', 'plan', 'skills', 'change requests', 'deliverables', 'gitops'],

@@ -26,7 +26,7 @@ import type {
   EnterpriseDecision,
   EnterpriseRevisionInfo
 } from './enterpriseControl'
-import type { RsiralsSnapshot } from './rsirals'
+import type { RsiralsSnapshot, RsiralsOctaStatus } from './rsirals'
 import type {
   LibraryCollection,
   LibraryPage,
@@ -55,7 +55,7 @@ export type {
   EnterpriseDecision,
   EnterpriseRevisionInfo
 } from './enterpriseControl'
-export type { RsiralsSnapshot } from './rsirals'
+export type { RsiralsSnapshot, RsiralsOctaStatus } from './rsirals'
 export type {
   LibraryCollection,
   LibraryPage,
@@ -373,6 +373,43 @@ export interface SkillMarketResult {
   registry: SkillSource
 }
 
+/* ── learned-skill proposals awaiting a human decision ───────────────────────
+ * The renderer sees these views, never the service's own rows: the stored
+ * procedure text and the distiller note are kept in the main process, so a
+ * decision list cannot carry a tool name or a document body into the UI. The
+ * decision input is a proposal id — the store key is never renderer-supplied. */
+
+export interface KnowledgeProposalView {
+  id: string
+  title: string
+  summary: string
+  /** Where the document content actually went: never left the machine, or was
+   *  sent to the configured model provider. */
+  dataHandling: 'local' | 'provider'
+  /** Present only when dataHandling is 'provider'. */
+  endpointClass: 'cloud-default' | 'local-configured' | 'unknown' | null
+  sourceName: string | null
+  sourceSha256: string
+  byteLength: number
+  distilledAt: string
+  /** Whether the structure came from the mechanical extractor alone. */
+  distiller: 'mechanical' | 'llm'
+  status: 'proposed' | 'approved' | 'discarded'
+  decidedBy: string | null
+  decidedAt: string | null
+}
+
+export interface KnowledgeDecisionInput {
+  id: string
+  decision: 'approve' | 'discard'
+}
+
+export interface KnowledgeDecideResult {
+  ok: boolean
+  error: string | null
+  proposals: KnowledgeProposalView[]
+}
+
 export type MemoryScope = 'global' | 'workspace'
 
 export interface MemoryNote {
@@ -385,6 +422,8 @@ export interface MemoryNote {
   source: 'user' | 'captain' | 'import'
   createdAt: string
   updatedAt: string
+  /** Optional expiry instant; omitted notes remain until explicitly removed. */
+  expiresAt?: string
 }
 
 export interface MemoryInput {
@@ -392,6 +431,8 @@ export interface MemoryInput {
   scope?: MemoryScope
   scopeRef?: string
   tags?: string[]
+  /** Optional retention in whole days, from 1 through 3650. */
+  retentionDays?: number
 }
 
 export type SubAgentStatus = 'running' | 'done' | 'error' | 'stopped'
@@ -1347,6 +1388,10 @@ export interface KnightApi {
   createSkill: (draft: SkillDraft) => Promise<SkillSummary[]>
   removeSkill: (id: string) => Promise<SkillSummary[]>
 
+  /** Proposals distilled from documents; a human decision is the only path to a skill. */
+  knowledgeList: () => Promise<KnowledgeProposalView[]>
+  knowledgeDecide: (input: KnowledgeDecisionInput) => Promise<KnowledgeDecideResult>
+
   marketspaceList: (query?: string) => Promise<MarketspaceEntry[]>
   marketspaceRead: (id: string) => Promise<MarketspaceDetail | null>
   marketspaceInstall: (id: string) => Promise<MarketspaceDetail>
@@ -1409,6 +1454,13 @@ export interface KnightApi {
   ) => Promise<DlpInspection>
   enterpriseControl: EnterpriseControlApi
   rsiralsSnapshot: () => Promise<RsiralsSnapshot>
+  rsiralsOctaStatus: () => Promise<RsiralsOctaStatus>
+  rsiralsFastLoop: (action: unknown, context?: unknown) => Promise<unknown>
+  rsiralsDiagnose: (trace: unknown, failure: unknown) => Promise<unknown>
+  rsiralsInduceSkill: (req: unknown) => Promise<unknown>
+  rsiralsPublishClaim: (params: unknown) => Promise<unknown>
+  rsiralsAcquireCharter: (params: unknown) => Promise<unknown>
+  rsiralsMetaEvolve: (candidate: unknown, evidence: unknown) => Promise<unknown>
 
   /* ── Nomos: the governance gate ─────────────────────────────────────────── */
   governanceSummary: () => Promise<GovernanceSummaryView>

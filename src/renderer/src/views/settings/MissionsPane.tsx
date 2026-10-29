@@ -220,7 +220,7 @@ export function MissionsPane() {
   return (
     <SettingsSection
       title="Durable missions"
-      description="Work that outlives the process that started it — parked at an approval or a timer, and resumed exactly where it stopped, without repeating what already ran."
+      
     >
       <div className="space-y-5">
         <PaneNote>

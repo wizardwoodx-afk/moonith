@@ -16,9 +16,11 @@ import {
   Users
 } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { toast } from 'sonner'
 import { useApp } from '../store'
 import { startNewTask } from '../lib/navigation'
 import { Popover } from './ui'
+import { ActiveWorkIsland } from '../motion/ActiveWorkIsland'
 
 function MenuAction({
   icon: Icon,
@@ -43,13 +45,23 @@ function MenuAction({
     >
       <span className="flex h-4 w-4 items-center justify-center text-faint">{Icon}</span>
       <span className="flex-1 text-[12.5px]">{label}</span>
-      {hint ? <span className="ml-3 text-[9.5px] text-faint">{hint}</span> : null}
+      {hint ? <span className="ml-3 text-[10px] text-faint">{hint}</span> : null}
     </button>
   )
 }
 
 function MenuDivider() {
   return <div className="my-1 h-px bg-line" />
+}
+
+type EditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste'
+
+const EDIT_FALLBACK: Record<EditCommand, string> = {
+  undo: 'Nothing was undone — focus the field and press Ctrl+Z.',
+  redo: 'Nothing was redone — focus the field and press Ctrl+Shift+Z.',
+  cut: 'Nothing was cut — select the text and press Ctrl+X.',
+  copy: 'Nothing was copied — select the text and copy it yourself.',
+  paste: 'Nothing was pasted — focus the field and press Ctrl+V.'
 }
 
 export function TitleBar({
@@ -74,12 +86,22 @@ export function TitleBar({
     startNewTask()
   }
 
-  const edit = (command: 'undo' | 'redo' | 'cut' | 'copy' | 'paste'): void => {
+  /*
+   * The native menu is hidden (autoHideMenuBar), so editing commands have to be
+   * replayed here. execCommand is the only synchronous route to the focused
+   * field's own selection; the async clipboard API cannot reach it, and a menu
+   * click is not a user gesture by the time a promise resolves. A false return
+   * means the field did not act, which must not be swallowed — a menu item that
+   * quietly does nothing is a broken control.
+   */
+  const edit = (command: EditCommand): void => {
+    let applied = false
     try {
-      document.execCommand(command)
+      applied = document.execCommand(command)
     } catch {
-      // The focused element may not support the command.
+      applied = false
     }
+    if (!applied) toast.error(EDIT_FALLBACK[command])
   }
 
   const menuTrigger = (label: string) => (props: Record<string, unknown>) => (
@@ -257,6 +279,7 @@ export function TitleBar({
         </Popover>
       </nav>
 
+      <ActiveWorkIsland />
       <div className="flex-1" />
     </header>
   )

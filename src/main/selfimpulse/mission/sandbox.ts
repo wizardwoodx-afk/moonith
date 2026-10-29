@@ -203,7 +203,7 @@ export async function verifyEnforcement(profile: SandboxProfile, timeoutMs = 800
   for (const canary of profile.canaries) {
     const ran = await new Promise<{ failed: boolean; absent: boolean; detail: string }>((resolve) => {
       const timer = setTimeout(() => resolve({ failed: true, absent: false, detail: "timeout (treated as blocked)" }), timeoutMs);
-      execFile(canary.argv[0], canary.argv.slice(1), { timeout: timeoutMs }, (err) => {
+      execFile(canary.argv[0], canary.argv.slice(1), { timeout: timeoutMs, windowsHide: true }, (err) => {
         clearTimeout(timer);
         const code = (err as NodeJS.ErrnoException | undefined)?.code;
         const absent = Boolean(err) && typeof code === "string" && WRAPPER_UNAVAILABLE.has(code);

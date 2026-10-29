@@ -22,6 +22,7 @@ interface TableStore {
   turnKey: (proposalId: string) => Promise<void>
   withdraw: (proposalId: string) => Promise<void>
   publish: (proposalId: string) => Promise<void>
+  markDone: (proposalId: string) => Promise<void>
   leave: () => Promise<void>
   clearError: () => void
 }
@@ -80,6 +81,10 @@ export const useTableStore = create<TableStore>((set, get) => {
 
     publish: async (proposalId) => {
       await run(() => window.knight.tablePublish(proposalId))
+    },
+
+    markDone: async (proposalId) => {
+      await run(() => window.knight.tableMarkDone(proposalId))
     },
 
     leave: async () => {

@@ -7,6 +7,7 @@ import type {
 } from '../types'
 import type { ChatMessage, TokenUsage } from '@shared/types'
 import { safeJsonParse } from '../../util'
+import { formatOpenAIUserContent } from '../multimodal'
 
 type OpenAIMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam
 
@@ -15,7 +16,10 @@ function toOpenAIMessages(system: string, messages: ChatMessage[]): OpenAIMessag
   for (const message of messages) {
     if (message.role === 'system') continue
     if (message.role === 'user') {
-      if (message.content.trim()) out.push({ role: 'user', content: message.content })
+      const formatted = formatOpenAIUserContent(message)
+      if (Array.isArray(formatted) ? formatted.length : formatted.trim()) {
+        out.push({ role: 'user', content: formatted })
+      }
       continue
     }
     if (message.role === 'assistant') {
@@ -62,7 +66,8 @@ function toOpenAITools(tools: ProviderToolSpec[]): OpenAI.Chat.Completions.ChatC
 
 export async function streamOpenAI(request: CompletionRequest): Promise<CompletionResult> {
   const client = new OpenAI({
-    apiKey: request.apiKey,
+    // The SDK rejects an empty string; local servers ignore the value entirely.
+    apiKey: request.apiKey || 'not-needed',
     baseURL: request.baseUrl || undefined
   })
 

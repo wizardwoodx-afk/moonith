@@ -20,7 +20,12 @@ import { ALL_CAPABILITIES, type Capability } from './types'
 
 export * from './types'
 export { GovernanceGate } from './gate'
-export { GovernanceJournal } from './journal'
+export {
+  GovernanceJournal,
+  JOURNAL_ZERO_HASH,
+  type JournalLine,
+  type JournalVerifyResult
+} from './journal'
 export { IdentityRegistry, narrowScopes, capabilitiesForTools } from './identity'
 export { KillSwitch, memoryKillSwitchStore, type KillSwitchState, type KillSwitchStore } from './kill'
 export { TrustEngine, TRUST_FLOOR, bandFor, type TrustBand, type TrustView } from './trust'

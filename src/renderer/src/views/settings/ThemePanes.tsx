@@ -1,6 +1,6 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, ChevronRight, Moon, SwatchBook, UserRound, UsersRound } from 'lucide-react'
+import { Check, ChevronRight, Moon, SwatchBook } from 'lucide-react'
 import { useApp } from '../../store'
 import {
   ATELIER_THEME_IDS,
@@ -11,31 +11,16 @@ import {
   type ThemeCollection
 } from '../../lib/themes'
 import { cn } from '../../lib/utils'
+import { MOTION_PREFERENCES, useMotion } from '../../lib/motion'
+import { NewCollectionBadge } from '../../motion/MetalAction'
+import { CountTabs, SettingList, SettingRow } from './settingParts'
+import { SettingsSection } from './SettingsSection'
 
 function tokenStyle(theme: Theme): CSSProperties {
   return theme.tokens as unknown as CSSProperties
 }
 
 const MOON_THEME = THEMES.find((theme) => theme.exclusive) ?? THEMES[THEMES.length - 1]
-
-/**
- * Self-contained stand-in for the animated collection badge.
- *
- * The donor's Appearance pane renders this through `NewCollectionBadge` in
- * `src/renderer/src/motion/MetalAction.tsx`. That motion module is owned by the
- * motion task (Task 13) and does not exist in this lane yet, so the badge is
- * inlined here using theme tokens only — no `.atelier-badge` stylesheet rule
- * and no motion import — so Colors works before and after the motion layer
- * lands. When `motion/MetalAction` ships, swap this for the animated
- * `NewCollectionBadge`; the call signature (`{children}`) is identical.
- */
-function CollectionBadge({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-flex items-center rounded-full border border-line bg-surface px-2.5 py-1 text-[9px] font-semibold tracking-[0.06em] text-muted uppercase">
-      {children}
-    </span>
-  )
-}
 
 function swatches(theme: Theme, keys: string[]): string[] {
   return keys.map((key) => theme.tokens[key]).filter(Boolean)
@@ -97,8 +82,8 @@ function ThemeCard({ theme }: { theme: Theme }) {
     >
       <Miniature theme={theme} />
       <div className="flex items-center gap-2 border-t border-line bg-canvas px-3 py-2.5">
-        <span className="truncate text-[12px] font-medium text-ink">{theme.label}</span>
-        <span className="text-[9.5px] text-faint">{theme.kind === 'dark' ? 'Dark' : 'Light'}</span>
+        <span className="min-w-0 truncate text-[12px] font-medium text-ink" title={theme.label}>{theme.label}</span>
+        <span className="text-[10px] text-faint">{theme.kind === 'dark' ? 'Dark' : 'Light'}</span>
         <span className="ml-auto flex h-[18px] w-[18px] items-center justify-center">
           {active ? (
             <span className="flex h-[16px] w-[16px] items-center justify-center rounded-full bg-accent text-on-ink">
@@ -110,7 +95,7 @@ function ThemeCard({ theme }: { theme: Theme }) {
         </span>
       </div>
       {theme.origin === 'atelier' ? (
-        <span className="absolute top-2 right-2 rounded-full border border-line bg-canvas/85 px-1.5 py-0.5 text-[7.5px] font-semibold tracking-[0.08em] text-muted uppercase backdrop-blur-sm">
+        <span className="absolute top-2 right-2 rounded-full border border-line bg-canvas/85 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-muted uppercase backdrop-blur-sm">
           Atelier
         </span>
       ) : null}
@@ -152,7 +137,7 @@ function PreviewRow({
         <span className="flex items-center gap-2 text-[12.5px] font-medium text-ink">
           {title}
           {exclusive ? (
-            <span className="rounded-full border border-line px-1.5 py-px text-[8.5px] font-medium tracking-[0.04em] text-faint uppercase">
+            <span className="rounded-full border border-line px-1.5 py-px text-[10px] font-medium tracking-[0.04em] text-faint uppercase">
               Exclusive
             </span>
           ) : null}
@@ -177,28 +162,57 @@ function PreviewRow({
 }
 
 export function AppearancePane() {
-  const openSettings = useApp((state) => state.openSettings)
-  const themeId = useTheme((state) => state.themeId)
-  const current = THEMES.find((theme) => theme.id === themeId) ?? THEMES[0]
+  return (
+    <div className="space-y-10">
+      <ColorsPane />
+      <div className="pt-6 border-t border-line/60">
+        <MotionPane />
+      </div>
+      <div className="pt-6 border-t border-line/60">
+        <MoonPane />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * One row per choice, with the mode spelled out. The person sets this
+ * themselves: a machine that reports "reduce motion" should not quietly freeze
+ * the interface, and the working loaders keep moving either way.
+ */
+export function MotionPane() {
+  const preference = useMotion((state) => state.preference)
+  const setPreference = useMotion((state) => state.setPreference)
 
   return (
-    <div className="card divide-y divide-line overflow-hidden">
-      <PreviewRow
-        icon={SwatchBook}
-        title="Colors"
-        detail={current.label}
-        colors={swatches(current, ['--c-canvas', '--c-surface', '--c-ink', '--c-accent'])}
-        onClick={() => openSettings('colors')}
-      />
-      <PreviewRow
-        icon={Moon}
-        title="Moon"
-        detail="The exclusive night"
-        colors={swatches(MOON_THEME, ['--c-canvas', '--c-ink', '--c-accent'])}
-        onClick={() => openSettings('moon')}
-        exclusive
-      />
-    </div>
+    <SettingsSection title="Motion">
+      <SettingList>
+        {MOTION_PREFERENCES.map((option) => (
+          <SettingRow
+            key={option.value}
+            title={option.label}
+            description={option.detail}
+            tone={preference === option.value ? 'accent' : 'default'}
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={preference === option.value}
+              aria-label={`Motion: ${option.label}`}
+              onClick={() => setPreference(option.value)}
+              className={cn(
+                'flex h-6 w-6 items-center justify-center rounded-full border transition-colors',
+                preference === option.value
+                  ? 'border-accent/40 bg-accent-soft/70 text-accent-ink'
+                  : 'border-line bg-surface-2/60 text-transparent hover:border-line-strong'
+              )}
+            >
+              <Check size={12} strokeWidth={2.6} />
+            </button>
+          </SettingRow>
+        ))}
+      </SettingList>
+    </SettingsSection>
   )
 }
 
@@ -222,45 +236,20 @@ export function ColorsPane() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3 px-1">
         <div>
-          <h2 className="text-[15px] font-semibold tracking-[-0.015em] text-ink">Color collections</h2>
-          <p className="mt-1 max-w-[480px] text-[11px] leading-relaxed text-faint">
-            House palettes and the supplied Atelier colors, mixed into two focused sets.
-          </p>
+          <h2 className="text-[12px] font-medium text-muted">Color collections</h2>
         </div>
-        <CollectionBadge>{ATELIER_THEME_IDS.length} new</CollectionBadge>
+        <NewCollectionBadge>{`${ATELIER_THEME_IDS.length} new`}</NewCollectionBadge>
       </div>
 
-      <div className="inline-flex rounded-full border border-line bg-surface-2/60 p-1" role="tablist" aria-label="Color collection">
-        {(Object.keys(COLLECTION_COPY) as ThemeCollection[]).map((value) => {
-          const copy = COLLECTION_COPY[value]
-          const Icon = value === 'solo' ? UserRound : UsersRound
-          const active = collection === value
-          const count = THEMES.filter((theme) => themeCollection(theme.id) === value).length
-          return (
-            <button
-              key={value}
-              role="tab"
-              aria-selected={active}
-              onClick={() => setCollection(value)}
-              className={cn(
-                'relative flex h-8 items-center gap-2 rounded-full px-3.5 text-[11.5px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-                active ? 'text-ink' : 'text-faint hover:text-muted'
-              )}
-            >
-              {active ? (
-                <motion.span
-                  layoutId="collection-active"
-                  className="absolute inset-0 rounded-full border border-line bg-surface shadow-sm"
-                  transition={{ type: 'spring', stiffness: 410, damping: 32 }}
-                />
-              ) : null}
-              <Icon size={12} className="relative z-10" />
-              <span className="relative z-10">{copy.title}</span>
-              <span className="relative z-10 font-mono text-[8.5px] text-faint">{count}</span>
-            </button>
-          )
-        })}
-      </div>
+      <CountTabs
+        value={collection}
+        onChange={setCollection}
+        tabs={(Object.keys(COLLECTION_COPY) as ThemeCollection[]).map((value) => ({
+          value,
+          label: COLLECTION_COPY[value].title,
+          count: THEMES.filter((theme) => themeCollection(theme.id) === value).length
+        }))}
+      />
 
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
@@ -272,19 +261,19 @@ export function ColorsPane() {
           className="space-y-5"
         >
           <div className="px-1">
-            <h3 className="text-[12.5px] font-medium text-ink">{COLLECTION_COPY[collection].title}</h3>
-            <p className="mt-1 text-[11px] leading-relaxed text-faint">{COLLECTION_COPY[collection].detail}</p>
+            <h3 className="text-[12px] font-medium text-muted">{COLLECTION_COPY[collection].title}</h3>
+            <p className="mt-1 text-[12px] leading-[1.6] text-faint">{COLLECTION_COPY[collection].detail}</p>
           </div>
           {(['light', 'dark'] as const).map((kind) => {
             const group = themes.filter((theme) => theme.kind === kind)
             return (
               <section key={kind} className="space-y-2.5" aria-labelledby={`${collection}-${kind}-heading`}>
                 <div className="flex items-center gap-2 px-1">
-                  <h4 id={`${collection}-${kind}-heading`} className="text-[9.5px] font-semibold tracking-[0.13em] text-faint uppercase">
+                  <h4 id={`${collection}-${kind}-heading`} className="text-[10px] font-semibold tracking-[0.13em] text-faint uppercase">
                     {kind === 'light' ? 'Day' : 'Night'}
                   </h4>
                   <span className="h-px flex-1 bg-line" />
-                  <span className="font-mono text-[8.5px] text-faint">{group.length}</span>
+                  <span className="font-mono text-[10px] text-faint">{group.length}</span>
                 </div>
                 <motion.div layout className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {group.map((theme) => <ThemeCard key={theme.id} theme={theme} />)}
@@ -312,9 +301,6 @@ export function MoonPane() {
       <div className="moon-halo pointer-events-none absolute inset-0" />
       <div className="relative px-8 py-8 sm:px-10 sm:py-10">
         <h2 className="serif-display text-[58px] leading-[0.92] text-ink">Moon</h2>
-        <p className="mt-4 max-w-[380px] text-[12px] leading-[1.8] text-muted">
-          Deep black. Moon white. One cool light.
-        </p>
 
         <div className="mt-8 grid grid-cols-3 gap-2.5">
           {[
@@ -328,7 +314,7 @@ export function MoonPane() {
                 style={{ background: swatch.value }}
               />
               <p className="mt-2 text-[10px] font-medium text-ink">{swatch.name}</p>
-              <p className="mt-0.5 font-mono text-[8px] text-faint">{swatch.value}</p>
+              <p className="mt-0.5 font-mono text-[10px] text-faint">{swatch.value}</p>
             </div>
           ))}
         </div>

@@ -10,9 +10,12 @@
  *     refused outright if registration fails, and revoked + forgotten when
  *     the run ends.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import type { Task } from '@shared/types'
 import type { ToolContext } from './tools/types'
+import { governanceService } from '../services/governance'
+import { toolExecutionGateway } from './gateway/gateway'
 
 const h = vi.hoisted(() => {
   const gate = {
@@ -22,7 +25,22 @@ const h = vi.hoisted(() => {
   }
   return {
     gate,
-    store: { getTask: vi.fn(), saveTask: vi.fn(async () => undefined) },
+    store: {
+      getTask: vi.fn(),
+      saveTask: vi.fn(async () => undefined),
+      getPublicSettings: vi.fn(() => ({
+        governance: {
+          defaultRole: 'executor',
+          custom: {
+            capabilities: ['read', 'write', 'execute', 'network', 'delegate'],
+            maxRisk: 'high',
+            toolAllowlist: [],
+            toolDenylist: []
+          },
+          dlp: { mode: 'off', categories: [] }
+        }
+      }))
+    },
     approvals: {
       request: vi.fn(),
       isAlwaysAllowed: vi.fn(() => false),
@@ -32,9 +50,10 @@ const h = vi.hoisted(() => {
     registerCrewSeat: vi.fn(),
     runEngineTurn: vi.fn(),
     receipts: {
-      recordIntent: vi.fn(async () => undefined),
+      recordIntent: vi.fn(async (_intent: { args: Record<string, unknown> }) => undefined),
       recordResult: vi.fn(async () => undefined)
     },
+    requiresReceipt: vi.fn(() => false),
     subAgents: {
       begin: vi.fn(),
       saveRun: vi.fn(async () => undefined),
@@ -50,11 +69,23 @@ vi.mock('../nomos', () => ({ LOCAL_PRINCIPAL_ID: 'local-user', nomosGate: () => 
 vi.mock('../approvals', () => ({ approvals: h.approvals }))
 vi.mock('../sphragis', () => ({
   receiptService: () => h.receipts,
-  requiresReceipt: () => false,
+  requiresReceipt: h.requiresReceipt,
   digestOfValue: () => 'digest'
 }))
 vi.mock('../emitter', () => ({ sendTaskEvent: vi.fn(), toast: vi.fn() }))
 vi.mock('../paths', () => ({ ensureTaskWorkspace: () => 'C:/ws' }))
+vi.mock('../audit/runtime', () => ({
+  runtimeAudit: { record: vi.fn(async () => true) }
+}))
+vi.mock('../enterpriseControl/runtime', () => ({
+  authorizeNativeTaskTool: vi.fn(async () => ({
+    allowed: true,
+    principalId: 'local-owner',
+    action: 'tool.invoke',
+    resource: { kind: 'tool', namespaceId: 'default' },
+    reason: 'test allow'
+  }))
+}))
 vi.mock('./governed', () => ({
   captainActionIds: () => ({
     runId: 't1',
@@ -76,7 +107,12 @@ vi.mock('../services/memory', () => ({ memoryService: { promptIndex: async () =>
 vi.mock('../services/skills', () => ({
   skillService: { promptIndex: async () => '', readForTool: async () => '' }
 }))
-vi.mock('../services/subagents', () => ({ subAgentService: h.subAgents }))
+vi.mock('../services/subagents', () => ({
+  subAgentService: h.subAgents,
+  CREW_SPECIALISTS: {},
+  crewDisplayName: (id: string) => (id ? id.charAt(0).toUpperCase() + id.slice(1) : 'Specialist'),
+  engineCrewAgents: () => []
+}))
 vi.mock('../services/usage', () => ({ usageService: h.usage }))
 vi.mock('../services/documents', () => ({
   artifactKindForPath: () => 'text',
@@ -94,7 +130,7 @@ interface RunState {
   taskId: string
   controller: AbortController
   stopped: boolean
-  pendingSteer: boolean
+  steering: unknown
 }
 
 const steerDecision = {
@@ -123,7 +159,17 @@ function makeTask(): Task {
 }
 
 function makeRun(stopped = false): RunState {
-  return { taskId: 't1', controller: new AbortController(), stopped, pendingSteer: false }
+  return {
+    taskId: 't1',
+    controller: new AbortController(),
+    stopped,
+    steering: {
+      drain: () => [],
+      commit: () => undefined,
+      restore: () => undefined,
+      hasItems: () => false
+    }
+  }
 }
 
 function makeContext(task: Task): ToolContext {
@@ -160,15 +206,12 @@ interface RuntimeInternals {
     context: ToolContext,
     messageId: string
   ): Promise<{ content: string; isError: boolean }>
-  runSubAgent(
+  recordEngineCrew(
     task: Task,
-    parent: RunState,
-    provider: unknown,
-    name: string,
-    instruction: string,
-    tools: AgentTool[],
-    context: ToolContext
-  ): Promise<{ content: string; isError?: boolean }>
+    attribution: { provider: string; model: string },
+    update: any,
+    runs: Map<string, any>
+  ): Promise<void>
 }
 
 const internals = agentRuntime as unknown as RuntimeInternals
@@ -178,6 +221,147 @@ beforeEach(() => {
   h.approvals.isAlwaysAllowed.mockReturnValue(false)
   h.governToolCall.mockResolvedValue(steerDecision)
   h.store.saveTask.mockResolvedValue(undefined)
+  h.requiresReceipt.mockReturnValue(false)
+})
+
+afterEach(() => vi.restoreAllMocks())
+
+describe('immutable tool argument boundary', () => {
+  beforeEach(() => {
+    // Keep the runtime path real; avoid gateway journal/passport IO.
+    vi.spyOn(toolExecutionGateway, 'execute').mockImplementation(async (request) => ({
+      ...await request.execute(),
+      isError: false,
+      journalEntryId: request.ids.actionId
+    }))
+    h.requiresReceipt.mockReturnValue(true)
+    h.approvals.request.mockResolvedValue(true)
+  })
+
+  it.each(['original', 'display'] as const)(
+    'ignores mutation of %s arguments while approval is pending',
+    async (source) => {
+      const task = makeTask()
+      const input = { path: 'safe.txt', nested: { items: [{ text: 'safe' }] } }
+      const expected = { path: 'safe.txt', nested: { items: [{ text: 'safe' }] } }
+      let approve!: (value: boolean) => void
+      h.approvals.request.mockImplementationOnce(() => new Promise<boolean>((resolve) => { approve = resolve }))
+      const summarize = vi.fn((args) => `write ${args.path}`)
+      const review = vi.fn(async (_args: unknown) => undefined)
+      const execute = vi.fn(async (args) => ({ content: JSON.stringify(args) }))
+      const tool = { ...writeTool, summarize, approvalReview: review, execute }
+      const pending = internals.executeToolCall(task, new Map([[tool.name, tool]]),
+        { id: 'snapshot-call', name: tool.name, arguments: input }, makeRun(), makeContext(task), 'msg-1')
+      await vi.waitFor(() => expect(h.approvals.request).toHaveBeenCalledTimes(1))
+
+      const exposed = source === 'original' ? input : task.steps[0].args as typeof input
+      exposed.path = 'changed.txt'
+      exposed.nested.items[0].text = 'changed'
+      exposed.nested.items.push({ text: 'extra' })
+      approve(true)
+      const result = await pending
+
+      expect(result).toMatchObject({ isError: false, content: JSON.stringify(expected) })
+      const snapshot = h.governToolCall.mock.calls[0][0].args
+      expect(snapshot).toEqual(expected)
+      expect(summarize.mock.calls[0][0]).toBe(snapshot)
+      expect(review.mock.calls[0][0]).toBe(snapshot)
+      expect(execute.mock.calls[0][0]).toBe(snapshot)
+      expect(h.receipts.recordIntent.mock.calls[0][0].args).toBe(snapshot)
+      expect(vi.mocked(toolExecutionGateway.execute).mock.calls[0][0].args).toBe(snapshot)
+      expect(h.approvals.request.mock.calls[0][1].details).toBe(JSON.stringify(expected, null, 2))
+      expect(Object.isFrozen(snapshot.nested.items[0])).toBe(true)
+      expect(h.gate.recordApproval).toHaveBeenCalledWith('act-1', 'human')
+      expect(h.receipts.recordResult).toHaveBeenCalledWith('act-1', 'success', { digest: 'digest' })
+    }
+  )
+
+  it('snapshots before asynchronous governance and keeps approval details isolated from display edits', async () => {
+    const task = makeTask()
+    const input = { path: 'safe.txt', nested: { text: 'safe' } }
+    let decide!: (value: typeof steerDecision) => void
+    h.governToolCall.mockImplementationOnce(() => new Promise((resolve) => { decide = resolve }))
+    const tool = { ...writeTool, execute: vi.fn(async (args) => ({ content: JSON.stringify(args) })) }
+    const pending = internals.executeToolCall(task, new Map([[tool.name, tool]]),
+      { id: 'snapshot-call', name: tool.name, arguments: input }, makeRun(), makeContext(task), 'msg-1')
+    await vi.waitFor(() => expect(h.governToolCall).toHaveBeenCalledTimes(1))
+    input.nested.text = 'original changed'
+    ;(task.steps[0].args as typeof input).path = 'display changed'
+    decide(steerDecision)
+    const result = await pending
+    expect(JSON.parse(result.content)).toEqual({ path: 'safe.txt', nested: { text: 'safe' } })
+    expect(JSON.parse(h.approvals.request.mock.calls[0][1].details)).toEqual({ path: 'safe.txt', nested: { text: 'safe' } })
+  })
+
+  it('preserves parsed defaults and freezes the DLP result before approvalReview', async () => {
+    const task = makeTask()
+    const protectedArgs = { path: 'safe.txt', nested: { text: '[redacted]' }, mode: 'append' }
+    const protect = vi.spyOn(governanceService, 'protectToolArguments').mockReturnValue({
+      args: protectedArgs, findings: [], total: 1
+    })
+    const review = vi.fn(async (args) => {
+      expect(Reflect.set(args, 'path', 'changed.txt')).toBe(false)
+      expect(Reflect.set(args.nested, 'text', 'changed')).toBe(false)
+      expect(() => Object.defineProperty(args, 'extra', { value: true })).toThrow(TypeError)
+      protectedArgs.nested.text = 'later DLP mutation'
+      return undefined
+    })
+    const tool = {
+      ...writeTool,
+      schema: z.object({ path: z.string(), nested: z.object({ text: z.string() }), mode: z.string().default('append') }),
+      approvalReview: review,
+      execute: vi.fn(async (args) => ({ content: JSON.stringify(args) }))
+    }
+    const result = await internals.executeToolCall(task, new Map([[tool.name, tool]]),
+      { id: 'snapshot-call', name: tool.name, arguments: { path: 'safe.txt', nested: { text: 'secret' } } },
+      makeRun(), makeContext(task), 'msg-1')
+    expect(protect.mock.calls[0][3]).toEqual({ path: 'safe.txt', nested: { text: 'secret' }, mode: 'append' })
+    expect(JSON.parse(result.content)).toEqual({ path: 'safe.txt', nested: { text: '[redacted]' }, mode: 'append' })
+    expect(review).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['allow', 'always-allowed'] as const)('preserves defaults and receipt behavior for %s actions', async (mode) => {
+    const task = makeTask()
+    h.governToolCall.mockResolvedValue({ ...steerDecision, decision: mode === 'allow' ? 'allow' : 'steer' })
+    h.approvals.isAlwaysAllowed.mockReturnValue(mode === 'always-allowed')
+    const review = vi.fn(async () => undefined)
+    const tool = {
+      ...writeTool,
+      schema: z.object({ path: z.string(), options: z.object({ append: z.boolean() }).default({ append: true }) }),
+      approvalReview: review,
+      execute: vi.fn(async (args) => ({ content: JSON.stringify(args) }))
+    }
+    const result = await internals.executeToolCall(task, new Map([[tool.name, tool]]),
+      { id: 'snapshot-call', name: tool.name, arguments: { path: 'safe.txt' } },
+      makeRun(), makeContext(task), 'msg-1')
+    expect(result.isError).toBe(false)
+    expect(JSON.parse(result.content)).toEqual({ path: 'safe.txt', options: { append: true } })
+    expect(Object.isFrozen(tool.execute.mock.calls[0][0].options)).toBe(true)
+    expect(h.approvals.request).not.toHaveBeenCalled()
+    expect(review).not.toHaveBeenCalled()
+    expect(h.gate.recordApproval).not.toHaveBeenCalled()
+    expect(h.receipts.recordIntent).toHaveBeenCalledWith(expect.objectContaining({
+      ids: { runId: 't1', taskId: 't1', actionId: 'act-1', agentId: 'Captain', principalId: 'local-user' },
+      tool: 'write_file',
+      authorization: expect.objectContaining({ approvedBy: null, approvedAt: null })
+    }))
+    expect(h.gate.recordOutcome).toHaveBeenCalledWith('act-1', 'success')
+  })
+
+  it('rejects unsupported parsed values before governance, approval, receipts or execution', async () => {
+    const task = makeTask()
+    const tool = { ...writeTool, schema: z.object({ value: z.any() }), execute: vi.fn(async () => ({ content: 'unexpected' })) }
+    const result = await internals.executeToolCall(task, new Map([[tool.name, tool]]),
+      { id: 'snapshot-call', name: tool.name, arguments: { value: new Date() } },
+      makeRun(), makeContext(task), 'msg-1')
+    expect(result.isError).toBe(true)
+    expect(result.content).toMatch(/unsupported tool arguments/i)
+    expect(h.governToolCall).not.toHaveBeenCalled()
+    expect(h.approvals.request).not.toHaveBeenCalled()
+    expect(h.receipts.recordIntent).not.toHaveBeenCalled()
+    expect(tool.execute).not.toHaveBeenCalled()
+    expect(task.steps[0].status).toBe('error')
+  })
 })
 
 describe('human denial of a steered action', () => {
@@ -220,58 +404,129 @@ describe('human denial of a steered action', () => {
   })
 })
 
-describe('crew seat lifecycle', () => {
-  const provider = { settings: { providerId: 'p', model: 'm' } }
-
-  it('refuses the job when the seat cannot be registered', async () => {
-    h.registerCrewSeat.mockReturnValue({ ok: false, reason: 'seat already active' })
-    h.subAgents.begin.mockResolvedValue({ steps: [] })
+describe('engine crew recording lifecycle', () => {
+  it('creates and tracks subagent runs as the engine emits crew events', async () => {
     const task = makeTask()
+    const attribution = { provider: 'Gemini', model: 'gemini-flash' }
+    const crewRuns = new Map<string, any>()
+    const fakeRun = { id: 'session-1', steps: [] }
+    h.subAgents.begin.mockResolvedValue(fakeRun)
 
-    const result = await internals.runSubAgent(
+    // Started event initializes the subagent run
+    await internals.recordEngineCrew(
       task,
-      makeRun(),
-      provider,
-      'Docs Scout',
-      'read the docs',
-      [],
-      makeContext(task)
+      attribution,
+      { sessionId: 'session-1', specialist: 'techne', kind: 'started', instruction: 'write code' },
+      crewRuns
+    )
+    expect(h.subAgents.begin).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'session-1',
+        name: 'Techne',
+        instruction: 'write code'
+      })
     )
 
-    expect(result.isError).toBe(true)
-    expect(result.content).toMatch(/could not be registered/)
-    expect(h.runEngineTurn).not.toHaveBeenCalled()
+    // Step event records a subagent tool step
+    await internals.recordEngineCrew(
+      task,
+      attribution,
+      {
+        sessionId: 'session-1',
+        specialist: 'techne',
+        kind: 'step',
+        step: { id: 'st-1', tool: 'write_file', status: 'ok', detail: 'wrote code.ts' }
+      },
+      crewRuns
+    )
+    expect(h.subAgents.saveRun).toHaveBeenCalled()
+
+    // Finished event completes the run
+    await internals.recordEngineCrew(
+      task,
+      attribution,
+      {
+        sessionId: 'session-1',
+        specialist: 'techne',
+        kind: 'finished',
+        report: 'All done.'
+      },
+      crewRuns
+    )
     expect(h.subAgents.finish).toHaveBeenCalledWith(
-      expect.anything(),
-      'error',
-      expect.objectContaining({ error: expect.stringContaining('could not be registered') })
+      fakeRun,
+      'done',
+      expect.objectContaining({ summary: 'All done.' })
     )
   })
+})
 
-  it('revokes and forgets the registered seat when the run finishes', async () => {
-    h.registerCrewSeat.mockReturnValue({ ok: true, agentId: 'crew:docs-scout' })
-    h.subAgents.begin.mockResolvedValue({ steps: [] })
-    h.runEngineTurn.mockResolvedValue({
-      finalResponse: 'done',
-      usage: { prompt: 1, completion: 2, total: 3 }
+describe('delivered files are anchored to their turn', () => {
+  it('hands the assistant message id to the tool context so writes land under that turn', async () => {
+    const execute = vi.fn(async (_args: unknown, _ctx: unknown) => ({ content: 'written' }))
+    const tool = {
+      name: 'write_file',
+      title: 'Write a file',
+      description: '',
+      sideEffect: 'write',
+      risk: 'low',
+      approval: 'never',
+      summarize: () => 'write a.txt',
+      execute
+    } as unknown as AgentTool
+    h.governToolCall.mockResolvedValue({
+      decision: 'allow',
+      rule: 'auto',
+      reason: 'test allow',
+      actionId: 'act-1',
+      capability: 'fs.write'
     })
+
     const task = makeTask()
+    task.messages = [
+      { id: 'msg-owner', role: 'assistant', content: '', createdAt: new Date().toISOString() }
+    ] as typeof task.messages
 
-    const result = await internals.runSubAgent(
+    await internals.executeToolCall(
       task,
+      new Map([['write_file', tool]]),
+      { id: 'call-9', name: 'write_file', arguments: { path: 'a.txt' } },
       makeRun(),
-      provider,
-      'Docs Scout',
-      'read the docs',
-      [],
-      makeContext(task)
+      makeContext(task),
+      'msg-owner'
     )
 
-    expect(result.isError).toBeFalsy()
-    expect(h.gate.identities.revokeAgent).toHaveBeenCalledWith(
-      'crew:docs-scout',
-      'crew run finished'
-    )
-    expect(h.gate.identities.forgetAgent).toHaveBeenCalledWith('crew:docs-scout')
+    expect(execute).toHaveBeenCalled()
+    expect(execute.mock.calls[0][1]).toMatchObject({ messageId: 'msg-owner' })
+  })
+})
+
+describe('editMessage', () => {
+
+  it('edits a user message, truncates subsequent messages, and relaunches the agent', async () => {
+    const task = makeTask()
+    task.messages = [
+      { id: 'msg-1', role: 'user', content: 'Original prompt', createdAt: '2026-01-01T00:00:00Z' },
+      { id: 'msg-2', role: 'assistant', content: 'Old response', createdAt: '2026-01-01T00:00:01Z' },
+      { id: 'msg-3', role: 'user', content: 'Follow-up', createdAt: '2026-01-01T00:00:02Z' }
+    ]
+    task.steps = [
+      { id: 'step-1', messageId: 'msg-2', tool: 'test', title: 'test', status: 'ok', startedAt: '2026-01-01' }
+    ]
+    h.store.getTask.mockReturnValue(task)
+    const launchSpy = vi.spyOn(agentRuntime as any, 'launch').mockImplementation(() => {})
+
+    const updated = await agentRuntime.editMessage({
+      taskId: task.id,
+      messageId: 'msg-1',
+      content: 'Updated prompt'
+    })
+
+    expect(updated.messages).toHaveLength(1)
+    expect(updated.messages[0].content).toBe('Updated prompt')
+    expect(updated.steps).toHaveLength(0)
+    expect(updated.status).toBe('running')
+    expect(launchSpy).toHaveBeenCalledWith(task.id)
+    launchSpy.mockRestore()
   })
 })

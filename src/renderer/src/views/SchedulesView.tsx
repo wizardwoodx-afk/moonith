@@ -22,8 +22,12 @@ import type {
   ScheduleRecord
 } from '@shared/types'
 import { useApp } from '../store'
-import { cn, cronDescription, errorMessage, folderName, timeAgo } from '../lib/utils'
+import { cn, errorMessage, folderName, timeAgo } from '../lib/utils'
+import { cronTimeMinutes, replaceCronTime } from '../lib/cron'
+import { TimeScrubber } from '../motion/TimeScrubber'
+import { PERMISSION_CHOICES } from '../lib/composerChoices'
 import { Button, FieldGroup, IconButton, Modal, Segmented, Toggle } from '../components/ui'
+import { confirmDialog } from '../components/Confirm'
 
 const CUSTOM = 'custom'
 
@@ -37,10 +41,79 @@ const CRON_PRESETS = [
   { value: '0 8 1 * *', label: 'First of the month at 08:00' }
 ]
 
-const PERMISSION_LABEL: Record<PermissionMode, string> = {
-  manual: 'Manual',
-  auto: 'Auto',
-  skip: 'Integrated acceptance'
+const PERMISSION_LABEL = Object.fromEntries(
+  PERMISSION_CHOICES.map((choice) => [choice.value, choice.label])
+) as Record<PermissionMode, string>
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+function formatClock(hour: number, minute: number): string {
+  const displayHour = hour % 12 || 12
+  const period = hour < 12 ? 'AM' : 'PM'
+  return `${displayHour}:${String(minute).padStart(2, '0')} ${period}`
+}
+
+function describeDays(dayOfWeek: string): string | null {
+  const days: number[] = []
+  for (const part of dayOfWeek.split(',')) {
+    const range = /^([0-6])-([0-6])$/.exec(part)
+    if (range) {
+      for (let day = Number(range[1]); day <= Number(range[2]); day += 1) days.push(day)
+      continue
+    }
+    if (/^[0-7]$/.test(part)) {
+      days.push(Number(part) % 7)
+      continue
+    }
+    return null
+  }
+  const unique = [...new Set(days)].sort((a, b) => a - b)
+  if (!unique.length) return null
+  const key = unique.join(',')
+  if (key === '0,1,2,3,4,5,6') return 'Every day'
+  if (key === '1,2,3,4,5') return 'Weekdays'
+  if (key === '0,6') return 'Weekends'
+  if (unique.length === 1) return `Every ${DAY_NAMES[unique[0]]}`
+  const names = unique.map((day) => `${DAY_NAMES[day]}s`)
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
+// Turns a cron expression into the human phrase the picker should lead with.
+// Falls back to 'Custom schedule' when the shape is not one we can phrase.
+function describeCron(cron: string): string {
+  const trimmed = cron.trim()
+  const preset = CRON_PRESETS.find((option) => option.value === trimmed)
+  if (preset) return preset.label
+  const fields = trimmed.split(/\s+/)
+  if (fields.length < 5) return 'Custom schedule'
+  const [minute, hour, dayOfMonth, month, dayOfWeek] = fields
+  const everyMinutes = /^\*\/([0-9]+)$/.exec(minute)
+  if (everyMinutes && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+    return `Every ${Number(everyMinutes[1])} minutes`
+  }
+  const everyHours = /^\*\/([0-9]+)$/.exec(hour)
+  if (everyHours && /^\d{1,2}$/.test(minute) && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+    return `Every ${Number(everyHours[1])} hours at :${minute.padStart(2, '0')}`
+  }
+  if (/^\d{1,2}$/.test(minute) && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+    return `Every hour at :${minute.padStart(2, '0')}`
+  }
+  if (/^\d{1,2}$/.test(minute) && /^\d{1,2}$/.test(hour)) {
+    const minuteValue = Number(minute)
+    const hourValue = Number(hour)
+    if (minuteValue <= 59 && hourValue <= 23) {
+      const clock = formatClock(hourValue, minuteValue)
+      if (dayOfWeek === '*' && dayOfMonth === '*' && month === '*') return `Every day at ${clock}`
+      if (dayOfWeek !== '*' && dayOfMonth === '*' && month === '*') {
+        const days = describeDays(dayOfWeek)
+        if (days) return `${days} at ${clock}`
+      }
+      if (dayOfWeek === '*' && /^\d{1,2}$/.test(dayOfMonth) && month === '*') {
+        return `Monthly on day ${Number(dayOfMonth)} at ${clock}`
+      }
+    }
+  }
+  return 'Custom schedule'
 }
 
 export function SchedulesView() {
@@ -114,7 +187,13 @@ export function SchedulesView() {
   }
 
   const remove = async (record: ScheduleRecord): Promise<void> => {
-    if (!window.confirm(`Delete the schedule “${record.title}”? Past task runs are kept.`)) {
+    const confirmed = await confirmDialog({
+      title: `Delete “${record.title}”?`,
+      body: 'The schedule stops firing. Task runs it already started are kept.',
+      confirmLabel: 'Delete schedule',
+      danger: true
+    })
+    if (!confirmed) {
       return
     }
     try {
@@ -133,32 +212,21 @@ export function SchedulesView() {
   return (
     <div className="scroll-thin h-full overflow-y-auto">
       <div className="mx-auto w-full max-w-[920px] px-9 pt-9 pb-16">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.16em] text-faint uppercase">
-              <CalendarClock size={11} />
-              Automation
-            </p>
-            <h1 className="display mt-1 text-[32px] leading-tight text-ink">
-              Work that runs itself.
-            </h1>
-            <p className="mt-1.5 max-w-[540px] text-[12.5px] leading-relaxed text-muted">
-              Turn a recurring outcome into a schedule. SelfImpulse starts a fresh cowork task on your
-              chosen rhythm and leaves the results in its workspace.
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h1 className="text-[22px] font-semibold leading-none tracking-[-0.01em] text-ink">
+            Schedules
+          </h1>
           <Button variant="primary" size="md" onClick={openCreate}>
             <Plus size={14} />
             New schedule
           </Button>
         </div>
 
-        <div className="mt-6 flex items-start gap-2.5 rounded-xl border border-line bg-surface/50 px-3.5 py-3">
-          <Info size={13} className="mt-0.5 shrink-0 text-muted" />
-          <div className="min-w-0 flex-1 text-[11.5px] leading-relaxed text-muted">
-            Schedules fire while SelfImpulse is running. If you close the window while a schedule
-            is enabled, SelfImpulse stays in the tray so work can still start on time.
-          </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2.5">
+          <p className="flex items-center gap-1.5 text-[11px] text-muted">
+            <Info size={12} className="shrink-0" />
+            Fires while SelfImpulse is running.
+          </p>
           {!hasProviders ? (
             <Button variant="secondary" size="sm" onClick={() => openSettings('providers')}>
               Connect a model
@@ -176,34 +244,12 @@ export function SchedulesView() {
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-soft text-accent-ink">
               <CalendarClock size={20} />
             </div>
-            <p className="mt-4 text-[14px] font-medium">Nothing scheduled yet</p>
-            <p className="mt-1 max-w-md text-[12px] leading-relaxed text-faint">
-              A Monday morning research brief. A Friday wrap-up. A monthly budget refresh. Set a
-              prompt once and let SelfImpulse repeat the work.
-            </p>
-            <div className="mt-5 flex flex-wrap justify-center gap-1.5">
-              {[
-                'Research brief every Monday',
-                'Weekly status wrap-up',
-                'Monthly budget review'
-              ].map((idea) => (
-                <span
-                  key={idea}
-                  className="rounded-full border border-line bg-canvas px-2.5 py-1 text-[10.5px] text-muted"
-                >
-                  {idea}
-                </span>
-              ))}
-            </div>
-            <Button variant="primary" size="sm" className="mt-5" onClick={openCreate}>
-              <Plus size={13} />
-              Create your first schedule
-            </Button>
+            <p className="mt-4 text-[14px] font-medium">Nothing scheduled</p>
           </div>
         ) : (
           <div className="mt-5 space-y-2.5">
             {schedules.map((record) => {
-              const cronLabel = cronDescription(record.cron)
+              const cronLabel = describeCron(record.cron)
               const busy = busyId === record.id
               const running = runningId === record.id
               return (
@@ -223,7 +269,7 @@ export function SchedulesView() {
                       <div className="flex flex-wrap items-center gap-1.5">
                         <h3 className="truncate text-[13px] font-semibold">{record.title}</h3>
                         {!record.enabled ? (
-                          <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[9.5px] font-medium text-faint">
+                          <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-faint">
                             Paused
                           </span>
                         ) : null}
@@ -236,7 +282,7 @@ export function SchedulesView() {
                           <CalendarClock size={10} />
                           {cronLabel}
                         </span>
-                        <span className="rounded-md border border-line bg-canvas px-1.5 py-0.5 font-mono text-[9.5px]">
+                        <span className="rounded-md border border-line bg-canvas px-1.5 py-0.5 font-mono text-[10px]">
                           {record.cron}
                         </span>
                         <span className="rounded-md border border-line bg-canvas px-1.5 py-0.5">
@@ -380,6 +426,13 @@ function ScheduleModal({
 
   const activeProvider = providers.find((provider) => provider.id === providerId) ?? providers[0]
   const cronValue = preset === CUSTOM ? customCron.trim() : preset
+  const fixedTime = cronTimeMinutes(cronValue)
+
+  const changeTime = (minutes: number): void => {
+    const next = replaceCronTime(cronValue, minutes)
+    if (preset === CUSTOM) setCustomCron(next)
+    else setPreset(next)
+  }
 
   const addFolder = async (): Promise<void> => {
     const folder = await window.knight.pickFolder()
@@ -482,6 +535,9 @@ function ScheduleModal({
                   {option.label}
                 </option>
               ))}
+              {preset !== CUSTOM && !CRON_PRESETS.some((option) => option.value === preset) ? (
+                <option value={preset} title={`Cron: ${preset}`}>{describeCron(preset)}</option>
+              ) : null}
               <option value={CUSTOM}>Custom cron…</option>
             </select>
           </FieldGroup>
@@ -496,14 +552,21 @@ function ScheduleModal({
               />
             </FieldGroup>
           ) : (
-            <div className="flex items-end pb-2.5">
-              <p className="flex items-center gap-1.5 text-[11px] text-faint">
-                <Clock size={11} />
-                {cronDescription(preset)}
+            <div className="flex flex-col justify-end gap-0.5 pb-1">
+              <p className="flex items-center gap-1.5 text-[11px] text-muted">
+                <Clock size={11} className="shrink-0" />
+                {describeCron(preset)}
+              </p>
+              <p className="pl-[18px] font-mono text-[10px] text-faint" title={`Cron expression · ${preset}`}>
+                {preset}
               </p>
             </div>
           )}
         </div>
+
+        {fixedTime !== null ? (
+          <TimeScrubber minutes={fixedTime} onChange={changeTime} />
+        ) : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <FieldGroup label="Provider">
@@ -556,18 +619,19 @@ function ScheduleModal({
           <Segmented
             value={permissionMode}
             onChange={setPermissionMode}
-            options={[
-              { value: 'manual', label: 'Manual' },
-              { value: 'auto', label: 'Auto' },
-              { value: 'skip', label: 'Integrated acceptance' }
-            ]}
+            options={PERMISSION_CHOICES.map((choice) => ({
+              value: choice.value,
+              label: choice.label
+            }))}
           />
           <p className="mt-2 text-[10.5px] leading-relaxed text-faint">
-            {permissionMode === 'manual'
-              ? 'Each run pauses for your approval on file changes and commands.'
-              : permissionMode === 'auto'
-                ? 'Routine actions run freely; high-risk actions wait for approval.'
-                : 'Runs without prompts. Use only in folders you trust.'}
+            {permissionMode === 'plan'
+              ? 'Each run reads and leaves you a plan. Nothing is written and no command runs.'
+              : permissionMode === 'manual'
+                ? 'Each run pauses for your approval on file changes and commands.'
+                : permissionMode === 'auto'
+                  ? 'Routine actions run freely; high-risk actions wait for approval.'
+                  : 'Each step is accepted without prompting. Shell commands still wait for approval.'}
           </p>
         </FieldGroup>
 

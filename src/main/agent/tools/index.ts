@@ -24,14 +24,24 @@ import {
   rookSynthesizeResearchTool,
   rookAskClarificationTool
 } from './rookTools'
+import { 
+  rsiralsTools, 
+  rsiralsQueryBeliefTool, 
+  rsiralsEvaluateRiskTool, 
+  rsiralsSimulateActionTool 
+} from './rsiralsTools'
 
 export function getBuiltinTools(mode: TaskMode): AgentTool[] {
   if (mode === 'chat') {
     const readOnlyFiles = fileTools.filter((tool) =>
       ['list_files', 'read_file', 'search_files'].includes(tool.name)
     )
-    const readOnlyLibrary = libraryTools.filter((tool) =>
-      ['list_library_pages', 'read_library_page'].includes(tool.name)
+    /* A Library page is the user's own data, so Chat never saves one directly.
+     * Chat may list, read, and hand a draft to review_library_page, which is
+     * the only Library write that reaches Chat: with approval 'always' and
+     * allowAlways false, the human sees the rendered draft and decides. */
+    const gatedLibrary = libraryTools.filter((tool) =>
+      ['list_library_pages', 'read_library_page', 'review_library_page'].includes(tool.name)
     )
     /* Chat can read, create, and convert documents: those tools only write
      * artifacts inside the task workspace, never the user's own files. */
@@ -51,7 +61,7 @@ export function getBuiltinTools(mode: TaskMode): AgentTool[] {
       ...planTools,
       ...memoryTools,
       ...marketspaceReadTools,
-      ...readOnlyLibrary,
+      ...gatedLibrary,
       ...readOnlyOpenDesign,
       coworkSearchSkillsTool,
       coworkQuarantineCheckTool,
@@ -59,7 +69,10 @@ export function getBuiltinTools(mode: TaskMode): AgentTool[] {
       rookVisualGroundTool,
       rookPermissionModeTool,
       rookSynthesizeResearchTool,
-      rookAskClarificationTool
+      rookAskClarificationTool,
+      rsiralsQueryBeliefTool,
+      rsiralsEvaluateRiskTool,
+      rsiralsSimulateActionTool
     ]
   }
   return [
@@ -80,11 +93,13 @@ export function getBuiltinTools(mode: TaskMode): AgentTool[] {
     ...libraryTools,
     ...opendesignTools,
     ...coworkTools,
-    ...rookTools
+    ...rookTools,
+    ...rsiralsTools
   ]
 }
 
 export { creativeStudioTools } from './creativeStudio'
 export { coworkTools } from './coworkTools'
 export { rookTools } from './rookTools'
+export { rsiralsTools } from './rsiralsTools'
 export type { AgentTool } from './types'

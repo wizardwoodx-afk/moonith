@@ -1,4 +1,3 @@
-import { agentName } from '../lib/localProfile'
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -29,8 +28,16 @@ const TABS = [
   { id: 'crew', label: 'Team', icon: Bot },
   { id: 'tools', label: 'Tools', icon: Wrench },
   { id: 'files', label: 'Files', icon: FolderOpen },
-  { id: 'rook', label: 'ROOK', icon: Cpu }
+  { id: 'rook', label: 'Worker', icon: Cpu }
 ] as const
+
+const FOOTER: Record<PanelTab, string | null> = {
+  now: null,
+  crew: 'Runs stored on this device',
+  tools: 'Installed skills and ready tool servers',
+  files: 'Created files stay in this task',
+  rook: 'Background jobs and approvals'
+}
 
 export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }) {
   const [tab, setTab] = useState<PanelTab>('now')
@@ -50,6 +57,8 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
     return null
   }
 
+  const footer = FOOTER[tab]
+
   return (
     <aside aria-label="Task workspace" className="panel-in flex h-full w-[380px] max-w-[92vw] shrink-0 flex-col border-l border-line bg-canvas-deep/65">
       <div className="flex h-[54px] shrink-0 items-center gap-2.5 border-b border-line px-3">
@@ -58,7 +67,6 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
         </span>
         <div className="min-w-0">
           <h2 className="text-[12px] font-semibold tracking-[-0.01em] text-ink">Task workspace</h2>
-          <p className="mt-0.5 text-[10px] text-faint">Live activity, capabilities, and output</p>
         </div>
         <div className="ml-auto flex items-center gap-0.5">
           <IconButton
@@ -75,7 +83,10 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
         </div>
       </div>
 
-      <div className="grid shrink-0 grid-cols-4 border-b border-line px-2" role="tablist" aria-label="Task workspace sections">
+      {/* Five tabs in four columns put 'Worker' on a second row, and a count in
+          the slot wrapped 'Tools 4' mid-label. One row, no wrapping: the count
+          rides on the accessible name instead. */}
+      <div className="grid shrink-0 grid-cols-5 border-b border-line px-2" role="tablist" aria-label="Task workspace sections">
         {TABS.map((item) => {
           const Icon = item.icon
           const active = tab === item.id
@@ -85,15 +96,16 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
               key={item.id}
               role="tab"
               aria-selected={active}
+              aria-label={count === null ? item.label : `${item.label}, ${count}`}
+              title={count === null ? item.label : `${item.label} · ${count}`}
               onClick={() => setTab(item.id)}
               className={cn(
-                'relative flex h-11 items-center justify-center gap-1.5 text-[10px] font-medium transition-colors outline-none focus-visible:bg-surface-2/50',
+                'relative flex h-11 items-center justify-center gap-1.5 whitespace-nowrap text-[10px] font-medium transition-colors outline-none focus-visible:bg-surface-2/50',
                 active ? 'text-ink' : 'text-faint hover:text-muted'
               )}
             >
-              <Icon size={11} />
+              <Icon size={11} className="shrink-0" />
               {item.label}
-              {count !== null ? <span className={cn('font-mono text-[10px]', item.id === 'crew' && liveCrew ? 'text-accent' : 'text-faint')}>{count}</span> : null}
               {active ? <motion.span layoutId="task-workspace-tab" className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-accent" transition={{ type: 'spring', stiffness: 420, damping: 32 }} /> : null}
             </button>
           )
@@ -122,17 +134,11 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
         </motion.div>
       </AnimatePresence>
 
-      <div className="shrink-0 border-t border-line px-4 py-2.5 text-[10px] leading-relaxed text-faint">
-        {tab === 'crew'
-          ? `Your teammates inherit the ${agentName()}’s role and tool gates. Runs are stored on this device.`
-          : tab === 'tools'
-            ? `Installed skills and ready, exposed MCP tools are available to ${agentName()}.`
-            : tab === 'files'
-              ? 'Sources are explicit. Created files stay attached to this task.'
-              : tab === 'rook'
-                ? 'ROOK dual-engine & digital worker: GitOps Change Requests, visual grounding, and secret shielding.'
-                : 'Live task state only · no synthetic activity or usage claims.'}
-      </div>
+      {footer ? (
+        <div className="shrink-0 border-t border-line px-4 py-2.5 text-[10px] leading-relaxed text-faint">
+          {footer}
+        </div>
+      ) : null}
     </aside>
   )
 }

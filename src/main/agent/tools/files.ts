@@ -1,12 +1,56 @@
 import { promises as fs } from 'node:fs'
 import { extname, join, relative, resolve } from 'node:path'
 import { z } from 'zod'
-import type { ToolContext } from './types'
+import type { ApprovalReview } from '@shared/types'
+import type { ToolContext, ToolResult } from './types'
 import { defineTool, toolResultError } from './types'
-import { isWithin, resolveSafePath } from '../../security'
+import { isWithin, PathAccessError, resolveSafePath } from '../../security'
 import { truncate } from '../../util'
+import { guard as guardOriginal, markApplied, recordMove } from '../../services/snapshots'
+import { extractDocumentContent } from '../../services/documents'
+import { diffLines } from '../diff'
 
 const IGNORED = new Set(['node_modules', '.git', '.svn', '.hg', 'dist', 'out', 'release', '.next', '.cache'])
+
+/** A diff the approval prompt can render, with an optional reason instead. */
+function diffReview(path: string, before: string, after: string, note?: string): ApprovalReview {
+  const diff = diffLines(before, after)
+  return {
+    kind: 'diff',
+    path,
+    added: diff.added,
+    removed: diff.removed,
+    truncated: diff.truncated,
+    lines: diff.lines,
+    ...(note ? { note } : {})
+  }
+}
+
+/**
+ * The current content of a write target, for the approval prompt.
+ *
+ * `ok: false` means the path is not ours to touch at all; the caller then shows
+ * the ordinary text prompt rather than pretending a blocked write is an empty
+ * file. A missing file is a real answer and stays `ok` with `before: ''`.
+ */
+async function readBefore(
+  ctx: ToolContext,
+  path: string
+): Promise<{ ok: true; before: string; binary: boolean } | { ok: false }> {
+  let target: string
+  try {
+    target = await resolveSafePath(ctx.roots, path, { mode: 'write' })
+  } catch {
+    return { ok: false }
+  }
+  let before: string
+  try {
+    before = await fs.readFile(target, 'utf8')
+  } catch {
+    return { ok: true, before: '', binary: false }
+  }
+  return { ok: true, before, binary: before.includes('\u0000') }
+}
 
 async function listTree(
   dir: string,
@@ -40,6 +84,30 @@ async function listTree(
   }
 }
 
+/**
+ * Plain words for the two path failures a guessed path can cause: one that does
+ * not exist inside a granted folder, and one that was never granted. The first
+ * names only the offending path, so it says nothing about folders this task was
+ * not given; the second keeps the sandbox's own refusal. Any other error is
+ * unexpected and the caller surfaces its message unchanged.
+ */
+function pathFailure(error: unknown, path: string): ToolResult | null {
+  if (error instanceof PathAccessError) return { content: error.message, isError: true }
+  const code = (error as NodeJS.ErrnoException)?.code
+  if (code === 'ENOENT' || code === 'ENOTDIR') {
+    return {
+      content:
+        `This path does not exist in the folders granted to this task: ${path}\n` +
+        'List the folder above it, or the task workspace, and use only paths that listing showed.',
+      isError: true
+    }
+  }
+  if (code === 'EISDIR') {
+    return { content: 'Not a file. Use list_files to see what a folder contains.', isError: true }
+  }
+  return null
+}
+
 export const listFilesTool = defineTool({
   name: 'list_files',
   title: 'List files',
@@ -61,7 +129,7 @@ export const listFilesTool = defineTool({
         content: results.length ? results.join('\n') : '(empty directory)'
       }
     } catch (error) {
-      return toolResultError(error)
+      return pathFailure(error, args.path ?? ctx.workspace) ?? toolResultError(error)
     }
   },
   summarize: (args) => `List ${args.path ?? 'workspace'}`
@@ -82,18 +150,33 @@ export const readFileTool = defineTool({
     try {
       const target = await resolveSafePath(ctx.roots, args.path, { mode: 'read' })
       const buffer = await fs.readFile(target)
-      if (buffer.includes(0)) return { content: 'Binary file. Use a specialized tool or the preview panel.', isError: true }
-      if (buffer.length > 512_000) {
-        return { content: 'File is larger than 512 KB. Use search_files or a shell command to inspect it.', isError: true }
+      const ext = extname(target).toLowerCase()
+      if (['.docx', '.doc', '.xlsx', '.xls', '.pdf'].includes(ext)) {
+        const rawText = await extractDocumentContent(target)
+        const lines = rawText.split(/\r?\n/)
+        const offset = Math.max(1, args.offset ?? 1)
+        const limit = args.limit ?? 400
+        const slice = lines.slice(offset - 1, offset - 1 + limit)
+        const header = `File: ${relative(ctx.workspace, target) || target} (extracted document text, lines ${offset}-${offset + slice.length - 1} of ${lines.length})`
+        return { content: `${header}\n\n${slice.join('\n')}` }
       }
-      const lines = buffer.toString('utf8').split(/\r?\n/)
+
+      // Check for binary content within the first 8KB sample
+      const sample = buffer.subarray(0, Math.min(buffer.length, 8192))
+      if (sample.includes(0)) {
+        return { content: 'Binary file. Use a specialized tool or the preview panel.', isError: true }
+      }
+
+      const content = buffer.toString('utf8')
+      const lines = content.split(/\r?\n/)
       const offset = Math.max(1, args.offset ?? 1)
       const limit = args.limit ?? 400
       const slice = lines.slice(offset - 1, offset - 1 + limit)
-      const header = `File: ${relative(ctx.workspace, target) || target} (lines ${offset}-${offset + slice.length - 1} of ${lines.length})`
+      const isTruncated = offset - 1 + limit < lines.length
+      const header = `File: ${relative(ctx.workspace, target) || target} (lines ${offset}-${offset + slice.length - 1} of ${lines.length})${isTruncated ? ` [${lines.length - (offset - 1 + limit)} lines remaining — use offset to continue]` : ''}`
       return { content: `${header}\n\n${slice.join('\n')}` }
     } catch (error) {
-      return toolResultError(error)
+      return pathFailure(error, args.path) ?? toolResultError(error)
     }
   },
   summarize: (args) => `Read ${args.path}`
@@ -109,16 +192,32 @@ export const writeFileTool = defineTool({
     content: z.string().describe('Complete UTF-8 file content.')
   }),
   sideEffect: 'write',
+  approvalReview: async (args, ctx) => {
+    const review = await readBefore(ctx, args.path)
+    if (!review.ok) return undefined
+    if (review.binary) {
+      return diffReview(args.path, '', '', 'This replaces a non-text file. The change cannot be shown as a diff.')
+    }
+    return diffReview(
+      args.path,
+      review.before,
+      args.content,
+      review.before ? undefined : 'New file — nothing exists at this path yet.'
+    )
+  },
   execute: async (args, ctx) => {
     try {
       if (Buffer.byteLength(args.content, 'utf8') > 2_500_000) {
         return { content: 'Content exceeds the 2.5 MB write limit.', isError: true }
       }
       const target = await resolveSafePath(ctx.roots, args.path, { mode: 'write' })
+      const trail = await guardOriginal(ctx.task.id, target, { stepId: ctx.callId })
       await fs.mkdir(join(target, '..'), { recursive: true })
       await fs.writeFile(target, args.content, 'utf8')
+      await markApplied(ctx.task.id, target, ctx.callId)
       await ctx.addArtifact(target)
-      return { content: `Wrote ${Buffer.byteLength(args.content, 'utf8')} bytes to ${relative(ctx.workspace, target) || target}` }
+      const written = `Wrote ${Buffer.byteLength(args.content, 'utf8')} bytes to ${relative(ctx.workspace, target) || target}`
+      return { content: trail.guarded ? written : `${written} — cannot be undone: ${trail.reason}` }
     } catch (error) {
       return toolResultError(error)
     }
@@ -138,6 +237,32 @@ export const editFileTool = defineTool({
     replace_all: z.boolean().optional()
   }),
   sideEffect: 'write',
+  approvalReview: async (args, ctx) => {
+    const review = await readBefore(ctx, args.path)
+    if (!review.ok) return undefined
+    if (review.binary) {
+      return diffReview(args.path, '', '', 'This edits a non-text file. The change cannot be shown as a diff.')
+    }
+    if (!review.before) {
+      return diffReview(args.path, '', '', 'The file does not exist yet, so there is no text to replace.')
+    }
+    const count = review.before.split(args.old_text).length - 1
+    if (count === 0) {
+      return diffReview(args.path, review.before, review.before, 'Old text was not found in the file — this edit will fail.')
+    }
+    if (count > 1 && !args.replace_all) {
+      return diffReview(
+        args.path,
+        review.before,
+        review.before,
+        `Old text appears ${count} times — the edit needs more context or replace_all.`
+      )
+    }
+    const after = args.replace_all
+      ? review.before.split(args.old_text).join(args.new_text)
+      : review.before.replace(args.old_text, args.new_text)
+    return diffReview(args.path, review.before, after)
+  },
   execute: async (args, ctx) => {
     try {
       const target = await resolveSafePath(ctx.roots, args.path, { mode: 'read' })
@@ -150,9 +275,12 @@ export const editFileTool = defineTool({
       const updated = args.replace_all
         ? original.split(args.old_text).join(args.new_text)
         : original.replace(args.old_text, args.new_text)
+      const trail = await guardOriginal(ctx.task.id, target, { stepId: ctx.callId })
       await fs.writeFile(target, updated, 'utf8')
+      await markApplied(ctx.task.id, target, ctx.callId)
       await ctx.addArtifact(target)
-      return { content: `Updated ${args.path} (${count} occurrence${count === 1 ? '' : 's'}).` }
+      const edited = `Updated ${args.path} (${count} occurrence${count === 1 ? '' : 's'}).`
+      return { content: trail.guarded ? edited : `${edited} — cannot be undone: ${trail.reason}` }
     } catch (error) {
       return toolResultError(error)
     }
@@ -170,6 +298,7 @@ export const makeDirectoryTool = defineTool({
   execute: async (args, ctx) => {
     try {
       const target = await resolveSafePath(ctx.roots, args.path, { mode: 'write' })
+      await guardOriginal(ctx.task.id, target)
       await fs.mkdir(target, { recursive: true })
       return { content: `Created folder ${relative(ctx.workspace, target) || target}` }
     } catch (error) {
@@ -199,6 +328,9 @@ export const movePathTool = defineTool({
       const to = await resolveSafePath(ctx.roots, args.to, { mode: 'write' })
       const rejection = moveRejection(from, to)
       if (rejection) return { content: rejection, isError: true }
+      await guardOriginal(ctx.task.id, from)
+      await guardOriginal(ctx.task.id, to)
+      await recordMove(ctx.task.id, from, to)
       await fs.mkdir(join(to, '..'), { recursive: true })
       await fs.rename(from, to)
       return { content: `Moved ${args.from} → ${args.to}` }
@@ -224,8 +356,10 @@ export const deletePathTool = defineTool({
       if (target === ctx.workspace || target === ctx.workspace.replace(/[\\/]$/, '')) {
         return { content: 'Refusing to delete the task workspace root.', isError: true }
       }
+      const trail = await guardOriginal(ctx.task.id, target, { forDeletion: true })
       await fs.rm(target, { recursive: true, force: false })
-      return { content: `Deleted ${relative(ctx.workspace, target) || target}` }
+      const deleted = `Deleted ${relative(ctx.workspace, target) || target}`
+      return { content: trail.guarded ? deleted : `${deleted} — cannot be undone: ${trail.reason}` }
     } catch (error) {
       return toolResultError(error)
     }
@@ -294,7 +428,7 @@ export const searchFilesTool = defineTool({
           : 'No matches found.'
       }
     } catch (error) {
-      return toolResultError(error)
+      return pathFailure(error, args.path ?? ctx.workspace) ?? toolResultError(error)
     }
   },
   summarize: (args) => `Search “${args.query}”`

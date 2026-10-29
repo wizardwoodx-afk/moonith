@@ -26,6 +26,13 @@ export interface ToolCall {
   id: string;
   name: string;
   args: Record<string, unknown>;
+  /**
+   * Google's OpenAI-compatible endpoint stamps an opaque signature onto every
+   * function call and rejects the follow-up request with a 400 unless that
+   * signature is sent back with the assistant turn. It is inert for every other
+   * provider, so it travels as an optional field rather than a new concept.
+   */
+  thoughtSignature?: string;
 }
 
 export interface ToolResult {
@@ -188,6 +195,9 @@ export interface TurnResult {
     | "final"
     | "max_iterations"
     | "budget_exhausted"
+    /** The failure breaker stopped the run instead of burning the budget on a
+     *  tool that keeps failing. */
+    | "circuit_open"
     | "interrupted"
     | "error"
     | "prelude_break";

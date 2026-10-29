@@ -32,16 +32,25 @@ describe('settings navigation', () => {
     expect(groups.Personal).toContain('colors')
     expect(groups.Personal).toContain('moon')
     expect(groups.Personal).not.toContain('agent')
-    expect(groups.Agents).toEqual(['agent', 'agent-team', 'skills', 'sub-agents'])
+    expect(groups.Agents).toEqual([
+      'agent',
+      'agent-team',
+      'rook',
+      'skills',
+      'learning',
+      'sub-agents',
+      'design-systems'
+    ])
     expect(groups.Integrations).toEqual([
       'mcp',
+      'impdesk',
       'connectors',
       'channels',
       'gateway',
       'work-files',
       'desktop'
     ])
-    expect(groups.SelfImpulse).toEqual(['audit', 'about'])
+    expect(groups.SelfImpulse).toEqual(['enterprise', 'audit', 'about'])
   })
 
   it('ships no placeholders and no beta badges', () => {
@@ -49,7 +58,8 @@ describe('settings navigation', () => {
     expect(SETTINGS_NAV.filter((item) => item.status === 'preview')).toEqual([])
     expect(SETTINGS_NAV.find((item) => item.id === 'agent')?.badge).toBeUndefined()
     expect(SETTINGS_NAV.find((item) => item.id === 'agent-team')?.badge).toBeUndefined()
-    expect(SETTINGS_NAV.find((item) => item.id === 'moon')?.badge).toBe('Exclusive')
+    expect(SETTINGS_NAV.find((item) => item.id === 'moon')?.badge).toBeUndefined()
+    expect(SETTINGS_NAV.filter((item) => item.badge)).toEqual([])
     expect(SETTINGS_NAV).toHaveLength(SETTINGS_PANES.length)
   })
 
@@ -82,7 +92,7 @@ describe('settings navigation', () => {
     expect(searchSettingsNav('exclusive').map((item) => item.id)).toEqual(['moon'])
     expect(searchSettingsNav('grounded').map((item) => item.id)).toEqual(['desktop'])
     expect(searchSettingsNav('router').map((item) => item.id)).toEqual(['gateway'])
-    expect(searchSettingsNav('impulse').map((item) => item.id)).toEqual(['audit'])
+    expect(searchSettingsNav('trail').map((item) => item.id)).toEqual(['audit'])
   })
 
   it('returns no matches without inventing panes', () => {

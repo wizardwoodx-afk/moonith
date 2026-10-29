@@ -5,6 +5,7 @@ import { basename, join } from 'node:path'
 import { assertTrustedMainFrame } from './ipcTrust'
 import { IPC } from '@shared/ipc'
 import { REA_SERVER_CONFIG } from '@shared/constants'
+import { LOCAL_OWNER_PRINCIPAL_ID } from '@shared/enterpriseControl'
 import type {
   AttachmentRef,
   ChannelInput,
@@ -12,6 +13,9 @@ import type {
   CreateScheduleInput,
   CreateTaskInput,
   EditMessageInput,
+  KnowledgeDecideResult,
+  KnowledgeDecisionInput,
+  KnowledgeProposalView,
   McpServerConfig,
   McpServerStatus,
   MemoryInput,
@@ -34,6 +38,7 @@ import type {
 import { agentRuntime } from './agent/runtime'
 import { coworkTools } from './agent/tools/coworkTools'
 import { rookTools } from './agent/tools/rookTools'
+import { rsiralsTools } from './agent/tools/rsiralsTools'
 import { rookEngineBridge } from './engine/rookBridge'
 import { coworkEngineBridge } from './engine/coworkBridge'
 import { fetchProviderModels, verifyProvider } from './agent/providers'
@@ -77,6 +82,11 @@ import {
 } from './services/snapshots'
 import { tableService } from './services/table'
 import { skillService } from './services/skills'
+import {
+  decideKnowledgeProposal,
+  loadKnowledgeProposals,
+  type KnowledgeProposal
+} from './selfimpulse/mission/knowledgeSkills'
 import { memoryService } from './services/memory'
 import { usageService } from './services/usage'
 import { connectorsManager } from './services/connectors'
@@ -526,7 +536,7 @@ export function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.agentToolsList, () =>
-    [...coworkTools, ...rookTools].map((tool) => ({ name: tool.name, title: tool.title, description: tool.description }))
+    [...coworkTools, ...rookTools, ...rsiralsTools].map((tool) => ({ name: tool.name, title: (tool as any).title || tool.name, description: tool.description }))
   )
   ipcMain.handle(IPC.skillsList, () => skillService.list())
   ipcMain.handle(IPC.skillsSearch, (_event, query: string, registry?: SkillSource) =>
@@ -538,6 +548,50 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.skillsRead, (_event, id: string) => skillService.read(id))
   ipcMain.handle(IPC.skillsCreate, (_event, draft: SkillDraft) => skillService.create(draft))
   ipcMain.handle(IPC.skillsRemove, (_event, id: string) => skillService.remove(id))
+
+  /* ── Knowledge forge: the human decision, and nothing else ─────────────────
+   * A distilled document becomes a skill only through the decision made here.
+   * The renderer names a proposal by id and nothing more: it cannot address a
+   * store key or a path, and the id is validated in this process before the
+   * service sees it. There is deliberately no auto-apply and no "always
+   * approve" — the mirror inside the service runs on this one call, once per
+   * proposal, and writes through the governed ledger as a human RECOURSE write. */
+  ipcMain.handle(IPC.knowledgeList, (): KnowledgeProposalView[] =>
+    knowledgeProposalViews(loadKnowledgeProposals())
+  )
+
+  ipcMain.handle(
+    IPC.knowledgeDecide,
+    async (event, input: KnowledgeDecisionInput): Promise<KnowledgeDecideResult> => {
+      assertTrustedMainFrame(event)
+      const current = (): KnowledgeProposalView[] => knowledgeProposalViews(loadKnowledgeProposals())
+      const id = typeof input?.id === 'string' ? input.id.trim() : ''
+      if (!KNOWLEDGE_PROPOSAL_ID.test(id)) {
+        return { ok: false, error: 'That is not a knowledge proposal. Nothing was decided.', proposals: current() }
+      }
+      const decision = input?.decision
+      if (decision !== 'approve' && decision !== 'discard') {
+        return { ok: false, error: 'Choose approve or discard. Nothing was decided.', proposals: current() }
+      }
+      await requireLocalEnterprise('approval.decide', 'approval', id)
+      const result = decideKnowledgeProposal({
+        id,
+        decision: decision === 'approve' ? 'APPROVED' : 'REJECTED',
+        /** The actor is this process's own local identity, never a renderer string. */
+        by: LOCAL_OWNER_PRINCIPAL_ID
+      })
+      if (!result.ok) return { ok: false, error: result.error, proposals: current() }
+      void runtimeAudit.record({
+        actor: 'system',
+        actorId: LOCAL_OWNER_PRINCIPAL_ID,
+        action: decision === 'approve' ? 'knowledge.approved' : 'knowledge.discarded',
+        outcome: 'ok',
+        target: id,
+        metadata: { mirrored: result.mirrored }
+      })
+      return { ok: true, error: null, proposals: current() }
+    }
+  )
 
   ipcMain.handle(IPC.marketspaceList, (_event, query?: string) =>
     getMarketspace().list(typeof query === 'string' ? query : '')
@@ -701,4 +755,31 @@ async function safeArtifactPath(taskId: string, relPath: string): Promise<string
   // Real-path checking as well as lexical: a symlink inside the workspace must
   // not hand `shell.openPath` a target that lives outside it.
   return resolveSafePath([taskWorkspace(taskId)], relPath, { mode: 'read' })
+}
+
+/** Knowledge proposal ids are minted in the main process as `kn-` plus a
+ *  CSPRNG token. Accepting only that shape is what stops a decision call from
+ *  addressing anything other than one proposal row: no store key, no path, no
+ *  wildcard. */
+const KNOWLEDGE_PROPOSAL_ID = /^kn-[A-Za-z0-9_-]{4,64}$/
+
+/** The stored row carries the document's distilled procedure and the distiller
+ *  note (which names the harness the pass ran through). Neither belongs in a
+ *  decision list, so the view drops both and keeps only what the decision needs. */
+function knowledgeProposalViews(list: KnowledgeProposal[]): KnowledgeProposalView[] {
+  return list.map((proposal) => ({
+    id: proposal.id,
+    title: proposal.title,
+    summary: proposal.summary,
+    dataHandling: proposal.dataHandling,
+    endpointClass: proposal.providerInfo?.endpointClass ?? null,
+    sourceName: proposal.provenance.sourceName,
+    sourceSha256: proposal.provenance.sourceSha256,
+    byteLength: proposal.provenance.byteLength,
+    distilledAt: proposal.provenance.distilledAt,
+    distiller: proposal.distiller.kind,
+    status: proposal.status,
+    decidedBy: proposal.decidedBy,
+    decidedAt: proposal.decidedAt
+  }))
 }

@@ -99,12 +99,12 @@ export class GovernanceGate {
     const detail = error instanceof Error ? error.message : String(error)
     const reason = `the governance decision for "${decision.record.tool}" could not be written to the journal (${detail}) — the action is refused, not run unrecorded`
     decision.record.decision = 'deny'
-    decision.record.rule = 'nomos-journal-unavailable'
+    decision.record.rule = 'governance-journal-unavailable'
     decision.record.reason = reason
     decision.record.outcome = 'denied'
     return {
       decision: 'deny',
-      rule: 'nomos-journal-unavailable',
+      rule: 'governance-journal-unavailable',
       reason,
       actionId: decision.record.actionId,
       ts: decision.record.ts,

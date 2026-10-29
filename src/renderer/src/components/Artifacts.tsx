@@ -126,8 +126,8 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
             <div className="flex items-center gap-1.5 px-1 pb-2 text-[10px] font-semibold tracking-[0.13em] text-faint uppercase">
               <Globe size={11} />
               Browser
-              <span className="ml-auto flex items-center gap-1 text-[9.5px] normal-case tracking-normal text-faint">
-                <span className="h-1 w-1 rounded-full bg-positive" /> session
+              <span className="ml-auto flex items-center gap-1 text-[10px] normal-case tracking-normal text-faint">
+                <span className="h-1 w-1 rounded-full bg-positive" /> {task.browser.ownerLabel ?? 'Task'} session
               </span>
             </div>
             <div className="overflow-hidden rounded-xl border border-line bg-surface">
@@ -164,7 +164,7 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
                   variant="secondary"
                   className="mt-2 w-full"
                   onClick={() =>
-                    window.knight.showBrowser(task.id).catch((error) => {
+                    window.knight.showBrowser(task.id, task.browser?.scope).catch((error) => {
                       toast.error(errorMessage(error))
                     })
                   }
@@ -233,7 +233,15 @@ function PreviewBody({ artifact, taskId }: { artifact: Artifact; taskId: string 
   }
 
   if (artifact.kind === 'pdf') {
-    return <iframe src={src} title={artifact.name} className="h-[68vh] w-full border-0 bg-white" />
+    return (
+      <iframe
+        src={src}
+        title={artifact.name}
+        sandbox=""
+        referrerPolicy="no-referrer"
+        className="h-[68vh] w-full border-0 bg-white"
+      />
+    )
   }
 
   if (isText) {

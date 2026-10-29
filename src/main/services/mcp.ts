@@ -1,5 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import type { McpServerConfig, McpServerStatus, McpToolInfo } from '@shared/types'
 import { store } from '../store'
 import type { AgentTool } from '../agent/tools/types'
@@ -42,19 +44,54 @@ class McpManager {
     await this.disconnect(config.id)
     if (!config.enabled) return
     this.starting.set(config.id, 'starting')
-    const transport = new StdioClientTransport({
-      command: config.command,
-      args: config.args,
-      env: { ...getDefaultEnvironment(), ...(config.env ?? {}) },
-      stderr: 'pipe',
-      cwd: process.cwd()
-    })
 
     let stderr = ''
-    transport.stderr?.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString()
-      if (stderr.length > 8000) stderr = stderr.slice(-8000)
-    })
+    let transport: StdioClientTransport | StreamableHTTPClientTransport | SSEClientTransport
+    try {
+      const kind = config.transport ?? 'stdio'
+      if (kind === 'http') {
+        if (!config.url) throw new Error('This HTTP MCP server has no endpoint URL.')
+        transport = new StreamableHTTPClientTransport(new URL(config.url), {
+          requestInit: { headers: config.headers }
+        })
+      } else if (kind === 'sse') {
+        if (!config.url) throw new Error('This SSE MCP server has no endpoint URL.')
+        transport = new SSEClientTransport(new URL(config.url), {
+          eventSourceInit: { fetch: (url, init) => fetch(url, { ...init, headers: config.headers }) },
+          requestInit: { headers: config.headers }
+        })
+      } else {
+        if (!config.command) throw new Error('This stdio MCP server has no command.')
+        const stdio = new StdioClientTransport({
+          command: config.command,
+          args: config.args,
+          env: { ...getDefaultEnvironment(), ...(config.env ?? {}) },
+          stderr: 'pipe',
+          cwd: process.cwd()
+        })
+        stdio.stderr?.on('data', (chunk: Buffer) => {
+          stderr += chunk.toString()
+          if (stderr.length > 8000) stderr = stderr.slice(-8000)
+        })
+        transport = stdio
+      }
+    } catch (error) {
+      this.starting.delete(config.id)
+      const message = error instanceof Error ? error.message : String(error)
+      this.connections.set(config.id, {
+        config,
+        client: new Client({ name: 'selfimpulse', version: '0.1.0' }, { capabilities: {} }),
+        tools: [],
+        status: 'error',
+        error: message
+      })
+      sendTaskEvent({
+        type: 'toast',
+        level: 'error',
+        message: `MCP server “${config.name}” failed: ${message}`
+      })
+      return
+    }
 
     const client = new Client(
       { name: 'selfimpulse', version: '0.1.0' },

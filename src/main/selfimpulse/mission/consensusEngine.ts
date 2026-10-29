@@ -162,7 +162,7 @@ export function evaluateConsensus(
     sender: { seatId: "consensus_engine", role: "reviewer", harness: "llm", name: "Consensus Engine" },
     mentions: ["@all"],
     intent: status === "APPROVED" ? "verification" : status === "REJECTED" ? "blocker" : "proposal",
-    content: `⚖️ MULTI-AGENT CONSENSUS: ${status}\n${summary}${arbitrationAction ? `\n${arbitrationAction}` : ""}`,
+    content: `MULTI-AGENT CONSENSUS: ${status}\n${summary}${arbitrationAction ? `\n${arbitrationAction}` : ""}`,
   });
 
   return {

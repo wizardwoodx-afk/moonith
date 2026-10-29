@@ -5,6 +5,17 @@ import { agentRuntime } from '../agent/runtime'
 import { subscribeTaskEvents } from '../emitter'
 import { store } from '../store'
 import { nowIso, truncate } from '../util'
+import { protectChannelReply, telegramChatAuthorized } from './channelPolicy'
+import { resolveAgentName } from '@shared/identity'
+
+/** Fallbacks are sent out to the other side of a channel, so they use the chosen name. */
+function agentLabel(): string {
+  try {
+    return resolveAgentName(store.getPublicSettings().agentName)
+  } catch {
+    return resolveAgentName()
+  }
+}
 
 const MAX_BODY = 64 * 1024
 const WEBHOOK_TIMEOUT = 180_000
@@ -15,6 +26,12 @@ interface DeliveryResult {
   taskId: string
   reply: string | null
   pending?: boolean
+}
+
+function replyForChannel(reply: string | null): string | null {
+  if (reply === null) return null
+  const protectedReply = protectChannelReply(reply, store.getGovernanceSettings().dlp)
+  return protectedReply.text ?? 'SelfImpulse blocked this response under the enterprise DLP policy.'
 }
 
 function lastAssistant(task: Task): string {
@@ -65,8 +82,15 @@ class ChannelService {
     for (const channel of channels) {
       if (channel.kind === 'telegram' && channel.enabled) {
         const token = store.getChannelToken(channel.id)
-        if (token) this.startTelegram(channel, token)
-        else await store.updateChannel(channel.id, { error: 'Add a bot token to connect.' })
+        if (token && channel.allowedChatIds.length === 0) {
+          await store.updateChannel(channel.id, {
+            error: 'Telegram is locked until at least one numeric chat ID is allowed.'
+          })
+        } else if (token) {
+          this.startTelegram(channel, token)
+        } else {
+          await store.updateChannel(channel.id, { error: 'Add a bot token to connect.' })
+        }
       }
     }
   }
@@ -190,13 +214,13 @@ class ChannelService {
       ok: true,
       taskId: result.taskId,
       pending: Boolean(result.pending),
-      reply: result.reply
+      reply: replyForChannel(result.reply)
     })
   }
 
   private authorized(request: IncomingMessage, secret: string | undefined): boolean {
     if (!secret) return false
-    const header = request.headers['x-knight-token']
+    const header = request.headers['x-selfimpulse-token'] ?? request.headers['x-knight-token']
     const authorization = request.headers.authorization
     const provided = Array.isArray(header)
       ? header[0]
@@ -265,9 +289,9 @@ class ChannelService {
       }
       const check = (): void => {
         const task = store.getTask(taskId)
-        if (!task) return finish('This conversation ended before the Captain replied.')
+        if (!task) return finish(`This conversation ended before ${agentLabel()} replied.`)
         if (task.status === 'done') {
-          return finish(lastAssistant(task) || 'The Captain finished without a written reply.')
+          return finish(lastAssistant(task) || `${agentLabel()} finished without a written reply.`)
         }
         if (task.status === 'error') {
           return finish(`The task failed: ${task.error ?? 'unknown error'}`)
@@ -337,6 +361,7 @@ class ChannelService {
           const text = message?.text?.trim()
           const chatId = message?.chat?.id
           if (!text || chatId === undefined || message?.from?.is_bot) continue
+          if (!telegramChatAuthorized(channel.allowedChatIds, chatId)) continue
           void this.handleTelegram(channel.id, token, chatId, text)
         }
         const stored = store.getChannel(channel.id)
@@ -357,24 +382,40 @@ class ChannelService {
     text: string
   ): Promise<void> {
     const channel = store.listChannels().find((item) => item.id === channelId)
-    if (!channel) return
+    if (!channel || !telegramChatAuthorized(channel.allowedChatIds, chatId)) return
     try {
       const result = await this.deliver(channel, text, `tg:${chatId}`, TELEGRAM_TIMEOUT)
-      const reply =
+      const reply = replyForChannel(
         result.reply ??
-        'The task is still running. Open SelfImpulse to follow it; I will not send a partial answer here.'
-      await this.sendTelegram(token, chatId, reply)
+          'The task is still running. Open SelfImpulse to follow it; I will not send a partial answer here.'
+      )
+      if (reply !== null) await this.sendTelegram(channelId, token, chatId, reply)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       await store.updateChannel(channelId, { error: truncate(message, 300) })
-      await this.sendTelegram(token, chatId, `SelfImpulse could not complete that: ${message}`).catch(
-        () => undefined
-      )
+      await this.sendTelegram(
+        channelId,
+        token,
+        chatId,
+        `SelfImpulse could not complete that: ${message}`
+      ).catch(() => undefined)
     }
   }
 
-  private async sendTelegram(token: string, chatId: number, text: string): Promise<void> {
-    const chunks = text.match(/[\s\S]{1,3900}/g) ?? [text]
+  private async sendTelegram(
+    channelId: string,
+    token: string,
+    chatId: number,
+    text: string
+  ): Promise<void> {
+    const channel = store.listChannels().find((item) => item.id === channelId)
+    if (!channel || !channel.enabled || !telegramChatAuthorized(channel.allowedChatIds, chatId)) {
+      return
+    }
+    const protectedReply = protectChannelReply(text, store.getGovernanceSettings().dlp)
+    const approvedText =
+      protectedReply.text ?? 'SelfImpulse blocked this response under the enterprise DLP policy.'
+    const chunks = approvedText.match(/[\s\S]{1,3900}/g) ?? [approvedText]
     for (const chunk of chunks) {
       const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',

@@ -10,6 +10,7 @@
 import type { ReactNode } from 'react'
 import { AlertTriangle, ShieldCheck } from 'lucide-react'
 import { cn } from '../../lib/utils'
+import { EmptyPanel } from './settingParts'
 
 /* ── outcomes ─────────────────────────────────────────────────────────────── */
 
@@ -61,10 +62,10 @@ export function Stat({
   tone?: 'default' | 'positive' | 'warn' | 'danger' | 'accent'
 }) {
   return (
-    <div className="rounded-xl border border-line bg-canvas/50 px-4 py-3">
+    <div className="rounded-[var(--r-card)] border border-line bg-canvas/50 px-4 py-3">
       <p
         className={cn(
-          'display text-[22px] leading-none',
+          'font-data text-[22px] leading-none font-semibold',
           tone === 'positive' && 'text-positive',
           tone === 'warn' && 'text-warn',
           tone === 'danger' && 'text-danger',
@@ -93,20 +94,12 @@ export function EmptyState({
 }: {
   icon: ReactNode
   title: string
-  children: ReactNode
+  children?: ReactNode
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-line px-6 py-12 text-center">
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-surface-2 text-faint">
-        {icon}
-      </div>
-      <div>
-        <p className="text-[13px] font-medium text-ink">{title}</p>
-        <p className="mx-auto mt-1 max-w-[440px] text-[11.5px] leading-relaxed text-muted">
-          {children}
-        </p>
-      </div>
-    </div>
+    <EmptyPanel icon={icon} title={title}>
+      {children}
+    </EmptyPanel>
   )
 }
 
@@ -122,7 +115,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium',
+        'inline-flex whitespace-nowrap items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium',
         tone === 'default' && 'border-line bg-surface-2 text-muted',
         tone === 'positive' && 'border-positive/25 bg-positive/10 text-positive',
         tone === 'warn' && 'border-warn/25 bg-warn/10 text-warn',
@@ -163,12 +156,16 @@ export function Row({
   meta?: ReactNode
   trailing?: ReactNode
 }) {
+  /** Both lines ellipsize, so a string title or meta carries its own full text as
+   *  a tooltip — ids, paths and digests must stay readable. */
+  const titleHint = typeof title === 'string' ? title : undefined
+  const metaHint = typeof meta === 'string' ? meta : undefined
   return (
     <div className="flex items-start gap-2.5 rounded-lg px-2.5 py-2 transition-colors hover:bg-surface-2/50">
       {leading}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[12px] font-medium text-ink">{title}</p>
-        {meta ? <p className="mt-0.5 truncate text-[10.5px] text-faint">{meta}</p> : null}
+        <p className="truncate text-[12px] font-medium text-ink" title={titleHint}>{title}</p>
+        {meta ? <p className="mt-0.5 truncate text-[10.5px] text-faint" title={metaHint}>{meta}</p> : null}
       </div>
       {trailing ? <div className="flex shrink-0 items-center gap-1.5">{trailing}</div> : null}
     </div>

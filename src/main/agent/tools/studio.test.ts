@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest'
-import { CLI_SHAPE, STUDIO_APPS, buildListArgs, buildRunArgs, studioCommandsTool, studioRunTool } from './studio'
+import { afterAll, describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { CLI_SHAPE, STUDIO_APPS, buildListArgs, buildRunArgs, resolveStudioBinary, safeCommandToken, studioCommandsTool, studioRunTool } from './studio'
 import { requiresReceipt } from '../../sphragis/schema'
 import { capabilityForTool } from '../../nomos/policy'
 import type { ToolContext } from './types'
@@ -8,7 +11,7 @@ const bare = { input: null, output: null, roots: [] }
 
 describe('studio engine registry', () => {
   it('covers every engine the app ships', () => {
-    expect(Object.keys(STUDIO_APPS)).toHaveLength(15)
+    expect(Object.keys(STUDIO_APPS)).toHaveLength(14)
   })
 
   it('gives every engine its own name rather than the upstream one', () => {
@@ -19,6 +22,7 @@ describe('studio engine registry', () => {
       // The id is the label lowercased, and must stay ASCII so it can travel as a tool argument.
       expect(id).toMatch(/^[a-z]+$/)
       expect(app.label.toLowerCase()).toBe(id)
+      expect(app.env).toBe(`SELFIMPULSE_STUDIO_${id.toUpperCase()}`)
     }
   })
 
@@ -27,13 +31,60 @@ describe('studio engine registry', () => {
       expect(CLI_SHAPE[id]).toBeDefined()
     }
   })
+})
 
-  it('marks only the engines whose CLI was confirmed', () => {
-    const verified = Object.entries(STUDIO_APPS)
-      .filter(([, app]) => app.verified)
-      .map(([id]) => id)
-      .sort()
-    expect(verified).toEqual(['chartes', 'eikon', 'logos', 'pinax', 'skene', 'techton', 'gramme'].sort())
+describe('binary resolution', () => {
+  const app = STUDIO_APPS.pinax
+  const originalOverride = process.env[app.env]
+  afterAll(() => {
+    if (originalOverride === undefined) delete process.env[app.env]
+    else process.env[app.env] = originalOverride
+  })
+
+  it('prefers the explicit override, then the tools folder, then PATH', () => {
+    delete process.env[app.env]
+    expect(resolveStudioBinary(app)).toBe('gridcraft-cli')
+    const dir = mkdtempSync(join(tmpdir(), 'studio-'))
+    try {
+      writeFileSync(join(dir, 'gridcraft-cli.exe'), '')
+      const found = resolveStudioBinary(app, dir)
+      expect(found).toContain('studio-')
+      expect(found.toLowerCase()).toContain('gridcraft-cli.exe')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+    process.env[app.env] = 'D:/tools/gridcraft-cli.exe'
+    expect(resolveStudioBinary(app, join(tmpdir(), 'nowhere'))).toBe('D:/tools/gridcraft-cli.exe')
+  })
+})
+
+describe('command token safety', () => {
+  it('accepts plain dotted ids and rejects flag-shaped or control-bearing ones', () => {
+    expect(safeCommandToken('home.bold')).toBe(true)
+    expect(safeCommandToken('text_find')).toBe(true)
+    expect(safeCommandToken('slide.new')).toBe(true)
+    expect(safeCommandToken('--root')).toBe(false)
+    expect(safeCommandToken('-x')).toBe(false)
+    expect(safeCommandToken('a b')).toBe(false)
+    expect(safeCommandToken('a\tb')).toBe(false)
+    expect(safeCommandToken('')).toBe(false)
+    expect(safeCommandToken('a'.repeat(129))).toBe(false)
+  })
+
+  it('refuses a flag-shaped command id instead of spawning it', () => {
+    const args = buildRunArgs('pinax', { app: 'pinax', commands: [{ id: '--root' }] }, bare)
+    expect(typeof args).toBe('string')
+    expect(args as string).toContain('not a valid command id')
+  })
+
+  it('refuses a flag-shaped parameter name', () => {
+    const args = buildRunArgs(
+      'pinax',
+      { app: 'pinax', commands: [{ id: 'home.bold', params: { '--out': '/etc' } }] },
+      bare
+    )
+    expect(typeof args).toBe('string')
+    expect(args as string).toContain('not a valid parameter name')
   })
 })
 
@@ -156,6 +207,6 @@ describe('studio tool classification', () => {
     const result = await studioCommandsTool.execute({}, {} as ToolContext)
     expect(result.isError).toBeUndefined()
     expect(result.content).toContain('pinax')
-    expect(Object.keys(STUDIO_APPS)).toHaveLength(15)
+    expect(Object.keys(STUDIO_APPS)).toHaveLength(14)
   })
 })

@@ -1,4 +1,6 @@
+import { agentName } from '../../lib/localProfile'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import {
   AlertTriangle,
   Bot,
@@ -7,6 +9,7 @@ import {
   Copy,
   Globe2,
   MessageCircle,
+  Plug,
   Plus,
   RefreshCw,
   Search,
@@ -22,18 +25,36 @@ import type {
   SkillDetail,
   SkillDraft,
   SkillMarketResult,
-  SkillSource,
   SkillSummary,
   SubAgentRun
 } from '@shared/types'
 import { Button, FieldGroup, IconButton, Modal, Spin, Toggle } from '../../components/ui'
 import { cn, errorMessage, timeAgo } from '../../lib/utils'
 import { SettingsSection } from './SettingsSection'
+import {
+  ActionWord,
+  CountTabs,
+  EmptyPanel,
+  SettingCard,
+  SettingList,
+  SettingRow,
+  SettingTile,
+  StatusChip
+} from './settingParts'
+import { MarketspaceSection } from './MarketspaceSection'
 
 const inputClass =
   'h-9 w-full rounded-lg border border-line bg-canvas px-3 text-[12.5px] text-ink outline-none transition-colors placeholder:text-faint focus:border-accent/45'
 const textareaClass =
   'w-full resize-y rounded-lg border border-line bg-canvas px-3 py-2.5 text-[12.5px] leading-relaxed text-ink outline-none transition-colors placeholder:text-faint focus:border-accent/45'
+
+export function DesignSystemsPane({ actionHost }: { actionHost: HTMLElement | null }) {
+  return (
+    <div className="space-y-9">
+      <MarketspaceSection actionHost={actionHost} />
+    </div>
+  )
+}
 
 function Chip({
   children,
@@ -45,7 +66,7 @@ function Chip({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium',
+        'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-medium',
         tone === 'accent' && 'border-accent/30 bg-accent-soft text-accent-ink',
         tone === 'positive' && 'border-positive/25 bg-positive/10 text-positive',
         tone === 'warn' && 'border-warn/30 bg-warn/10 text-warn',
@@ -62,31 +83,6 @@ function ErrorBanner({ message }: { message: string }) {
     <div className="flex items-start gap-2.5 rounded-xl border border-danger/25 bg-danger/10 px-3.5 py-3">
       <AlertTriangle size={14} className="mt-0.5 shrink-0 text-danger" />
       <p className="text-[11.5px] leading-relaxed text-danger">{message}</p>
-    </div>
-  )
-}
-
-function Empty({
-  icon,
-  title,
-  hint,
-  action
-}: {
-  icon: ReactNode
-  title: string
-  hint: string
-  action?: ReactNode
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-line px-6 py-12 text-center">
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-surface-2 text-faint">
-        {icon}
-      </div>
-      <div>
-        <p className="text-[13px] font-medium text-ink">{title}</p>
-        <p className="mx-auto mt-1 max-w-[420px] text-[11.5px] leading-relaxed text-muted">{hint}</p>
-      </div>
-      {action}
     </div>
   )
 }
@@ -110,13 +106,17 @@ function formatElapsed(run: SubAgentRun): string {
 
 /* ───────────────────────────── Skills ───────────────────────────── */
 
-export function SkillsPane() {
+const CATALOG_FAILURE = 'The catalog could not be reached. Check the connection and try again.'
+
+export function SkillsPane({ actionHost }: { actionHost: HTMLElement | null }) {
   const [skills, setSkills] = useState<SkillSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
-  const [registry, setRegistry] = useState<SkillSource>('registry')
+  const [tab, setTab] = useState<'installed' | 'catalog'>('installed')
   const [results, setResults] = useState<SkillMarketResult[] | null>(null)
   const [searching, setSearching] = useState(false)
+  const [catalogError, setCatalogError] = useState<string | null>(null)
+  const [installError, setInstallError] = useState<string | null>(null)
   const [installing, setInstalling] = useState<string | null>(null)
   const [detail, setDetail] = useState<SkillDetail | null>(null)
   const [removeTarget, setRemoveTarget] = useState<SkillSummary | null>(null)
@@ -139,24 +139,50 @@ export function SkillsPane() {
     void load()
   }, [load])
 
-  const runSearch = async (): Promise<void> => {
+  const runSearch = useCallback(async (searchQuery: string): Promise<void> => {
     setSearching(true)
+    setCatalogError(null)
     try {
-      setResults(await window.knight.searchSkills(query, registry))
-    } catch (error) {
-      toast.error(errorMessage(error))
+      setResults(await window.knight.searchSkills(searchQuery))
+    } catch {
+      setResults(null)
+      setCatalogError(CATALOG_FAILURE)
     } finally {
       setSearching(false)
     }
-  }
+  }, [])
 
-  const install = async (ref: string, from: SkillSource): Promise<void> => {
+  useEffect(() => {
+    if (tab === 'installed') return
+    let alive = true
+    setSearching(true)
+    setCatalogError(null)
+    window.knight
+      .searchSkills('')
+      .then((found) => {
+        if (alive) setResults(found)
+      })
+      .catch(() => {
+        if (!alive) return
+        setResults(null)
+        setCatalogError(CATALOG_FAILURE)
+      })
+      .finally(() => {
+        if (alive) setSearching(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [tab])
+
+  const install = async (ref: string): Promise<void> => {
     setInstalling(ref)
+    setInstallError(null)
     try {
-      setSkills(await window.knight.installSkill(ref, from))
-      toast.success('Skill installed. The Captain can use it now.')
+      setSkills(await window.knight.installSkill(ref))
+      toast.success(`Skill installed. The ${agentName()} can use it now.`)
     } catch (error) {
-      toast.error(errorMessage(error))
+      setInstallError(errorMessage(error))
     } finally {
       setInstalling(null)
     }
@@ -201,101 +227,89 @@ export function SkillsPane() {
   }
 
   return (
-    <div className="space-y-9">
-      <SettingsSection
-        title="Installed skills"
-        description="Playbooks the Captain loads when the work matches."
-        action={
-          <Button size="sm" variant="primary" onClick={() => setCreating(true)}>
-            <Plus size={13} /> New skill
+    <div className="space-y-6">
+      {actionHost
+        ? createPortal(
+            <Button size="sm" variant="primary" onClick={() => setCreating(true)}>
+              <Plus size={13} /> New skill
+            </Button>,
+            actionHost
+          )
+        : null}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <CountTabs
+          value={tab}
+          onChange={(value) => {
+            setTab(value)
+            setResults(null)
+            setCatalogError(null)
+            setInstallError(null)
+          }}
+          tabs={[
+            { value: 'installed', label: 'Installed', count: skills.length },
+            { value: 'catalog', label: 'Catalog' }
+          ]}
+        />
+        {tab === 'installed' ? null : (
+          <Button size="sm" variant="secondary" loading={searching} onClick={() => void runSearch(query)}>
+            <Search size={13} /> Search
           </Button>
-        }
-      >
-        {loading ? (
-          <div className="flex items-center justify-center py-10 text-muted">
+        )}
+      </div>
+
+      {tab === 'installed' ? (
+        loading ? (
+          <div className="card flex items-center justify-center py-12 text-muted">
             <Spin size={18} />
           </div>
         ) : skills.length === 0 ? (
-          <Empty
+          <EmptyPanel
             icon={<Sparkles size={18} />}
-            title="No skills installed yet"
-            hint="Write a playbook for work you repeat, or install one from the registry."
+            title={<>No skills installed yet.</>}
             action={
-              <Button size="sm" variant="primary" onClick={() => setCreating(true)}>
-                <Plus size={13} /> Write the first skill
+              <Button size="sm" variant="secondary" onClick={() => setTab('catalog')}>
+                <Boxes size={13} /> Browse the catalog
               </Button>
             }
-          />
+          >
+            Create one with <ActionWord>New skill</ActionWord> in the top right, or install it from
+            the catalog.
+          </EmptyPanel>
         ) : (
-          <div className="divide-y divide-line">
+          <SettingCard>
             {skills.map((skill) => (
-              <div key={skill.id} className="flex items-start gap-3.5 py-3.5 first:pt-0 last:pb-0">
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-ink">
-                  <Sparkles size={14} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[12.5px] font-medium text-ink">{skill.name}</p>
+              <SettingRow
+                key={skill.id}
+                icon={<Sparkles size={14} />}
+                tone="accent"
+                title={
+                  <span className="flex flex-wrap items-center gap-2">
+                    {skill.name}
                     <Chip tone={skill.source === 'installed' ? 'accent' : 'neutral'}>
-                      {skill.registry === 'marketplace'
-                        ? 'Marketplace'
-                        : skill.registry === 'registry'
-                          ? 'Registry'
-                          : 'Local'}
+                      {skill.source === 'installed' ? 'Catalog' : 'Local'}
                     </Chip>
-                    <span className="text-[10px] text-faint">
-                      {skill.files} file{skill.files === 1 ? '' : 's'}
-                      {skill.updatedAt ? ` · ${timeAgo(skill.updatedAt)}` : ''}
-                    </span>
-                  </div>
-                  <p className="mt-1 line-clamp-2 text-[11.5px] leading-relaxed text-muted">
-                    {skill.description}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => void openDetail(skill.id)}>
-                    Read
-                  </Button>
-                  <IconButton
-                    aria-label={`Remove ${skill.name}`}
-                    onClick={() => setRemoveTarget(skill)}
-                    className="hover:text-danger"
-                  >
-                    <Trash2 size={13} />
-                  </IconButton>
-                </div>
-              </div>
+                  </span>
+                }
+                description={`${skill.description} · ${skill.files} file${skill.files === 1 ? '' : 's'}${skill.updatedAt ? ` · ${timeAgo(skill.updatedAt)}` : ''}`}
+              >
+                <Button size="sm" variant="secondary" onClick={() => void openDetail(skill.id)}>
+                  Read
+                </Button>
+                <IconButton
+                  aria-label={`Remove ${skill.name}`}
+                  onClick={() => setRemoveTarget(skill)}
+                  className="hover:text-danger"
+                >
+                  <Trash2 size={13} />
+                </IconButton>
+              </SettingRow>
             ))}
-          </div>
-        )}
-      </SettingsSection>
-
-      <SettingsSection
-        title="Skill registries"
-        description="Search a public registry. Nothing installs until you choose it."
-      >
-        <div className="flex w-fit gap-0.5 rounded-lg border border-line bg-canvas p-0.5">
-          {(['registry', 'marketplace'] as const).map((id) => (
-            <button
-              key={id}
-              onClick={() => {
-                setRegistry(id)
-                setResults(null)
-              }}
-              className={cn(
-                'rounded-[6px] px-2.5 py-1 text-[11px] transition-colors',
-                registry === id
-                  ? 'bg-surface-3 text-ink'
-                  : 'text-muted hover:text-ink'
-              )}
-            >
-              {id === 'registry' ? 'Registry' : 'Marketplace'}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-4 flex gap-2">
-          <div className="relative flex-1">
+          </SettingCard>
+        )
+      ) : (
+        <div className="space-y-4">
+          <div className="relative">
             <Search
               size={13}
               className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-faint"
@@ -304,61 +318,69 @@ export function SkillsPane() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') void runSearch()
+                if (event.key === 'Enter') void runSearch(query)
               }}
-              placeholder={`Search ${registry === 'marketplace' ? 'Marketplace' : 'Registry'}`}
-              aria-label={`Search ${registry === 'marketplace' ? 'Marketplace' : 'Registry'} skills`}
+              placeholder="Search the skill catalog"
+              aria-label="Search the skill catalog"
               className={cn(inputClass, 'pl-8')}
             />
           </div>
-          <Button size="md" variant="secondary" loading={searching} onClick={() => void runSearch()}>
-            Search
-          </Button>
-        </div>
 
-        {results === null ? (
-          <p className="mt-4 text-[11.5px] leading-relaxed text-faint">
-            See what is available. Nothing installs until you choose it.
-          </p>
-        ) : results.length === 0 ? (
-          <p className="mt-4 text-[11.5px] text-muted">No skills match that search.</p>
-        ) : (
-          <div className="mt-4 divide-y divide-line">
-            {results.map((result) => (
-              <div key={result.ref} className="flex items-start gap-3.5 py-3.5 first:pt-0 last:pb-0">
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-muted">
-                  <Boxes size={14} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[12.5px] font-medium text-ink">{result.name}</p>
-                    {result.version ? <Chip>{result.version}</Chip> : null}
-                    {result.author ? <span className="text-[10px] text-faint">by {result.author}</span> : null}
-                  </div>
-                  <p className="mt-1 line-clamp-2 text-[11.5px] leading-relaxed text-muted">
-                    {result.summary || 'No summary provided.'}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  loading={installing === result.ref}
-                  disabled={!result.ref || Boolean(installing)}
-                  onClick={() => void install(result.ref, result.registry)}
+          {installError ? <ErrorBanner message={installError} /> : null}
+
+          {searching ? (
+            <div className="card flex items-center justify-center py-12 text-muted">
+              <Spin size={18} />
+            </div>
+          ) : catalogError ? (
+            <div className="space-y-3">
+              <ErrorBanner message={catalogError} />
+              <Button size="sm" variant="secondary" onClick={() => void runSearch(query)}>
+                <RefreshCw size={12} /> Try again
+              </Button>
+            </div>
+          ) : results === null ? (
+            <p className="px-1 text-[12px] leading-relaxed text-faint">Loading the catalog…</p>
+          ) : results.length === 0 ? (
+            <p className="px-1 text-[12px] text-muted">No skill in the catalog matches that search.</p>
+          ) : (
+            <SettingCard>
+              {results.map((result) => (
+                <SettingRow
+                  key={result.ref}
+                  icon={<Boxes size={14} />}
+                  title={
+                    <span className="flex flex-wrap items-center gap-2">
+                      {result.name}
+                      {result.version ? <Chip>{result.version}</Chip> : null}
+                      {result.author ? (
+                        <span className="text-[10.5px] text-faint">by {result.author}</span>
+                      ) : null}
+                    </span>
+                  }
+                  description={result.summary || 'No summary provided.'}
                 >
-                  Install
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </SettingsSection>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={installing === result.ref}
+                    disabled={!result.ref || Boolean(installing)}
+                    onClick={() => void install(result.ref)}
+                  >
+                    Install
+                  </Button>
+                </SettingRow>
+              ))}
+            </SettingCard>
+          )}
+        </div>
+      )}
 
       <Modal
         open={creating}
         onClose={() => setCreating(false)}
         title="New skill"
-        subtitle="Give the Captain a repeatable playbook it can load by name."
+        subtitle={`Give the ${agentName()} a repeatable playbook it can load by name.`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setCreating(false)}>
@@ -418,7 +440,7 @@ export function SkillsPane() {
         open={Boolean(removeTarget)}
         onClose={() => setRemoveTarget(null)}
         title={`Remove ${removeTarget?.name ?? 'skill'}?`}
-        subtitle="This deletes the bundle from this device. Installed registry skills can be installed again."
+        subtitle="This deletes the bundle from this device. Catalog skills can be installed again."
         footer={
           <>
             <Button variant="ghost" onClick={() => setRemoveTarget(null)}>
@@ -431,7 +453,7 @@ export function SkillsPane() {
         }
       >
         <p className="text-[12px] leading-relaxed text-muted">
-          The Captain will stop seeing this skill in its prompt immediately.
+          The {agentName()} will stop seeing this skill in its prompt immediately.
         </p>
       </Modal>
     </div>
@@ -439,6 +461,11 @@ export function SkillsPane() {
 }
 
 /* ───────────────────────────── Connectors ─────────────────────────── */
+
+/** The connector service names itself in the errors it returns; the UI stays in product voice. */
+function connectorMessage(message: string): string {
+  return message.replace(/\bComposio\b/g, 'Connector service')
+}
 
 export function ConnectorsPane() {
   const [state, setState] = useState<ConnectorsState | null>(null)
@@ -454,7 +481,7 @@ export function ConnectorsPane() {
     try {
       setState(await window.knight.connectorsState(refresh))
     } catch (error) {
-      toast.error(errorMessage(error))
+      toast.error(connectorMessage(errorMessage(error)))
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -475,10 +502,10 @@ export function ConnectorsPane() {
       const next = await window.knight.saveConnectors({ apiKey: keyDraft })
       setState(next)
       setKeyDraft('')
-      if (next.error) toast.error(next.error)
+      if (next.error) toast.error(connectorMessage(next.error))
       else toast.success('Connectors connected.')
     } catch (error) {
-      toast.error(errorMessage(error))
+      toast.error(connectorMessage(errorMessage(error)))
     } finally {
       setSaving(false)
     }
@@ -492,9 +519,9 @@ export function ConnectorsPane() {
     try {
       const next = await window.knight.saveConnectors(input)
       setState(next)
-      if (next.error) toast.error(next.error)
+      if (next.error) toast.error(connectorMessage(next.error))
     } catch (error) {
-      toast.error(errorMessage(error))
+      toast.error(connectorMessage(errorMessage(error)))
     }
   }
 
@@ -534,64 +561,89 @@ export function ConnectorsPane() {
     <div className="space-y-9">
       <SettingsSection
         title="Connection"
-        description="Your key stays sealed on this device. Calls go straight to the connector service."
-      >
-        <div className="space-y-5">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-[12.5px] font-medium text-ink">Connector key</p>
-              <p className="text-[11.5px] text-muted">
-                {state?.configured ? 'A key is saved on this device.' : 'Add a key to list toolkits.'}
-              </p>
+        body={
+          <div className="space-y-5">
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={keyDraft}
+                onChange={(event) => setKeyDraft(event.target.value)}
+                aria-label="Connector key"
+                placeholder="Paste a connector key"
+                className={inputClass}
+                autoComplete="off"
+              />
+              <Button variant="primary" loading={saving} onClick={() => void saveKey()}>
+                {state?.configured ? 'Replace' : 'Connect'}
+              </Button>
             </div>
+            {state?.configured ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+                <div>
+                  <p className="text-[12.5px] font-medium text-ink">Give the {agentName()} tool access</p>
+                  <p className="text-[11.5px] text-muted">
+                    Only enabled toolkits are exposed. Calls follow your gates.
+                  </p>
+                </div>
+                <Toggle
+                  checked={state.enabled}
+                  onChange={(checked) => void patch({ enabled: checked })}
+                  label="Expose connector tools"
+                />
+              </div>
+            ) : null}
+            {state?.configured ? (
+              <button
+                onClick={() => void patch({ removeKey: true })}
+                className="text-[11px] font-medium text-danger hover:underline"
+              >
+                Remove the saved key
+              </button>
+            ) : null}
+            {state?.error ? <ErrorBanner message={connectorMessage(state.error)} /> : null}
+          </div>
+        }
+      >
+        <SettingList>
+          <SettingRow
+            icon={<Plug size={14} />}
+            title="Connector key"
+            description={
+              state?.configured ? 'A key is saved on this device.' : 'Add a key to list toolkits.'
+            }
+          >
             <Chip tone={state?.configured ? 'positive' : 'neutral'}>
               {state?.configured ? 'Connected' : 'Not connected'}
             </Chip>
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="password"
-              value={keyDraft}
-              onChange={(event) => setKeyDraft(event.target.value)}
-              aria-label="Connector API key"
-              className={inputClass}
-              autoComplete="off"
-            />
-            <Button variant="primary" loading={saving} onClick={() => void saveKey()}>
-              {state?.configured ? 'Replace' : 'Connect'}
-            </Button>
-          </div>
-          {state?.configured ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-              <div>
-                <p className="text-[12.5px] font-medium text-ink">Give the Captain tool access</p>
-                <p className="text-[11.5px] text-muted">
-                  Only enabled toolkits are exposed. Calls follow your gates.
-                </p>
-              </div>
-              <Toggle
-                checked={state.enabled}
-                onChange={(checked) => void patch({ enabled: checked })}
-                label="Expose connector tools"
-              />
-            </div>
-          ) : null}
-          {state?.configured ? (
-            <button
-              onClick={() => void patch({ removeKey: true })}
-              className="text-[11px] font-medium text-danger hover:underline"
-            >
-              Remove the saved key
-            </button>
-          ) : null}
-          {state?.error ? <ErrorBanner message={state.error} /> : null}
-        </div>
+          </SettingRow>
+        </SettingList>
       </SettingsSection>
+
+      {state ? null : (
+        <div className="space-y-3">
+          <ErrorBanner message="Connector status could not be loaded. Check the connection and try again." />
+          <Button size="sm" variant="secondary" loading={refreshing} onClick={() => void load(true)}>
+            <RefreshCw size={12} /> Try again
+          </Button>
+        </div>
+      )}
+
+      {state && !state.configured ? (
+        <SettingsSection title="Toolkits">
+          <EmptyPanel
+            icon={<Plug size={18} />}
+            title="No key saved, so there is nothing to list."
+            className="pt-10 pb-8"
+          >
+            Paste a key above and press <ActionWord>Connect</ActionWord>.
+          </EmptyPanel>
+        </SettingsSection>
+      ) : null}
 
       {state?.configured && state.enabled ? (
         <SettingsSection
           title="Toolkits"
-          description="Enabled toolkits expose their tools to the Captain."
+          
           action={
             <Button size="sm" variant="ghost" loading={refreshing} onClick={() => void load(true)}>
               <RefreshCw size={12} /> Refresh
@@ -629,7 +681,7 @@ export function ConnectorsPane() {
                         <span className="text-[10px] text-faint">{toolkit.tools} tools</span>
                       ) : null}
                     </div>
-                    <p className="mt-0.5 line-clamp-1 text-[11px] leading-relaxed text-muted">
+                    <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted" title={toolkit.description || undefined}>
                       {toolkit.description || 'No description provided.'}
                     </p>
                   </div>
@@ -648,11 +700,11 @@ export function ConnectorsPane() {
       {state?.configured && state.enabled ? (
         <SettingsSection
           title="Tools in the prompt"
-          description="Handed to the model. Every call passes your gates."
+          
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="display text-[26px] leading-none text-ink">{state.tools.length}</p>
+              <p className="font-data text-[26px] leading-none font-semibold text-ink">{state.tools.length}</p>
               <p className="mt-1 text-[11px] text-muted">
                 across {state.toolkits.filter((toolkit) => toolkit.enabled).length} enabled toolkit
                 {state.toolkits.filter((toolkit) => toolkit.enabled).length === 1 ? '' : 's'}
@@ -684,13 +736,14 @@ export function ConnectorsPane() {
 
 /* ───────────────────────────── Channels ───────────────────────────── */
 
-export function ChannelsPane() {
+export function ChannelsPane({ actionHost }: { actionHost: HTMLElement | null }) {
   const [state, setState] = useState<ChannelState | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<ChannelRecord | 'new' | null>(null)
   const [kind, setKind] = useState<'webhook' | 'telegram'>('webhook')
   const [name, setName] = useState('')
   const [token, setToken] = useState('')
+  const [allowedChatIds, setAllowedChatIds] = useState('')
   const [saving, setSaving] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [removeTarget, setRemoveTarget] = useState<ChannelRecord | null>(null)
@@ -714,6 +767,7 @@ export function ChannelsPane() {
     setKind(next)
     setName(next === 'webhook' ? 'Local webhook' : 'Chat channel')
     setToken('')
+    setAllowedChatIds('')
     setEditing('new')
   }
 
@@ -721,10 +775,12 @@ export function ChannelsPane() {
     setKind(channel.kind)
     setName(channel.name)
     setToken('')
+    setAllowedChatIds(channel.allowedChatIds.join('\n'))
     setEditing(channel)
   }
 
   const save = async (): Promise<void> => {
+    const chatIds = allowedChatIds.split(/[\s,]+/).map((id) => id.trim()).filter(Boolean)
     setSaving(true)
     try {
       if (editing === 'new') {
@@ -733,7 +789,8 @@ export function ChannelsPane() {
             kind,
             name,
             enabled: true,
-            token: kind === 'telegram' ? token : undefined
+            token: kind === 'telegram' ? token : undefined,
+            allowedChatIds: kind === 'telegram' ? chatIds : undefined
           })
         )
       } else if (editing) {
@@ -743,7 +800,8 @@ export function ChannelsPane() {
             kind: editing.kind,
             name,
             enabled: editing.enabled,
-            token: token || undefined
+            token: token || undefined,
+            allowedChatIds: kind === 'telegram' ? chatIds : undefined
           })
         )
       }
@@ -824,9 +882,19 @@ export function ChannelsPane() {
 
   return (
     <div className="space-y-9">
-      <SettingsSection
-        title="Listeners"
-        description="Another program can message the Captain. The reply goes back the same way."
+      {actionHost
+        ? createPortal(
+            <Button size="sm" variant="primary" onClick={() => openNew('webhook')}>
+              <Plus size={12.5} /> Add channel
+            </Button>,
+            actionHost
+          )
+        : null}
+
+      {state?.channels.length ? (
+        <SettingsSection
+          title="Listeners"
+        
         action={
           <div className="flex items-center gap-2 whitespace-nowrap text-[11px] text-muted">
             <span
@@ -839,7 +907,6 @@ export function ChannelsPane() {
           </div>
         }
       >
-        {state?.channels.length ? (
           <div className="space-y-4">
             {state.channels.map((channel) => (
               <div key={channel.id} className="rounded-xl border border-line bg-canvas/45 p-4">
@@ -868,7 +935,10 @@ export function ChannelsPane() {
                     {channel.kind === 'webhook' && channel.webhookPath ? (
                       <div className="mt-3 space-y-2">
                         <div className="flex items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-1.5">
-                          <code className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-ink/80">
+                          <code
+                            className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-ink/80"
+                            title={channel.webhookPath ?? undefined}
+                          >
                             {channel.webhookPath}
                           </code>
                           <IconButton
@@ -884,7 +954,10 @@ export function ChannelsPane() {
                         </div>
                         {channel.webhookToken ? (
                           <div className="flex items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-1.5">
-                            <code className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-ink/80">
+                            <code
+                              className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-ink/80"
+                              title={channel.webhookToken ?? undefined}
+                            >
                               {channel.webhookToken}
                             </code>
                             <IconButton
@@ -903,16 +976,16 @@ export function ChannelsPane() {
                         ) : null}
                         <p className="text-[10.5px] leading-relaxed text-faint">
                           POST JSON with a text field to this address and the header
-                          <span className="mx-1 font-mono">x-knight-token</span>. The call returns the
-                          Captain’s reply, or 202 with a task id if it is still running.
+                          <span className="mx-1 font-mono">x-selfimpulse-token</span>. The call returns the
+                          {agentName()}’s reply, or 202 with a task id if it is still running.
                         </p>
                       </div>
                     ) : null}
 
                     {channel.kind === 'telegram' ? (
                       <p className="mt-3 text-[10.5px] leading-relaxed text-faint">
-                        The bot polls Telegram from this machine. Messages from any chat the bot can
-                        receive become tasks; replies are sent back to the same chat.
+                        Only {channel.allowedChatIds.length} configured numeric chat ID{channel.allowedChatIds.length === 1 ? '' : 's'} can create tasks.
+                        Unlisted chats are denied; outgoing replies are checked by enterprise DLP.
                       </p>
                     ) : null}
                   </div>
@@ -931,7 +1004,7 @@ export function ChannelsPane() {
                     </Button>
                   ) : (
                     <Button size="sm" variant="ghost" onClick={() => openEdit(channel)}>
-                      {channel.hasToken ? 'Replace token' : 'Add token'}
+                      Configure
                     </Button>
                   )}
                   <Button size="sm" variant="ghost" onClick={() => setRemoveTarget(channel)}>
@@ -941,18 +1014,22 @@ export function ChannelsPane() {
               </div>
             ))}
           </div>
-        ) : (
-          <Empty
-            icon={<Globe2 size={18} />}
-            title="No channels yet"
-            hint="Add a local webhook for your own scripts and apps, or connect a chat bot so you can message the Captain from your phone."
-          />
-        )}
+        </SettingsSection>
+      ) : (
+        <EmptyPanel
+          icon={<Globe2 size={18} />}
+          title={<>No channels yet.</>}
+        >
+          Select <ActionWord>Add channel</ActionWord> in the top right to get started.
+        </EmptyPanel>
+      )}
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div>
+        <p className="mb-2.5 px-4 text-[12px] font-medium text-muted">Other kinds</p>
+        <div className="grid gap-3 sm:grid-cols-2">
           <button
             onClick={() => openNew('webhook')}
-            className="group flex items-center gap-3 rounded-xl border border-dashed border-line px-4 py-3.5 text-left transition-colors hover:border-accent/40 hover:bg-accent-soft/40"
+            className="group flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3.5 text-left transition-colors hover:border-accent/40 hover:bg-accent-soft/40"
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-muted group-hover:text-accent-ink">
               <Webhook size={14} />
@@ -965,7 +1042,7 @@ export function ChannelsPane() {
           </button>
           <button
             onClick={() => openNew('telegram')}
-            className="group flex items-center gap-3 rounded-xl border border-dashed border-line px-4 py-3.5 text-left transition-colors hover:border-accent/40 hover:bg-accent-soft/40"
+            className="group flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3.5 text-left transition-colors hover:border-accent/40 hover:bg-accent-soft/40"
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-muted group-hover:text-accent-ink">
               <MessageCircle size={14} />
@@ -977,7 +1054,7 @@ export function ChannelsPane() {
             <Plus size={13} className="ml-auto text-faint" />
           </button>
         </div>
-      </SettingsSection>
+      </div>
 
       <Modal
         open={editing !== null}
@@ -986,7 +1063,7 @@ export function ChannelsPane() {
         subtitle={
           kind === 'webhook'
             ? 'SelfImpulse issues the token and listens only on this machine.'
-            : 'Paste the token BotFather gave your bot.'
+            : 'Paste the BotFather token and authorize only the numeric chat IDs you trust.'
         }
         footer={
           <>
@@ -1008,18 +1085,32 @@ export function ChannelsPane() {
             />
           </FieldGroup>
           {kind === 'telegram' ? (
-            <FieldGroup
-              label="Bot token"
-              hint={editing !== 'new' ? 'Leave blank to keep the saved token' : undefined}
-            >
-              <input
-                type="password"
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                className={inputClass}
-                autoComplete="off"
-              />
-            </FieldGroup>
+            <>
+              <FieldGroup
+                label="Bot token"
+                hint={editing !== 'new' ? 'Leave blank to keep the saved token' : undefined}
+              >
+                <input
+                  type="password"
+                  value={token}
+                  onChange={(event) => setToken(event.target.value)}
+                  className={inputClass}
+                  autoComplete="off"
+                />
+              </FieldGroup>
+              <FieldGroup
+                label="Allowed chat IDs"
+                hint="One numeric ID per line. Group IDs may start with -. Empty keeps the channel locked."
+              >
+                <textarea
+                  value={allowedChatIds}
+                  onChange={(event) => setAllowedChatIds(event.target.value)}
+                  className={cn(inputClass, 'min-h-24 resize-y font-mono text-[11px]')}
+                  placeholder={'123456789\n-1001234567890'}
+                  spellCheck={false}
+                />
+              </FieldGroup>
+            </>
           ) : (
             <p className="text-[11.5px] leading-relaxed text-muted">
               A token is generated and shown on the channel card after you save. Only requests that
@@ -1099,23 +1190,60 @@ export function SubAgentsPane() {
   return (
     <div className="space-y-9">
       <SettingsSection
-        title="Crew activity"
-        description="Focused jobs the Captain delegates, live as they work."
+        title="Dedicated Crew Specialists"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-canvas/40 border-b border-line">
+          <div className="rounded-lg border border-line bg-surface p-3.5 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-semibold text-ink">Techne</span>
+              <StatusChip tone="positive">Ready</StatusChip>
+            </div>
+            <p className="text-[11px] font-medium text-accent-ink">Coding Specialist</p>
+            <p className="text-[11px] leading-relaxed text-muted">
+              AST inspection, multi-hunk patch application, and pre-flight syntax gates.
+            </p>
+          </div>
+          <div className="rounded-lg border border-line bg-surface p-3.5 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-semibold text-ink">Archon</span>
+              <StatusChip tone="positive">Ready</StatusChip>
+            </div>
+            <p className="text-[11px] font-medium text-accent-ink">File Navigator</p>
+            <p className="text-[11px] leading-relaxed text-muted">
+              Streaming file chunking, directory indexing, and symbol outline extraction.
+            </p>
+          </div>
+          <div className="rounded-lg border border-line bg-surface p-3.5 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-semibold text-ink">Atropos</span>
+              <StatusChip tone="positive">Active</StatusChip>
+            </div>
+            <p className="text-[11px] font-medium text-accent-ink">Durable Actor Engine</p>
+            <p className="text-[11px] leading-relaxed text-muted">
+              Deterministic replayable steps, persistent awakeables, and durable wall-clock timers.
+            </p>
+          </div>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        title="Team run activity"
+        
         action={
           <Button size="sm" variant="ghost" onClick={() => void window.knight.listSubAgents().then(setRuns)}>
             <RefreshCw size={12} /> Refresh
           </Button>
         }
       >
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 divide-x divide-line/70 border-b border-line bg-canvas/40">
           {[
             { label: 'Running now', value: live },
             { label: 'Finished', value: finished },
             { label: 'Recorded runs', value: runs.length }
           ].map((stat) => (
-            <div key={stat.label} className="rounded-xl border border-line bg-canvas/50 px-4 py-3">
-              <p className="display text-[22px] leading-none text-ink">{stat.value}</p>
-              <p className="mt-1 text-[10.5px] text-muted">{stat.label}</p>
+            <div key={stat.label} className="px-5 py-4 text-center">
+              <p className="font-data text-[22px] leading-none font-semibold text-ink">{stat.value}</p>
+              <p className="mt-1.5 text-[11px] text-muted">{stat.label}</p>
             </div>
           ))}
         </div>
@@ -1126,101 +1254,147 @@ export function SubAgentsPane() {
           </div>
         ) : ordered.length === 0 ? (
           <div className="mt-4">
-            <Empty
+            <EmptyPanel
               icon={<Bot size={18} />}
-              title="No Crew runs yet"
-              hint="Ask for work that can be split; delegated runs appear here as they work."
+              title={<>No team runs yet. Ask for work that can be split; delegated runs land here.</>}
             />
           </div>
         ) : (
-          <div className="mt-4 space-y-4">
-            {ordered.map((run) => {
-              const open = expanded === run.id
-              return (
-                <div key={run.id} className="rounded-xl border border-line bg-canvas/45">
-                  <div className="flex items-start gap-3 px-4 py-3.5">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-ink">
-                      <Bot size={14} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-[12.5px] font-medium text-ink">{run.name}</p>
-                        <span className="flex items-center gap-1.5 rounded-full border border-line bg-surface/70 px-2 py-0.5 text-[10px] font-medium text-muted">
-                          <span className={cn('h-1.5 w-1.5 rounded-full', STATUS_TONE[run.status])} />
-                          {run.status === 'running' ? 'Working' : run.status}
-                        </span>
-                        <span className="text-[10px] text-faint">
-                          {formatElapsed(run)} · {run.provider} · {run.model}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[11px] text-muted">
-                        For “{run.taskTitle}” · {run.steps.length} step{run.steps.length === 1 ? '' : 's'}
-                      </p>
-                      <p className="mt-1.5 line-clamp-2 text-[11.5px] leading-relaxed text-ink/70">
-                        {run.instruction}
-                      </p>
-                    </div>
-                    <Button size="sm" variant="ghost" onClick={() => setExpanded(open ? null : run.id)}>
-                      {open ? 'Hide' : 'Details'}
-                    </Button>
-                  </div>
-
-                  {open ? (
-                    <div className="border-t border-line px-4 py-3.5">
-                      <div className="space-y-2">
-                        {run.steps.length ? (
-                          run.steps.map((step) => (
-                            <div key={step.id} className="flex items-start gap-2.5">
-                              <span
-                                className={cn(
-                                  'mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full',
-                                  step.status === 'running'
-                                    ? 'bg-accent'
-                                    : step.status === 'ok'
-                                      ? 'bg-positive'
-                                      : 'bg-danger'
-                                )}
-                              />
-                              <div className="min-w-0">
-                                <p className="text-[11.5px] font-medium text-ink">{step.title}</p>
-                                {step.detail ? (
-                                  <p className="mt-0.5 line-clamp-2 font-mono text-[10px] leading-relaxed text-faint">
-                                    {step.detail}
-                                  </p>
-                                ) : null}
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-[11px] text-faint">
-                            {run.status === 'running'
-                              ? 'Reading the brief…'
-                              : 'No tool steps were recorded.'}
-                          </p>
-                        )}
-                      </div>
-                      {run.error ? (
-                        <p className="mt-3 text-[11px] leading-relaxed text-danger">{run.error}</p>
-                      ) : null}
-                      {run.summary ? (
-                        <div className="mt-3 rounded-lg border border-line bg-surface px-3 py-2.5">
-                          <p className="mb-1 text-[10px] font-semibold tracking-[0.1em] text-faint uppercase">
-                            Crew report
-                          </p>
-                          <pre className="scroll-thin max-h-48 overflow-auto text-[11px] leading-relaxed whitespace-pre-wrap text-ink/80">
-                            {run.summary}
-                          </pre>
+          <div className="mt-4">
+            <SettingList>
+              {ordered.map((run) => {
+                const open = expanded === run.id
+                return (
+                  <div key={run.id}>
+                    <div className="flex items-start gap-3 px-4 py-3.5">
+                      <SettingTile tone="accent">
+                        <Bot size={14} />
+                      </SettingTile>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[13px] font-medium text-ink">{run.name}</p>
+                          <StatusChip
+                            tone={
+                              run.status === 'running'
+                                ? 'accent'
+                                : run.status === 'done'
+                                  ? 'positive'
+                                  : run.status === 'error'
+                                    ? 'danger'
+                                    : 'neutral'
+                            }
+                          >
+                            {run.status === 'running' ? 'Working' : run.status}
+                          </StatusChip>
+                          {(run.batchSize ?? 1) > 1 ? (
+                            <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent-ink">
+                              Team of {run.batchSize}
+                            </span>
+                          ) : null}
+                          <span className="text-[10.5px] text-faint">
+                            {formatElapsed(run)} · {run.provider} · {run.model}
+                          </span>
                         </div>
-                      ) : null}
-                      <p className="mt-3 text-[10px] text-faint">
-                        Started {timeAgo(run.startedAt)}
-                        {run.endedAt ? ` · ended ${timeAgo(run.endedAt)}` : ''}
-                      </p>
+                        <p className="mt-1 text-[12px] text-muted">
+                          For “{run.taskTitle}” · {run.steps.length} step{run.steps.length === 1 ? '' : 's'}
+                          {run.usage && run.usage.total > 0
+                            ? ` · ${run.usage.total.toLocaleString()} tokens`
+                            : ''}
+                        </p>
+                        <p className="mt-1 font-mono text-[10px] text-faint">
+                          {(run.agentPath ?? [agentName(), run.name]).join(' / ')}
+                        </p>
+                        {run.purpose ? (
+                          <p className="mt-1.5 text-[12px] font-medium text-ink/80">{run.purpose}</p>
+                        ) : null}
+                        <p className={cn('mt-1.5 text-[12px] leading-[1.6] text-muted', !open && 'line-clamp-2')}>
+                          {run.instruction}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setExpanded(open ? null : run.id)}
+                      >
+                        {open ? 'Hide' : 'Details'}
+                      </Button>
                     </div>
-                  ) : null}
-                </div>
-              )
-            })}
+
+                    {open ? (
+                      <div className="border-t border-line/70 bg-canvas/40 px-4 py-3.5">
+                        <div className="space-y-2">
+                          {run.steps.length ? (
+                            run.steps.map((step) => (
+                              <div key={step.id} className="flex items-start gap-2.5">
+                                <span
+                                  className={cn(
+                                    'mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full',
+                                    step.status === 'running'
+                                      ? 'bg-accent'
+                                      : step.status === 'ok'
+                                        ? 'bg-positive'
+                                        : 'bg-danger'
+                                  )}
+                                />
+                                <div className="min-w-0">
+                                  <p className="text-[11.5px] font-medium text-ink">{step.title}</p>
+                                  {step.detail ? (
+                                    <p className="mt-0.5 line-clamp-2 break-words font-mono text-[10px] leading-relaxed text-faint" title={step.detail ?? undefined}>
+                                      {step.detail}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-[11px] text-faint">
+                              {run.status === 'running'
+                                ? 'Reading the brief…'
+                                : 'No tool steps were recorded.'}
+                            </p>
+                          )}
+                        </div>
+                        {run.events?.length ? (
+                          <div className="mt-3 rounded-lg border border-line/70 bg-surface/45 px-3 py-2.5">
+                            <p className="mb-1.5 text-[10px] font-semibold tracking-[0.1em] text-faint uppercase">
+                              Forwarded activity
+                            </p>
+                            <ol className="space-y-1">
+                              {[...run.events].slice(-6).reverse().map((event) => (
+                                <li
+                                  key={event.id}
+                                  className="flex items-center gap-2 text-[10.5px] text-muted"
+                                >
+                                  <span className="h-1 w-1 shrink-0 rounded-full bg-accent/70" />
+                                  <span>{event.label}</span>
+                                </li>
+                              ))}
+                            </ol>
+                          </div>
+                        ) : null}
+                        {run.error ? (
+                          <p className="mt-3 text-[11px] leading-relaxed text-danger">{run.error}</p>
+                        ) : null}
+                        {run.summary ? (
+                          <div className="mt-3 rounded-lg border border-line bg-surface px-3 py-2.5">
+                            <p className="mb-1 text-[10px] font-semibold tracking-[0.1em] text-faint uppercase">
+                              Team report
+                            </p>
+                            <pre className="scroll-thin max-h-48 overflow-auto text-[11px] leading-relaxed whitespace-pre-wrap text-ink/80">
+                              {run.summary}
+                            </pre>
+                          </div>
+                        ) : null}
+                        <p className="mt-3 text-[10px] text-faint">
+                          Started {timeAgo(run.startedAt)}
+                          {run.endedAt ? ` · ended ${timeAgo(run.endedAt)}` : ''}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
+            </SettingList>
           </div>
         )}
       </SettingsSection>
