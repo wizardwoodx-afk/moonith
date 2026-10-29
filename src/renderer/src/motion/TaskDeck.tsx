@@ -73,7 +73,7 @@ export function TaskDeck({ tasks }: { tasks: TaskSummary[] }) {
             <p className="mt-3 line-clamp-2 text-[11.5px] leading-relaxed text-muted" title={top.objective}>{top.objective}</p>
             <div className="mt-auto flex items-center gap-2 pt-3 text-[10px] text-faint">
               <span className="rounded-md border border-line bg-canvas px-1.5 py-0.5">
-                {top.mode === 'cowork' ? 'Cowork' : 'Assistant'}
+                {top.mode === 'cowork' ? 'Cowork' : 'Self'}
               </span>
               {top.artifactsCount > 0 ? (
                 <span className="flex items-center gap-1"><FileText size={9} />{top.artifactsCount} files</span>

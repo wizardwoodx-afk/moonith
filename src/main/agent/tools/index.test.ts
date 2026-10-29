@@ -59,4 +59,25 @@ describe('chat Library gate', () => {
       expect(names).toContain(tool.name)
     }
   })
+
+  it('equips Self mode with cyclical loops, time-travel, and stealth browser tools', () => {
+    const names = getBuiltinTools('chat').map((tool) => tool.name)
+
+    expect(names).toContain('rsirals_time_travel_rewind')
+    expect(names).toContain('rsirals_run_workflow')
+    expect(names).toContain('rsirals_dual_ledger_status')
+    expect(names).toContain('browser_task_controller_act')
+    expect(names).toContain('browser_visual_act')
+    expect(names).toContain('browser_stealth_search')
+  })
+
+  it('equips Cowork mode with full collaborative workspace, dual ledger, and stealth browser tools', () => {
+    const names = getBuiltinTools('cowork').map((tool) => tool.name)
+
+    expect(names).toContain('write_file')
+    expect(names).toContain('run_command')
+    expect(names).toContain('rsirals_dual_ledger_status')
+    expect(names).toContain('browser_task_controller_act')
+    expect(names).toContain('browser_stealth_search')
+  })
 })

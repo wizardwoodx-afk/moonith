@@ -28,7 +28,12 @@ import {
   rsiralsTools, 
   rsiralsQueryBeliefTool, 
   rsiralsEvaluateRiskTool, 
-  rsiralsSimulateActionTool 
+  rsiralsSimulateActionTool,
+  rsiralsRunWorkflowTool,
+  rsiralsEvaluateOutputTool,
+  rsiralsSemanticSearchTool,
+  rsiralsTimeTravelRewindTool,
+  rsiralsDualLedgerStatusTool
 } from './rsiralsTools'
 import { 
   promeyTools, 
@@ -80,6 +85,11 @@ export function getBuiltinTools(mode: TaskMode): AgentTool[] {
       rsiralsQueryBeliefTool,
       rsiralsEvaluateRiskTool,
       rsiralsSimulateActionTool,
+      rsiralsRunWorkflowTool,
+      rsiralsEvaluateOutputTool,
+      rsiralsSemanticSearchTool,
+      rsiralsTimeTravelRewindTool,
+      rsiralsDualLedgerStatusTool,
       promeyGenerateBriefTool,
       promeyTriageStreamTool,
       promeyRequestApprovalTool,

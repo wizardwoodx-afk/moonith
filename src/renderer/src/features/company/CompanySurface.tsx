@@ -107,7 +107,7 @@ function Workboard() {
                       {task.title}
                     </span>
                     <span className="hidden shrink-0 whitespace-nowrap rounded-md border border-line bg-canvas px-1.5 py-0.5 text-[10px] text-muted sm:inline">
-                      {task.mode === 'cowork' ? 'Cowork' : 'Assistant'}
+                      {task.mode === 'cowork' ? 'Cowork' : 'Self'}
                     </span>
                     {task.artifactsCount > 0 ? (
                       <span className="flex shrink-0 items-center gap-1 whitespace-nowrap font-mono text-[10px] text-faint">

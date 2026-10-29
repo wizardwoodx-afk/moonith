@@ -201,8 +201,8 @@ export function Composer({
       ? (['chat', 'cowork'] as TaskMode[]).map((value) => ({
           id: `command-mode-${value}`,
           kind: '/' as const,
-          label: `Switch to ${value === 'chat' ? 'Assistant' : 'Cowork'}`,
-          keywords: 'mode conversation work',
+          label: `Switch to ${value === 'chat' ? 'Self' : 'Cowork'}`,
+          keywords: 'mode conversation work self cowork',
           icon: <MessageCircle size={ICON_SIZES.md} />,
           run: () => onModeChange(value)
         }))
@@ -258,8 +258,8 @@ export function Composer({
             (running
               ? 'Add instructions to steer this task…'
               : mode === 'cowork'
-                ? 'Describe an outcome…'
-                : 'Ask anything…')
+                ? 'Collaborate on a task or outcome…'
+                : 'Hand off a goal to your digital self…')
           }
           rows={1}
           className="scroll-thin block w-full min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-0 pt-0.5 pb-1 text-[14.5px] leading-relaxed text-ink outline-none placeholder:text-faint"

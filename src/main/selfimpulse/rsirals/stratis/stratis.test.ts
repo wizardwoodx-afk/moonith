@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, it } from 'vitest'
 import { StratisWorkflowEngine } from './workflowEngine'
 import { StratisEvaluator } from './evaluator'
 import { StratisRagEngine } from './ragEngine'
