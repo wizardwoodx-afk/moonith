@@ -314,12 +314,12 @@ function TaskHeader({
           <button
             type="button"
             onClick={() => void updateCurrent({ mode: task.mode === 'cowork' ? 'chat' : 'cowork' })}
-            title={`Switch to ${task.mode === 'cowork' ? 'Chat' : 'Cowork'} mode`}
+            title={`Switch to ${task.mode === 'cowork' ? 'Assistant' : 'Cowork'} mode`}
             className="inline-flex items-center gap-1 hover:text-ink transition-colors cursor-pointer rounded px-1 py-0.5 hover:bg-surface-2"
           >
             {task.mode === 'cowork' ? <BrandMark size={10} /> : <MessageCircle size={10} />}
             <span className="font-medium underline decoration-dotted underline-offset-2">
-              {task.mode === 'cowork' ? 'Cowork' : 'Chat'}
+              {task.mode === 'cowork' ? 'Cowork' : 'Assistant'}
             </span>
           </button>
           <span>·</span>

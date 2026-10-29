@@ -7,12 +7,15 @@ import {
   rsiralsInduceSkillTool, 
   rsiralsPublishClaimTool, 
   rsiralsAcquireTaskTool, 
+  rsiralsRunWorkflowTool,
+  rsiralsEvaluateOutputTool,
+  rsiralsSemanticSearchTool,
   rsiralsTools 
 } from './rsiralsTools';
 
 describe('RSIRALS Native Agent Tools', () => {
-  it('exposes all 7 core native tools', () => {
-    expect(rsiralsTools.length).toBe(7);
+  it('exposes all 10 core native tools', () => {
+    expect(rsiralsTools.length).toBe(10);
   });
 
   it('queries SENTRIX belief state', async () => {
@@ -78,5 +81,45 @@ describe('RSIRALS Native Agent Tools', () => {
     expect(res.status).toBe('acquired');
     expect(res.authTier).toBeDefined();
     expect(res.blastRadiusCap).toBeDefined();
+  });
+
+  it('runs deterministic DAG workflow with STRATIS', async () => {
+    const res = await rsiralsRunWorkflowTool.execute({
+      workflowName: 'Test Pipeline',
+      steps: [
+        { id: 'step_1', name: 'Step 1' },
+        { id: 'step_2', name: 'Step 2' }
+      ]
+    });
+    expect(res.status).toBe('completed');
+    expect(res.workflowId).toBeDefined();
+    expect(res.stepResults['step_1'].status).toBe('completed');
+  });
+
+  it('evaluates candidate outputs with STRATIS evals', async () => {
+    const res = await rsiralsEvaluateOutputTool.execute({
+      prompt: 'Check system health',
+      output: 'System health is optimal with 100% services online.',
+      context: 'Health status: 100% services online'
+    });
+    expect(res.status).toBe('evaluated');
+    expect(res.overallScore).toBeGreaterThan(0.5);
+  });
+
+  it('ingests and searches documentation with STRATIS Agentic RAG', async () => {
+    const ingest = await rsiralsSemanticSearchTool.execute({
+      action: 'ingest',
+      documentId: 'doc_rsirals',
+      content: 'RSIRALS octa-module architecture enforces tri-loop cognition.'
+    });
+    expect(ingest.status).toBe('ingested');
+    expect(ingest.chunksCreated).toBeGreaterThan(0);
+
+    const search = await rsiralsSemanticSearchTool.execute({
+      action: 'search',
+      query: 'RSIRALS cognition'
+    });
+    expect(search.status).toBe('success');
+    expect(search.resultsCount).toBeGreaterThan(0);
   });
 });

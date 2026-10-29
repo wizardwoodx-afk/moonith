@@ -270,6 +270,146 @@ export const rsiralsAcquireTaskTool: AgentTool = {
   }
 };
 
+export const rsiralsRunWorkflowTool: AgentTool = {
+  name: 'rsirals_run_workflow',
+  description: 'Execute a deterministic multi-step DAG workflow via the STRATIS engine with branching, error retries, and state tracking.',
+  parameters: {
+    type: 'object',
+    properties: {
+      workflowName: { type: 'string', description: 'Name of the workflow to execute' },
+      steps: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            name: { type: 'string' },
+            action: { type: 'string' }
+          },
+          required: ['id', 'name']
+        },
+        description: 'Sequence of steps to execute in the DAG'
+      },
+      initialInput: { type: 'object', description: 'Initial state variables for the workflow' }
+    },
+    required: ['workflowName', 'steps']
+  },
+  execute: async (args) => {
+    const workflowName = String(args.workflowName);
+    const stepsInput = Array.isArray(args.steps) ? args.steps : [];
+    const initialInput = typeof args.initialInput === 'object' && args.initialInput !== null
+      ? (args.initialInput as Record<string, unknown>)
+      : {};
+
+    const workflowId = `wf_${workflowName.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`;
+    const steps = stepsInput.map((s: any) => ({
+      id: String(s.id),
+      name: String(s.name),
+      execute: async (ctx: any) => ({
+        stepId: s.id,
+        status: 'executed',
+        receivedInput: ctx.input,
+        timestamp: new Date().toISOString()
+      })
+    }));
+
+    rsirals.stratis.workflows.registerWorkflow({
+      id: workflowId,
+      name: workflowName,
+      steps
+    });
+
+    const result = await rsirals.stratis.workflows.executeWorkflow(workflowId, initialInput);
+    return {
+      status: result.status,
+      workflowId: result.workflowId,
+      executionId: result.executionId,
+      stepResults: result.stepResults,
+      totalDurationMs: result.totalDurationMs
+    };
+  }
+};
+
+export const rsiralsEvaluateOutputTool: AgentTool = {
+  name: 'rsirals_evaluate_output',
+  description: 'Continuous model-graded evaluation of an agent output or plan for faithfulness, hallucination risk, and prompt relevance.',
+  parameters: {
+    type: 'object',
+    properties: {
+      prompt: { type: 'string', description: 'The prompt or user request' },
+      output: { type: 'string', description: 'The candidate output or generated answer' },
+      context: { type: 'string', description: 'Source context or reference documentation' },
+      groundTruth: { type: 'string', description: 'Verified ground truth facts' }
+    },
+    required: ['prompt', 'output']
+  },
+  execute: async (args) => {
+    const prompt = String(args.prompt);
+    const output = String(args.output);
+    const context = typeof args.context === 'string' ? args.context : undefined;
+    const groundTruth = typeof args.groundTruth === 'string' ? args.groundTruth : undefined;
+
+    const report = rsirals.stratis.evals.evaluateAll({
+      prompt,
+      output,
+      context,
+      groundTruth
+    });
+
+    return {
+      status: 'evaluated',
+      targetOutputId: report.targetOutputId,
+      overallScore: report.overallScore,
+      passed: report.passed,
+      scores: report.scores
+    };
+  }
+};
+
+export const rsiralsSemanticSearchTool: AgentTool = {
+  name: 'rsirals_semantic_search',
+  description: 'Ingest and retrieve knowledge chunks via STRATIS Agentic Hybrid RAG with semantic density scoring.',
+  parameters: {
+    type: 'object',
+    properties: {
+      action: { type: 'string', enum: ['search', 'ingest'], description: 'Whether to ingest text or search indexed chunks' },
+      query: { type: 'string', description: 'Search query' },
+      documentId: { type: 'string', description: 'Document ID if ingesting' },
+      content: { type: 'string', description: 'Document content if ingesting' }
+    },
+    required: ['action']
+  },
+  execute: async (args) => {
+    const action = String(args.action);
+    if (action === 'ingest') {
+      const docId = String(args.documentId || `doc_${Date.now()}`);
+      const content = String(args.content || '');
+      const chunks = rsirals.stratis.rag.ingestDocument(docId, content);
+      return {
+        status: 'ingested',
+        documentId: docId,
+        chunksCreated: chunks.length,
+        totalIndexed: rsirals.stratis.rag.getIndexedChunkCount()
+      };
+    }
+
+    const query = String(args.query || '');
+    const results = rsirals.stratis.rag.search(query, 5);
+    return {
+      status: 'success',
+      query,
+      resultsCount: results.length,
+      matches: results.map((r) => ({
+        chunkId: r.chunk.chunkId,
+        documentId: r.chunk.documentId,
+        score: r.score,
+        matchType: r.matchType,
+        textPreview: r.chunk.text.slice(0, 150)
+      }))
+    };
+  }
+};
+
 export const rsiralsTools: AgentTool[] = [
   rsiralsQueryBeliefTool,
   rsiralsEvaluateRiskTool,
@@ -277,5 +417,8 @@ export const rsiralsTools: AgentTool[] = [
   rsiralsDiagnoseFailureTool,
   rsiralsInduceSkillTool,
   rsiralsPublishClaimTool,
-  rsiralsAcquireTaskTool
+  rsiralsAcquireTaskTool,
+  rsiralsRunWorkflowTool,
+  rsiralsEvaluateOutputTool,
+  rsiralsSemanticSearchTool
 ];

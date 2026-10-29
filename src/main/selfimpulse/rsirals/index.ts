@@ -12,4 +12,5 @@ export * from './kavyra';
 export * from './nexalis';
 export * from './vantage';
 export * from './miralyx';
+export * from './stratis';
 export * from './rsiralsEngine';

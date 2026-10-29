@@ -201,7 +201,7 @@ export function Composer({
       ? (['chat', 'cowork'] as TaskMode[]).map((value) => ({
           id: `command-mode-${value}`,
           kind: '/' as const,
-          label: `Switch to ${value === 'chat' ? 'Chat' : 'Cowork'}`,
+          label: `Switch to ${value === 'chat' ? 'Assistant' : 'Cowork'}`,
           keywords: 'mode conversation work',
           icon: <MessageCircle size={ICON_SIZES.md} />,
           run: () => onModeChange(value)
@@ -281,7 +281,7 @@ export function Composer({
                     label: (
                       <>
                         <MessageCircle size={11} />
-                        Chat
+                        Assistant
                       </>
                     ),
                     hint: 'Research and answer without editing files'

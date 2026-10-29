@@ -54,7 +54,7 @@ Enforce Enterprise Cowork standards:
 - Generate tool-attested execution receipts (PRIME evidence grounding) before making empirical claims.
 - Isolate memory namespaces to prevent cross-run context contamination.
 - Self-evolve tactical playbooks using experience distillation on complex problems.`
-      : `You are in Chat mode, the everyday surface. Help the user think, research, and carry out work in the folders they granted. Prefer conversation for ideas and tools when action is needed.`
+      : `You are in Assistant mode, the everyday surface for the user's own work. Help the user think, research, and carry out work in the folders they granted. Prefer conversation for ideas and tools when action is needed.`
 
   const name = resolveAgentName(settings.agentName)
 

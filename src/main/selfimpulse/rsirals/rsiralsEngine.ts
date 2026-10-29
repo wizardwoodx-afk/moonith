@@ -11,6 +11,7 @@ import { KavyraSkillEngine } from './kavyra';
 import { NexalisKnowledgeExchange } from './nexalis';
 import { VantageTaskAcquisition } from './vantage';
 import { MiralyxMetaOptimizer } from './miralyx';
+import { StratisEngine } from './stratis';
 import { verifyProprietaryIntegrity, RSIRALS_PROPRIETARY_MANIFEST } from './proprietary';
 import type { 
   ActionRequest, 
@@ -38,6 +39,7 @@ export class RsiralsEngine {
   public readonly nexalis: NexalisKnowledgeExchange;
   public readonly vantage: VantageTaskAcquisition;
   public readonly miralyx: MiralyxMetaOptimizer;
+  public readonly stratis: StratisEngine;
 
   private constructor() {
     this.sentrix = new SentrixController();
@@ -48,6 +50,7 @@ export class RsiralsEngine {
     this.nexalis = new NexalisKnowledgeExchange();
     this.vantage = new VantageTaskAcquisition();
     this.miralyx = new MiralyxMetaOptimizer();
+    this.stratis = new StratisEngine();
   }
 
   public static getInstance(): RsiralsEngine {

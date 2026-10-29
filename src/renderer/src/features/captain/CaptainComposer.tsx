@@ -321,40 +321,6 @@ export function CaptainComposer({
       onFiles={(incoming) => onAttachmentsChange(mergeAttachments(attachments, incoming))}
     >
       <div className={cn('w-full', className)}>
-        {onModeChange ? (
-          /* The mode is the first decision, not a chip buried in the toolbar:
-             Chat reads and answers, Cowork changes files. */
-          <div className="mb-1.5 flex items-center gap-1 px-1" role="tablist" aria-label="What this task will do">
-            {(['chat', 'cowork'] as TaskMode[]).map((value) => {
-              const active = mode === value
-              return (
-                <button
-                  key={value}
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => {
-                    onModeChange(value)
-                    setCoworkNoFolder(value === 'cowork' && !workspace)
-                  }}
-                  className={cn(
-                    'flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium transition-colors',
-                    active
-                      ? value === 'cowork'
-                        ? 'border-accent/45 bg-accent-soft text-accent-ink'
-                        : 'border-line-strong bg-surface-3 text-ink'
-                      : 'border-transparent text-faint hover:text-muted'
-                  )}
-                >
-                  {value === 'cowork' ? <BrandMark size={11} /> : <Icon name="spark" size="xs" />}
-                  {value === 'chat' ? 'Chat' : 'Cowork'}
-                </button>
-              )
-            })}
-            <span className="ml-auto pr-1 text-[10px] text-faint">
-              {mode === 'cowork' ? 'changes files' : 'reads and answers'}
-            </span>
-          </div>
-        ) : null}
         <motion.div
           layout
           className="composer-shell relative px-3 pt-2.5 pb-2"
@@ -473,6 +439,44 @@ export function CaptainComposer({
               </div>
             )}
           </Popover>
+
+          {onModeChange ? (
+            /* The mode sits with the tools that shape the task, not floating over
+               the box: Assistant reads and answers, Cowork changes files. */
+            <div
+              className="flex h-8 shrink-0 items-center gap-0.5 rounded-full border border-line bg-canvas/60 p-0.5"
+              title={
+                mode === 'cowork'
+                  ? 'Cowork changes files. Switch to Assistant to read and answer only.'
+                  : 'Assistant reads and answers. Switch to Cowork to change files.'
+              }
+            >
+              {(['chat', 'cowork'] as TaskMode[]).map((value) => {
+                const active = mode === value
+                return (
+                  <button
+                    key={value}
+                    onClick={() => {
+                      onModeChange(value)
+                      setCoworkNoFolder(value === 'cowork' && !workspace)
+                    }}
+                    aria-pressed={active}
+                    className={cn(
+                      'flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-medium transition-colors',
+                      active
+                        ? value === 'cowork'
+                          ? 'bg-accent-soft text-accent-ink'
+                          : 'bg-surface-3 text-ink'
+                        : 'text-faint hover:text-muted'
+                    )}
+                  >
+                    {value === 'cowork' ? <BrandMark size={10} /> : <Icon name="spark" size="xs" />}
+                    {value === 'chat' ? 'Assistant' : 'Cowork'}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
 
           <Popover
             side="top"
