@@ -208,7 +208,7 @@ function TaskErrorBanner({
             type="button"
             onClick={() => setShowRaw((value) => !value)}
             aria-expanded={showRaw}
-            className="text-[11px] font-medium text-muted underline underline-offset-2"
+            className="whitespace-nowrap text-[11px] font-medium text-muted underline underline-offset-2"
           >
             {showRaw ? 'Hide details' : 'Details'}
           </button>
@@ -216,14 +216,14 @@ function TaskErrorBanner({
         <button
           type="button"
           onClick={onRetry}
-          className="text-[11px] font-medium text-ink underline underline-offset-2"
+          className="whitespace-nowrap text-[11px] font-medium text-ink underline underline-offset-2"
         >
           Try again
         </button>
         <button
           type="button"
           onClick={onOpenSettings}
-          className="text-[11px] font-medium text-muted underline underline-offset-2"
+          className="whitespace-nowrap text-[11px] font-medium text-muted underline underline-offset-2"
         >
           Settings
         </button>
@@ -819,7 +819,7 @@ export function TaskView() {
                 <p className="flex-1 text-[12px] text-muted">Paused</p>
                 <button
                   onClick={() => void resumeCurrent()}
-                  className="text-[11px] font-medium text-accent underline underline-offset-2"
+                  className="whitespace-nowrap text-[11px] font-medium text-accent underline underline-offset-2"
                 >
                   Resume
                 </button>
@@ -871,6 +871,7 @@ export function TaskView() {
       {panelOpen ? (
         <>
           <div
+            aria-hidden="true"
             className="absolute inset-0 z-20 bg-black/15 backdrop-blur-[1px] xl:hidden"
             onClick={() => setPanelOpen(false)}
           />

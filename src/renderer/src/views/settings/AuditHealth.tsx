@@ -1,4 +1,4 @@
-import { AlertTriangle, ShieldCheck } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import type { RuntimeAuditIntegrity } from '@shared/audit'
 import { cn } from '../../lib/utils'
 
@@ -10,7 +10,7 @@ export function AuditHealth({ integrity }: { integrity: RuntimeAuditIntegrity })
           role="alert"
           className="flex items-start gap-2.5 rounded-xl border border-warn/25 bg-warn/10 px-3.5 py-3"
         >
-          <AlertTriangle size={14} aria-hidden="true" className="mt-0.5 shrink-0 text-warn" />
+          <Icon name="caution" size="sm" className="mt-0.5 text-warn" />
           <div className="min-w-0">
             <p className="text-[11.5px] font-medium text-warn">
               Audit recording failed — some events may be missing.
@@ -38,9 +38,9 @@ export function AuditHealth({ integrity }: { integrity: RuntimeAuditIntegrity })
         )}
       >
         {integrity.ok ? (
-          <ShieldCheck size={14} className="mt-0.5 shrink-0 text-positive" />
+          <Icon name="shield" size="sm" className="mt-0.5 text-positive" />
         ) : (
-          <AlertTriangle size={14} className="mt-0.5 shrink-0 text-danger" />
+          <Icon name="caution" size="sm" className="mt-0.5 text-danger" />
         )}
         <div>
           <p

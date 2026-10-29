@@ -60,9 +60,9 @@ describe('buildOversight', () => {
     expect(report.entries[0].id).toBe('new')
   })
 
-  it('names the stop reason, including the breaker', () => {
+  it('names the stop reason, including repeated failures', () => {
     const report = buildOversight(task({ stop: { reason: 'circuit_open', at: '2026-10-27T00:00:00.000Z' } }))
-    expect(report.stop).toContain('breaker')
+    expect(report.stop).toContain('too many failures')
     expect(report.empty).toBe(false)
   })
 

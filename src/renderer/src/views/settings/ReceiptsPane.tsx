@@ -69,12 +69,12 @@ export function ReceiptsPane() {
       if (result.ok && result.signed) {
         setOutcome({
           tone: 'positive',
-          message: `Verification passed — ${formatCount(result.receipts, 'receipt')} form an unbroken chain, every signature checks out, and every intent has its result.`
+          message: `Verification passed — ${formatCount(result.receipts, 'receipt')}, chain intact and signed.`
         })
       } else if (result.ok) {
         setOutcome({
           tone: 'neutral',
-          message: `The chain is intact, but ${formatCount(result.receipts, 'receipt')} ${result.receipts === 1 ? 'is' : 'are'} unsigned — the signing key is unavailable on this machine, so nothing has been tampered with and nothing has been attested either.`
+          message: `Chain intact, but ${formatCount(result.receipts, 'receipt')} unsigned — no signing key available on this machine.`
         })
       } else {
         setOutcome({
@@ -108,11 +108,8 @@ export function ReceiptsPane() {
     >
       <div className="space-y-5">
         <PaneNote>
-          Whenever the {agentName()} or the Crew does something that executes, changes files or carries
-          real risk, a signed intent receipt is written before it runs and a result receipt after.
-          Each one is chained to the last and signed with a key sealed in your system keychain —
-          edit, delete or reorder a line and verification fails and says where. Only digests are
-          kept: the chain proves the action happened, not what it touched.
+          A signed receipt is written before each risky action runs and after it finishes. Only
+          digests are kept, never the content.
         </PaneNote>
 
         {loadError ? (
@@ -144,18 +141,14 @@ export function ReceiptsPane() {
         ) : null}
 
         {empty ? (
-          <EmptyState icon={<ScrollText size={18} />} title="No receipts yet">
-            Receipts are minted when the agent does something with a real side effect — running a
-            command, writing a file, driving the browser. Low-risk reads are covered by the
-            governance record alone, so the chain stays worth reading.
-          </EmptyState>
+          <EmptyState icon={<ScrollText size={18} />} title="No receipts yet" />
         ) : null}
 
         {summary && !empty && summary.lastTs ? (
           <p className="text-[11.5px] leading-relaxed text-muted">
             Last receipt {formatWhen(summary.lastTs)}
             {summary.unsigned > 0
-              ? ` — ${formatCount(summary.unsigned, 'receipt')} unsigned, because the keychain was unavailable when ${summary.unsigned === 1 ? 'it was' : 'they were'} written.`
+              ? ` — ${formatCount(summary.unsigned, 'receipt')} unsigned.`
               : ' — every receipt carries a signature.'}
           </p>
         ) : null}
@@ -201,8 +194,7 @@ export function ReceiptsPane() {
                 ))}
             </RowList>
             <p className="px-2.5 text-[10.5px] text-faint">
-              An intent with no result after it means the action was authorised and the process
-              stopped before it could finish — the chain flags that rather than hiding it.
+              An intent with no result means the action was authorised but never finished.
             </p>
           </div>
         ) : null}

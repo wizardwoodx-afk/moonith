@@ -39,7 +39,9 @@ import { agentRuntime } from './agent/runtime'
 import { coworkTools } from './agent/tools/coworkTools'
 import { rookTools } from './agent/tools/rookTools'
 import { rsiralsTools } from './agent/tools/rsiralsTools'
+import { promeyTools } from './agent/tools/promeyTools'
 import { rookEngineBridge } from './engine/rookBridge'
+import { promeyEngineBridge } from './engine/promeyBridge'
 import { coworkEngineBridge } from './engine/coworkBridge'
 import { fetchProviderModels, verifyProvider } from './agent/providers'
 import { refreshSelfImpulseEngine } from './selfimpulse/bridge/facade'
@@ -536,7 +538,7 @@ export function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.agentToolsList, () =>
-    [...coworkTools, ...rookTools, ...rsiralsTools].map((tool) => ({ name: tool.name, title: (tool as any).title || tool.name, description: tool.description }))
+    [...coworkTools, ...rookTools, ...rsiralsTools, ...promeyTools].map((tool) => ({ name: tool.name, title: (tool as any).title || tool.name, description: tool.description }))
   )
   ipcMain.handle(IPC.skillsList, () => skillService.list())
   ipcMain.handle(IPC.skillsSearch, (_event, query: string, registry?: SkillSource) =>
@@ -735,6 +737,36 @@ export function registerIpc(): void {
     const markdown = rookEngineBridge.getKernel().worker.research.formatMarkdownReport(report)
     return { report, markdown }
   })
+
+  // Promey Proactive Duet IPC handlers
+  ipcMain.handle(IPC.promeyStatus, () => promeyEngineBridge.getStatus())
+  ipcMain.handle(IPC.promeyGenerateBrief, (_event, userName?: string, workspaceName?: string) =>
+    promeyEngineBridge.generateMorningBrief(userName, workspaceName)
+  )
+  ipcMain.handle(IPC.promeyListTriage, () =>
+    promeyEngineBridge.getKernel().triage.listItems()
+  )
+  ipcMain.handle(IPC.promeyTriageItem, (_event, item) =>
+    promeyEngineBridge.triageStream(item)
+  )
+  ipcMain.handle(IPC.promeyResolveTriage, (_event, id: string, note?: string) =>
+    promeyEngineBridge.getKernel().triage.resolveItem(id, note)
+  )
+  ipcMain.handle(IPC.promeyListApprovals, () =>
+    promeyEngineBridge.getKernel().approvals.listAll()
+  )
+  ipcMain.handle(IPC.promeySubmitApproval, (_event, id: string, decision: any, note?: string) =>
+    promeyEngineBridge.submitApprovalDecision(id, decision, note)
+  )
+  ipcMain.handle(IPC.promeyListRoutines, () =>
+    promeyEngineBridge.getKernel().routines.listRoutines()
+  )
+  ipcMain.handle(IPC.promeyToggleRoutine, (_event, id: string, active: boolean) =>
+    promeyEngineBridge.getKernel().routines.toggleRoutine(id, active)
+  )
+  ipcMain.handle(IPC.promeySanitize, (_event, text: string) =>
+    promeyEngineBridge.sanitizeOutbound(text)
+  )
 
   // Cowork IPC handlers
   ipcMain.handle(IPC.coworkStatus, () => coworkEngineBridge.getStatus())

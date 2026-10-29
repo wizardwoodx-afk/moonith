@@ -14,6 +14,7 @@ import { ConfirmHost } from './components/Confirm'
 import { SettingsView } from './views/SettingsView'
 import { TaskView } from './views/TaskView'
 import { SchedulesView } from './views/SchedulesView'
+import { PromeyView } from './views/PromeyView'
 import { CaptainSurface } from './features/captain/CaptainSurface'
 import { LibraryView } from './features/library/LibraryView'
 import { CompanySurface } from './features/company/CompanySurface'
@@ -56,6 +57,7 @@ function viewKey(view: View): string {
   if (view.kind === 'surface') return `surface:${view.surface}`
   if (view.kind === 'settings') return `settings:${view.tab}`
   if (view.kind === 'task') return `task:${view.taskId}`
+  if (view.kind === 'promey') return 'promey'
   return 'schedules'
 }
 
@@ -72,6 +74,7 @@ export function App() {
   const openSurface = useApp((state) => state.openSurface)
   const openTask = useApp((state) => state.openTask)
   const openSchedules = useApp((state) => state.openSchedules)
+  const openPromey = useApp((state) => state.openPromey)
   const openSettings = useApp((state) => state.openSettings)
   const themeId = useTheme((state) => state.themeId)
   const themeKind = themeById(themeId).kind
@@ -178,6 +181,7 @@ export function App() {
     if (target.kind === 'surface') openSurface(target.surface)
     else if (target.kind === 'settings') openSettings(target.tab)
     else if (target.kind === 'schedules') openSchedules()
+    else if (target.kind === 'promey') openPromey()
     else void openTask(target.taskId)
   }
 
@@ -222,6 +226,7 @@ export function App() {
               {settingsActive ? <SettingsView /> : null}
               {!settingsActive && view.kind === 'task' ? <TaskView /> : null}
               {!settingsActive && view.kind === 'schedules' ? <SchedulesView /> : null}
+              {!settingsActive && view.kind === 'promey' ? <PromeyView /> : null}
               {!settingsActive && view.kind === 'surface' && activeSurface === 'chat' ? (
                 <CaptainSurface />
               ) : null}

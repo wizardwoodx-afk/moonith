@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
-import { LockKeyhole } from 'lucide-react'
 import type { AttachmentRef, PermissionMode, TaskMode, TaskSummary } from '@shared/types'
-import { cn } from '../../lib/utils'
+import { cn, plural } from '../../lib/utils'
 import { buildActivity, type ActivityMetric } from '../../lib/activity'
 import type { ComposerModelState } from '../../lib/composerChoices'
 import { CaptainComposer } from './CaptainComposer'
@@ -37,8 +36,8 @@ function ActivityCard({ tasks }: { tasks: TaskSummary[] }) {
             {value === 'sessions' ? 'Sessions' : 'Receipts'}
           </button>
         ))}
-        <span className="ml-auto font-mono text-[10px] text-faint">
-          {grid.stats.total} {tab === 'sessions' ? 'sessions' : 'receipts'} this year
+        <span className="ml-auto whitespace-nowrap font-mono text-[10px] text-faint">
+          {plural(grid.stats.total, tab === 'sessions' ? 'session' : 'receipt')} this year
         </span>
       </div>
       <div className="scroll-thin overflow-x-auto px-5 pb-3">
@@ -50,13 +49,13 @@ function ActivityCard({ tasks }: { tasks: TaskSummary[] }) {
               gridTemplateRows: 'repeat(7, 9px)'
             }}
             role="img"
-            aria-label={`${grid.stats.total} ${tab} across the last year`}
+            aria-label={`${plural(grid.stats.total, tab === 'sessions' ? 'session' : 'receipt')} across the last year`}
           >
             {grid.columns.map((column, columnIndex) =>
               column.map((day, rowIndex) => (
                 <span
                   key={`${columnIndex}-${rowIndex}`}
-                  title={`${day.date} · ${day.count} ${tab}`}
+                  title={`${day.date} · ${plural(day.count, tab === 'sessions' ? 'session' : 'receipt')}`}
                   className={cn('h-[9px] w-[10.4px] rounded-[2px]', LEVELS[day.level])}
                 />
               ))
@@ -151,10 +150,6 @@ export function CaptainWelcome({
             busy={busy}
             autoFocus
           />
-          <p className="mt-2 flex items-center justify-center gap-1.5 pb-2 text-[10.5px] text-faint">
-            <LockKeyhole size={10} />
-            Local-first. Files stay on this machine.
-          </p>
         </div>
       </div>
     </div>

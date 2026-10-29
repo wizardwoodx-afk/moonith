@@ -5,7 +5,7 @@
  * here can never drift from the data.
  */
 import { useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import type { ProviderPreset, ProviderPresetCategory } from '@shared/providerPresets'
 import { PRESET_CATEGORY_LABELS, PROVIDER_PRESETS } from '@shared/providerPresets'
 import { cn } from '../../lib/utils'
@@ -60,10 +60,10 @@ export function ProviderPresets({ onPick }: { onPick: (preset: ProviderPreset) =
             Pick an endpoint to fill the form. Everything stays editable.
           </span>
         </span>
-        <ChevronDown
-          aria-hidden
-          size={14}
-          className={cn('shrink-0 text-muted transition-transform duration-200 ease-out', open && 'rotate-180')}
+        <Icon
+          name="chevronDown"
+          size="md"
+          className={cn('text-muted transition-transform duration-200 ease-out', open && 'rotate-180')}
         />
       </button>
 

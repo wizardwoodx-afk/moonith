@@ -487,7 +487,6 @@ function ScheduleModal({
       width="max-w-[600px]"
       icon={<CalendarClock size={17} />}
       title={record ? 'Edit schedule' : 'New schedule'}
-      subtitle="SelfImpulse opens a fresh task and follows your prompt each time this fires."
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -503,6 +502,7 @@ function ScheduleModal({
         <FieldGroup label="Name" hint="Optional">
           <input
             className="field"
+            aria-label="Schedule name"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder="Monday research brief"
@@ -513,6 +513,7 @@ function ScheduleModal({
         <FieldGroup label="Prompt">
           <textarea
             className="field min-h-[110px]"
+            aria-label="Prompt for each run"
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             placeholder="Research the top three developments in our market this week. Write a short sourced brief as a Word document and save it to the workspace."
@@ -523,6 +524,7 @@ function ScheduleModal({
           <FieldGroup label="Repeats">
             <select
               className="field"
+              aria-label="How often the schedule repeats"
               value={preset}
               onChange={(event) => {
                 const value = event.target.value
@@ -545,6 +547,7 @@ function ScheduleModal({
             <FieldGroup label="Cron expression" hint="minute hour day month weekday">
               <input
                 className="field font-mono text-[12px]"
+                aria-label="Cron expression"
                 value={customCron}
                 onChange={(event) => setCustomCron(event.target.value)}
                 placeholder="0 9 * * 1-5"
@@ -572,6 +575,7 @@ function ScheduleModal({
           <FieldGroup label="Provider">
             <select
               className="field"
+              aria-label="Model provider"
               value={activeProvider?.id ?? ''}
               disabled={!providers.length}
               onChange={(event) => {
@@ -671,9 +675,9 @@ function ScheduleModal({
           </div>
         ) : null}
 
-        <div className="flex items-start gap-2 rounded-xl border border-line bg-canvas/50 px-3.5 py-2.5 text-[10.5px] leading-relaxed text-faint">
-          <Info size={12} className="mt-0.5 shrink-0" />
-          Each run creates a new task in Recents. Old runs are kept until you delete them.
+        <div className="flex items-center gap-2 rounded-xl border border-line bg-canvas/50 px-3.5 py-2 text-[10.5px] text-faint">
+          <Info size={12} className="shrink-0" />
+          Each run creates a new task in Recents.
         </div>
       </div>
     </Modal>

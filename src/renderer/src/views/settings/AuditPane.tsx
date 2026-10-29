@@ -282,10 +282,8 @@ export function AuditPane() {
       >
         <div className="space-y-5">
           <p className="text-[11.5px] leading-relaxed text-muted">
-            Runtime events record policy decisions, DLP actions, provider attempts, approvals,
-            tool/argument/result hashes, and completion outcomes. Raw prompts and tool payloads are
-            not added to this ledger. Older engine receipts and traces remain in the export and may
-            contain work content, so treat exported files as confidential.
+            Entries hold decisions and hashes, not raw prompts or tool payloads. Exported files may
+            contain work content — treat them as confidential.
           </p>
 
           {loadError ? (
@@ -334,8 +332,7 @@ export function AuditPane() {
               icon={<ScrollText size={19} />}
               title={<>Nothing recorded yet.</>}
             >
-              Run a task or change an enterprise policy to create runtime evidence. You can still
-              verify a file exported on another machine.
+              Run a task or change an enterprise policy to create runtime evidence.
             </EmptyPanel>
           ) : null}
 
@@ -369,6 +366,7 @@ export function AuditPane() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="policy.check, write_file, task ID…"
+                aria-label="Search audit events"
                 className="h-9 w-full rounded-lg border border-line bg-canvas pr-3 pl-8 text-[11.5px] text-ink outline-none placeholder:text-faint focus:border-accent/45"
               />
             </div>

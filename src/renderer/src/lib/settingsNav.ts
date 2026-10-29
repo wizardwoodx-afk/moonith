@@ -219,7 +219,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     id: 'rook',
     label: 'Autonomous worker',
     group: 'Agents',
-    summary: 'Autonomous digital worker, GitOps Change Requests, and 360K+ skills.',
+    summary: 'Background work, change requests, and skills.',
     keywords: ['rook', 'worker', 'yolo', 'build', 'plan', 'skills', 'change requests', 'deliverables', 'gitops'],
     status: 'live'
   },
@@ -255,7 +255,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     id: 'mcp',
     label: 'MCP servers',
     group: 'Integrations',
-    summary: 'Installed tool servers plus the community marketplace.',
+    summary: 'Installed tool servers and the catalog.',
     keywords: ['tools', 'stdio', 'http', 'sse', 'server', 'rea', 'reverse engineering', 'protocol', 'extensions', 'mcp', 'marketplace'],
     status: 'live'
   },

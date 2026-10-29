@@ -191,7 +191,7 @@ export function MissionsPane() {
       await load()
       setOutcome({
         tone: 'positive',
-        message: `A repository scan of ${root} has started. It parks whenever it needs your approval, and picks up where it left off if the app restarts.`
+        message: `A repository scan of ${root} has started. It parks whenever it needs your approval.`
       })
     } catch (error) {
       setOutcome({ tone: 'danger', message: errorMessage(error) })
@@ -224,12 +224,8 @@ export function MissionsPane() {
     >
       <div className="space-y-5">
         <PaneNote>
-          A mission is written down as it goes, one step at a time. If the app closes mid-step,
-          the mission comes back marked for reconciliation rather than blindly replaying: a step
-          that may already have run is re-checked where the step knows how to check itself, and
-          otherwise handed to you as a question — never re-done. That is why the ledger below
-          shows attempts — an attempt count above one means the step was retried or recovered,
-          not that your files were touched twice.
+          A mission records every step as it runs, so it can resume exactly where it stopped after
+          a restart. The ledger below shows each step and its attempts.
         </PaneNote>
 
         {loadError ? (
@@ -281,11 +277,7 @@ export function MissionsPane() {
         {outcome ? <OutcomeBanner outcome={outcome} /> : null}
 
         {list.length === 0 ? (
-          <EmptyState icon={<Hourglass size={18} />} title="No missions yet">
-            A mission is for work worth surviving a restart — a long scan, a build that waits on
-            your approval halfway through. Start one above and it will appear here with its step
-            ledger.
-          </EmptyState>
+          <EmptyState icon={<Hourglass size={18} />} title="No missions yet" />
         ) : (
           <div className="space-y-3">
             {list
@@ -446,8 +438,7 @@ export function MissionsPane() {
                         was running, so the journal cannot say whether its effect landed.{' '}
                         <span className="font-medium text-ink">It landed</span> continues from the
                         next step; <span className="font-medium text-ink">It didn&apos;t</span>{' '}
-                        stops the mission without replaying anything. Nothing is retried on a
-                        guess.
+                        stops the mission. Nothing is retried on a guess.
                       </p>
                     </div>
                   ) : null}

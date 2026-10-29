@@ -67,7 +67,7 @@ export function ApprovalDialog() {
           </div>
           <span
             className={cn(
-              'inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize',
+              'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize',
               riskClass
             )}
           >
@@ -80,7 +80,7 @@ export function ApprovalDialog() {
           <div className="overflow-hidden rounded-xl border border-line bg-canvas">
             <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2">
               <span className="text-[10.5px] font-medium text-faint">Markdown preview</span>
-              <span className="text-[10px] text-faint">Exact draft · no always-allow</span>
+              <span className="text-[10px] whitespace-nowrap text-faint">One-time approval</span>
             </div>
             <div className="scroll-thin max-h-[48vh] overflow-y-auto px-5 py-4">
               <Markdown content={pageReview.content} />
@@ -131,14 +131,6 @@ export function ApprovalDialog() {
             </pre>
           </div>
         )}
-
-        <p className="text-[11.5px] leading-relaxed text-faint">
-          {pageReview
-            ? 'Only this exact draft is approved. Saving checks the page revision again; a changed draft or conflicting revision requires a new review.'
-            : diffReview
-              ? 'This is the exact change. Deny it and nothing on disk is touched; approve it and the file is written as shown.'
-              : 'Review the details before you allow this action. You can change permission behavior per task in the composer.'}
-        </p>
       </div>
     </Modal>
   )

@@ -10,13 +10,11 @@ type Path = 'host' | 'join'
 function Choice({
   icon: Icon,
   title,
-  detail,
   active,
   onSelect
 }: {
   icon: typeof Radio
   title: string
-  detail: string
   active: boolean
   onSelect: () => void
 }) {
@@ -26,15 +24,12 @@ function Choice({
       onClick={onSelect}
       aria-pressed={active}
       className={cn(
-        'flex flex-1 items-start gap-3 rounded-[var(--r-card)] border px-4 py-3.5 text-left transition-colors',
+        'flex flex-1 items-center gap-3 rounded-[var(--r-card)] border px-4 py-3.5 text-left transition-colors',
         active ? 'border-accent/50 bg-accent-soft/25' : 'border-line hover:border-line-strong'
       )}
     >
-      <Icon size={16} className={cn('mt-0.5 shrink-0', active ? 'text-accent' : 'text-muted')} />
-      <span className="min-w-0">
-        <span className="block text-[13px] font-medium text-ink">{title}</span>
-        <span className="mt-0.5 block text-[11.5px] leading-relaxed text-muted">{detail}</span>
-      </span>
+      <Icon size={16} className={cn('shrink-0', active ? 'text-accent' : 'text-muted')} />
+      <span className="min-w-0 whitespace-nowrap text-[13px] font-medium text-ink">{title}</span>
     </button>
   )
 }
@@ -67,14 +62,12 @@ export function PairingPanel() {
           <Choice
             icon={Radio}
             title="Start here"
-            detail="Gives you a code to type into the other machine."
             active={path === 'host'}
             onSelect={() => setPath('host')}
           />
           <Choice
             icon={KeyRound}
             title="Join from here"
-            detail="Uses a code the other machine already showed you."
             active={path === 'join'}
             onSelect={() => setPath('join')}
           />
@@ -201,9 +194,9 @@ export function PairingPanel() {
           </form>
         ) : null}
 
-        <p className="mt-8 flex items-center justify-center gap-2 text-[11px] text-faint">
+        <p className="mt-8 flex items-center justify-center gap-2 whitespace-nowrap text-[11px] text-faint">
           <LockKeyhole size={11} className="shrink-0" />
-          Stays on your network. Every seated agent approves each joint action.
+          Stays on your local network.
         </p>
       </div>
     </div>

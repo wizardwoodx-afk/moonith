@@ -1,8 +1,8 @@
 import type { Task } from '@shared/types'
-import { ShieldCheck } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { buildOversight, type OversightEntry, type OversightKind } from './oversight'
 import { PERMISSION_CHOICES } from '../../lib/composerChoices'
-import { cn } from '../../lib/utils'
+import { cn, plural } from '../../lib/utils'
 
 const KIND_STYLE: Record<OversightKind, { dot: string; label: string }> = {
   decision: { dot: 'bg-danger', label: 'Refused' },
@@ -42,7 +42,7 @@ export function OversightPanel({ task }: { task: Task }) {
     <section className="mt-8 rounded-xl border border-line bg-surface/50 p-3.5">
       <div className="mb-1 flex items-center justify-between gap-3">
         <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.13em] text-faint uppercase">
-          <ShieldCheck size={11} />
+          <Icon name="shield" size="xs" />
           Oversight
         </p>
         {report.stop ? <p className="text-[11px] text-warn">{report.stop}</p> : null}
@@ -62,7 +62,7 @@ export function OversightPanel({ task }: { task: Task }) {
       ) : null}
 
       {report.entries.length > 40 ? (
-        <p className="mt-1.5 text-[10.5px] text-faint">{report.entries.length - 40} earlier entries not shown.</p>
+        <p className="mt-1.5 text-[10.5px] text-faint">{plural(report.entries.length - 40, 'earlier entry')} not shown.</p>
       ) : null}
 
       <p className="mt-2.5 border-t border-line pt-2 text-[10.5px] text-faint">

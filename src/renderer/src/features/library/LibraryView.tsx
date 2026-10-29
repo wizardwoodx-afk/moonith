@@ -444,11 +444,10 @@ export function LibraryView() {
         <header className="flex min-h-[76px] items-center justify-between gap-4 border-b border-line/70 px-7 py-4">
           <div className="min-w-0">
             <h1 className="font-display text-[20px] tracking-[-0.025em]">Library</h1>
-            <p className="mt-1 text-[11px] text-faint">Local Markdown pages · agent drafts require your review</p>
           </div>
           <div className="flex shrink-0 items-center gap-3">
-            <span className="hidden items-center gap-1.5 text-[10.5px] text-faint sm:inline-flex">
-              <LiveNumber value={pages.length} /> pages
+            <span className="hidden items-center gap-1.5 whitespace-nowrap text-[10.5px] text-faint sm:inline-flex">
+              <LiveNumber value={pages.length} /> {pages.length === 1 ? 'page' : 'pages'}
             </span>
             <Button variant="secondary" size="sm" onClick={() => void createPage()} loading={creating}>
               <Plus size={13} /> New page
@@ -573,13 +572,7 @@ export function LibraryView() {
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-surface text-accent">
               <LibraryBig size={21} />
             </div>
-            <h2 className="mt-4 font-display text-[18px]">A quiet place for good work</h2>
-            <p className="mt-2 max-w-sm text-[12px] leading-relaxed text-faint">
-              Keep research, briefs, and decisions in local Markdown pages. {agentName()} can propose a page, but only you can approve it.
-            </p>
-            <Button variant="secondary" size="sm" className="mt-5" onClick={() => void createPage()} loading={creating}>
-              <Plus size={13} /> Create your first page
-            </Button>
+            <p className="mt-3 text-[12px] text-muted">No pages yet.</p>
           </div>
         )}
       </section>
@@ -598,7 +591,7 @@ export function LibraryView() {
         }
       >
         <p className="text-[12px] leading-relaxed text-muted">
-          This removes the local page and reparents its children. Approved-review receipts are retained so a retry cannot recreate it.
+          This removes the page and any pages under it.
           {dirtyRef.current ? ' Your unsaved draft will be discarded.' : ''}
         </p>
       </Modal>

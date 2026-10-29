@@ -93,11 +93,7 @@ export function GatewayPane() {
           <SettingRow
             icon={<Activity size={14} />}
             title="Endpoint"
-            description={
-              state?.running
-                ? `Every request to this address is routed to the ${agentName()}.`
-                : 'Start the gateway to get an address.'
-            }
+            description={state?.running ? undefined : 'Start the gateway to get an address.'}
           >
             {state?.running ? (
               <code className="font-mono text-[11.5px] text-muted">{state.url}</code>
@@ -106,7 +102,7 @@ export function GatewayPane() {
           <SettingRow
             icon={<KeyRound size={14} />}
             title="Access token"
-            description="Every remote call carries this token. Copy it once, it is not stored in plain text."
+            description="Shown once — copy it now; it is not stored in plain text."
           >
             <Button variant="secondary" size="sm" onClick={() => void revealToken()}>
               <Copy size={12} />
@@ -223,8 +219,8 @@ export function WorkFilesPane() {
             title="Microsoft 365"
             description={
               connected
-                ? 'Signed in. Files, mail and the calendar are read from this account.'
-                : 'Not connected. Sign-in uses the device code flow, so no browser is required on this machine.'
+                ? 'Files, mail and calendar read from this account.'
+                : 'Sign-in uses the device code flow, so no browser is required on this machine.'
             }
           >
             <StatusChip tone={connected ? 'positive' : 'neutral'}>
@@ -235,7 +231,6 @@ export function WorkFilesPane() {
             <SettingRow
               icon={<Inbox size={14} />}
               title="Account"
-              description={`The address the ${agentName()} works from.`}
             >
               <code className="font-mono text-[11.5px] text-muted">{email}</code>
             </SettingRow>
@@ -384,7 +379,7 @@ export function DesktopPane() {
               className="w-full rounded-lg border border-line bg-canvas px-3 py-2 text-[12px] text-ink outline-none focus:border-accent"
             />
             <span className="mt-1 block text-[10.5px] text-faint">
-              Required. The endpoint that serves the grounding model.
+              Required. Endpoint serving the grounding model.
             </span>
           </label>
           <label className="block">
@@ -398,7 +393,7 @@ export function DesktopPane() {
               className="w-full rounded-lg border border-line bg-canvas px-3 py-2 text-[12px] text-ink outline-none focus:border-accent"
             />
             <span className="mt-1 block text-[10.5px] text-faint">
-              Required. The model name the endpoint expects.
+              Required. Model name the endpoint expects.
             </span>
           </label>
         </div>

@@ -22,9 +22,9 @@ export interface OversightEntry {
 
 export const STOP_LABEL: Record<string, string> = {
   final: 'Answered',
-  max_iterations: 'Stopped at the iteration ceiling',
+  max_iterations: 'Stopped: too many steps',
   budget_exhausted: 'Stopped: no budget left',
-  circuit_open: 'Stopped: repeated failures tripped the breaker',
+  circuit_open: 'Stopped: too many failures in a row',
   interrupted: 'Stopped by you',
   error: 'Ended with an error',
   prelude_break: 'Stopped before the first call'
@@ -46,9 +46,9 @@ function classify(step: StepRecord): OversightKind | null {
 }
 
 const TITLES: Record<OversightKind, (step: StepRecord) => string> = {
-  decision: (step) => `Refused: ${step.title}`,
+  decision: (step) => step.title,
   guard: (step) => (step.tool === 'tripwire:output' ? 'Answer edited before display' : 'Retrieved content marked'),
-  failure: (step) => `Failed: ${step.title}`,
+  failure: (step) => step.title,
   change: (step) => step.title
 }
 

@@ -106,7 +106,7 @@ export function GovernancePane() {
       setOutcome({
         tone: 'danger',
         message:
-          `The kill switch is engaged. Every action the ${agentName()} or the Crew attempts is refused until you release it.`
+          `The kill switch is engaged. Every action ${agentName()} or any sub-agent attempts is refused until you release it.`
       })
       await load()
     } catch (error) {
@@ -162,11 +162,7 @@ export function GovernancePane() {
     >
       <div className="space-y-5">
         <PaneNote>
-          Before the {agentName()} or a Crew seat runs a tool, the gate checks three things in order: is
-          this agent still allowed to act, does it hold the capability the tool needs, and does the
-          action need a human. It fails closed — if the policy engine itself breaks, the action is
-          refused rather than allowed. A high-risk action always reaches you, whatever the agent's
-          trust score.
+          Every tool action passes this gate before it runs. High-risk actions always ask you.
         </PaneNote>
 
         {loadError ? (
@@ -193,15 +189,12 @@ export function GovernancePane() {
               tone={summary.deny > 0 ? 'danger' : 'default'}
               hint="never ran"
             />
-            <Stat label="Registered agents" value={summary.agents} hint={`the ${agentName()} and its Crew`} />
+            <Stat label="Registered agents" value={summary.agents} />
           </StatGrid>
         ) : null}
 
         {summary && decided === 0 ? (
-          <EmptyState icon={<Scale size={18} />} title="Nothing judged yet">
-            The gate speaks the moment the {agentName()} runs a tool. Until then there is nothing to show —
-            which is the honest answer, not an empty promise.
-          </EmptyState>
+          <EmptyState icon={<Scale size={18} />} title="Nothing judged yet" />
         ) : null}
 
         {/* ── the emergency control ─────────────────────────────────────────── */}
@@ -266,14 +259,14 @@ export function GovernancePane() {
               ) : (
                 <p className="mt-1.5 max-w-[520px] text-[11.5px] leading-relaxed text-muted">
                   {gateKnown
-                    ? 'Engaging this refuses every governed action for every agent, immediately and across restarts. Use it when something is running that should not be.'
+                    ? 'Engaging refuses every governed action, immediately and across restarts. Use it when something is running that should not be.'
                     : 'The gate could not be read, so whether the emergency stop is engaged is unknown. Engaging still refuses everything until you release it.'}
                 </p>
               )}
 
               {engaged ? (
                 <p className="mt-1.5 text-[10.5px] text-muted">
-                  It stays engaged across a restart until you release it.
+                  Stays engaged across a restart until you release it.
                 </p>
               ) : null}
             </div>
@@ -337,9 +330,8 @@ export function GovernancePane() {
                 ))}
             </RowList>
             <p className="px-2.5 text-[10.5px] text-faint">
-              The number on the right is the acting agent's trust score at the moment of the
-              decision. Trust can raise scrutiny; it can never authorise a high-risk action on its
-              own.
+              The number on the right is the agent&apos;s trust score at the decision. Trust never
+              authorises a high-risk action on its own.
             </p>
           </div>
         ) : null}
@@ -371,7 +363,7 @@ export function GovernancePane() {
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             rows={3}
-            placeholder="e.g. the Crew is writing to the wrong folder"
+            placeholder="e.g. an agent is writing to the wrong folder"
             className="w-full resize-none rounded-xl border border-line bg-surface-2/60 px-3 py-2 text-[12.5px] text-ink outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-accent/40"
           />
           <span className="block text-[11px] text-faint">

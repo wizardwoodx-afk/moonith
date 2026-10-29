@@ -65,10 +65,7 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent-ink">
               <Sparkles size={18} />
             </div>
-            <p className="mt-3 text-[12.5px] font-medium">Files will appear here</p>
-            <p className="mt-1 text-[11px] leading-relaxed text-faint">
-              Everything SelfImpulse creates lands in this task.
-            </p>
+            <p className="mt-3 text-[12.5px] font-medium">No files yet</p>
           </div>
         ) : null}
 
@@ -98,11 +95,11 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
                     </span>
                   </span>
                 </button>
-                <div className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                   <IconButton
                     onClick={() => revealArtifact(task.id, artifact)}
                     title="Show in folder"
-                    aria-label="Show in folder"
+                    aria-label={`Show ${artifact.name} in folder`}
                     className="h-7 w-7"
                   >
                     <FolderOpen size={13} />
@@ -110,7 +107,7 @@ export function ArtifactPanelBody({ task }: { task: Task }) {
                   <IconButton
                     onClick={() => openArtifact(task.id, artifact)}
                     title="Open in default app"
-                    aria-label="Open file"
+                    aria-label={`Open ${artifact.name} in the default app`}
                     className="h-7 w-7"
                   >
                     <ExternalLink size={13} />
@@ -267,10 +264,7 @@ function PreviewBody({ artifact, taskId }: { artifact: Artifact; taskId: string 
         <ImageOff size={20} />
       </div>
       <div>
-        <p className="text-[13px] font-medium">No inline preview available</p>
-        <p className="mt-1 text-[12px] text-faint">
-          Open this file in its native app to see the full content.
-        </p>
+        <p className="text-[13px] font-medium">No preview available</p>
       </div>
     </div>
   )

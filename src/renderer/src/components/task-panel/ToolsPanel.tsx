@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from 'react'
-import { agentName } from '../../lib/localProfile'
 import { AnimatePresence, motion, useReducedMotionConfig } from 'framer-motion'
 import { toast } from 'sonner'
 import type { McpServerConfig, McpServerStatus, SkillDetail } from '@shared/types'
@@ -88,14 +87,14 @@ function McpCard({
           <p className="mt-0.5 truncate font-mono text-[10px] text-faint" title={`${config.command} ${config.args.join(' ')}`}>
             {config.command} {config.args.join(' ')}
           </p>
-          <p className="mt-1 text-[10px] text-faint">
+          <p className="mt-1 truncate text-[10px] text-faint">
             {state === 'ready'
-              ? `${exposure.exposed} exposed · ${exposure.discovered} discovered`
+              ? `${exposure.exposed} available · ${exposure.discovered} found`
               : state === 'error'
-                ? 'The local process did not become ready'
+                ? 'Local server did not start'
                 : config.enabled
-                  ? 'No tools currently exposed'
-                  : 'Server is off'}
+                  ? 'No tools available'
+                  : 'Turned off'}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
@@ -106,17 +105,17 @@ function McpCard({
         </div>
       </div>
 
-      {status?.error ? <p className="mx-3 mb-2 line-clamp-2 text-[10px] leading-relaxed text-danger/90">{status.error}</p> : null}
+      {status?.error ? <p className="mx-3 mb-2 line-clamp-2 text-[10px] leading-relaxed text-danger/90" title={status.error}>{status.error}</p> : null}
 
       {(status?.tools.length || status?.error) ? (
         <button
           onClick={() => setExpanded((value) => !value)}
           aria-expanded={expanded}
-          className="flex w-full items-center gap-1.5 border-t border-line/70 px-3 py-1.5 text-[10px] text-faint hover:bg-surface-2/40 hover:text-muted"
+          className="flex w-full items-center gap-1.5 border-t border-line/70 px-3 py-1.5 text-[10px] whitespace-nowrap text-faint hover:bg-surface-2/40 hover:text-muted"
         >
-          <Icon name="chevronDown" size="xs" className={cn('transition-transform', expanded && 'rotate-180')} />
-          {expanded ? 'Hide inspection' : 'Inspect tools and status'}
-          {config.toolAllowlist?.length ? <span className="ml-auto">Allowlist · {config.toolAllowlist.length}</span> : <span className="ml-auto">All discovered tools allowed</span>}
+          <Icon name="chevronDown" size="xs" className={cn('shrink-0 transition-transform', expanded && 'rotate-180')} />
+          {expanded ? 'Hide tools' : 'Tools and status'}
+          {config.toolAllowlist?.length ? <span className="ml-auto shrink-0">{config.toolAllowlist.length} allowed</span> : <span className="ml-auto shrink-0">All tools allowed</span>}
         </button>
       ) : null}
 
@@ -138,7 +137,7 @@ function McpCard({
                     <div key={tool.name} className={cn('rounded-lg px-2 py-1.5', exposed ? 'bg-surface/60' : 'opacity-55')}>
                       <div className="flex items-center gap-2">
                         <code className="min-w-0 flex-1 truncate text-[10px] text-ink" title={tool.name}>{tool.name}</code>
-                        <span className="shrink-0 text-[10px] text-faint">{exposed ? 'Exposed' : 'Not exposed'}</span>
+                        <span className="shrink-0 whitespace-nowrap text-[10px] text-faint">{exposed ? 'Available' : 'Not available'}</span>
                       </div>
                       {tool.description ? <p className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-faint">{tool.description}</p> : null}
                     </div>
@@ -174,8 +173,8 @@ export function ToolsPanel({ capabilities }: { capabilities: TaskCapabilities })
   if (capabilities.loading) {
     return (
       <div className="flex flex-1 items-center justify-center gap-3 text-muted">
-        <TaskOrb state="connecting" label="Reading installed capabilities" />
-        <span className="text-[10.5px]">Reading installed capabilities</span>
+        <TaskOrb state="connecting" label="Loading tools" />
+        <span className="text-[10.5px]">Loading tools</span>
       </div>
     )
   }
@@ -188,12 +187,12 @@ export function ToolsPanel({ capabilities }: { capabilities: TaskCapabilities })
       <div className="mb-3 rounded-xl border border-line bg-canvas/45 px-3 py-2.5">
         <p className="text-[10.5px] leading-relaxed text-muted">
           {unavailable ? (
-            'Skills and MCP status could not be read. Retry below; your configuration has not been changed.'
+            'Could not read skills or MCP services.'
           ) : (
             <>
-              <span className="font-medium text-ink">{capabilities.skills.length} skills</span> and{' '}
-              <span className="font-medium text-ink">{ready}/{capabilities.configs.length} MCP services ready</span>.
-              Installed skills are available to {agentName()}; only exposed, ready MCP tools can be called.
+              <span className="font-medium text-ink">{capabilities.skills.length} skill{capabilities.skills.length === 1 ? '' : 's'}</span>
+              {' · '}
+              <span className="font-medium text-ink">{ready}/{capabilities.configs.length} MCP services ready</span>
             </>
           )}
         </p>
@@ -201,9 +200,9 @@ export function ToolsPanel({ capabilities }: { capabilities: TaskCapabilities })
 
       {capabilities.error ? (
         <div className="mb-3 flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/5 px-3 py-2 text-[10px] text-danger">
-          <Icon name="alert" size="sm" className="mt-0.5" />
-          <span className="min-w-0 flex-1">{capabilities.error}</span>
-          <button onClick={() => void capabilities.refresh()} className="shrink-0 underline">Retry</button>
+          <Icon name="alert" size="sm" className="mt-0.5 shrink-0" />
+          <span className="min-w-0 flex-1 line-clamp-2" title={capabilities.error}>{capabilities.error}</span>
+          <button onClick={() => void capabilities.refresh()} className="shrink-0 whitespace-nowrap underline">Retry</button>
         </div>
       ) : null}
 
@@ -211,7 +210,7 @@ export function ToolsPanel({ capabilities }: { capabilities: TaskCapabilities })
         <SectionHeading
           icon="spark"
           title="Skills"
-          detail="Installed playbooks · select one to read it"
+          detail="Installed playbooks"
           action={<button onClick={() => openSettings('skills')} className="flex items-center gap-1 text-[10px] text-faint hover:text-ink"><Icon name="settingsFine" size="xs" /> Manage</button>}
         />
         {capabilities.skills.length ? (
@@ -236,7 +235,7 @@ export function ToolsPanel({ capabilities }: { capabilities: TaskCapabilities })
                     <span className="ml-auto shrink-0 text-[10px] text-faint">{skill.source === 'local' ? 'Local' : skill.registry === 'marketplace' ? 'Marketplace' : 'Registry'}</span>
                   </span>
                   <span className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-muted">{skill.description}</span>
-                  <span className="mt-1 block text-[10px] text-faint">{skill.files} file{skill.files === 1 ? '' : 's'} · Read playbook</span>
+                  <span className="mt-1 block text-[10px] text-faint">{skill.files} file{skill.files === 1 ? '' : 's'}</span>
                 </span>
               </motion.button>
             ))}
@@ -245,7 +244,6 @@ export function ToolsPanel({ capabilities }: { capabilities: TaskCapabilities })
           <button onClick={() => openSettings('skills')} className="w-full rounded-xl border border-dashed border-line px-4 py-6 text-center hover:bg-surface/40">
             <Icon name="spark" size="lg" className="mx-auto text-faint" />
             <span className="mt-2 block text-[10.5px] font-medium text-ink">No skills installed</span>
-            <span className="mt-1 block text-[10px] text-faint">Open Skills to write or install a real playbook.</span>
           </button>
         )}
       </section>
@@ -255,7 +253,7 @@ export function ToolsPanel({ capabilities }: { capabilities: TaskCapabilities })
           <SectionHeading
             icon="builtin"
             title="Built into the agent"
-            detail="Capabilities that ship with this app, not installed"
+            detail="Ships with the app"
           />
           <div className="space-y-1.5">
             {capabilities.builtinTools.map((tool, index) => (
@@ -285,7 +283,7 @@ export function ToolsPanel({ capabilities }: { capabilities: TaskCapabilities })
         <SectionHeading
           icon="connector"
           title="Local MCP services"
-          detail="Real stdio processes and discovered tools"
+          detail="Runs on this device"
           action={<button onClick={() => openSettings('mcp')} className="flex items-center gap-1 text-[10px] text-faint hover:text-ink"><Icon name="settingsFine" size="xs" /> Manage</button>}
         />
         {capabilities.configs.length ? (
@@ -306,7 +304,6 @@ export function ToolsPanel({ capabilities }: { capabilities: TaskCapabilities })
           <button onClick={() => openSettings('mcp')} className="w-full rounded-xl border border-dashed border-line px-4 py-6 text-center hover:bg-surface/40">
             <Icon name="connector" size="lg" className="mx-auto text-faint" />
             <span className="mt-2 block text-[10.5px] font-medium text-ink">No MCP services configured</span>
-            <span className="mt-1 block text-[10px] text-faint">Open MCP settings to add a trusted local server.</span>
           </button>
         )}
       </section>

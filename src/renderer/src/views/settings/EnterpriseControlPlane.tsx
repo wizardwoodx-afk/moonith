@@ -3,7 +3,6 @@ import { motion } from 'framer-motion'
 import {
   Activity,
   Archive,
-  Building2,
   CheckCircle2,
   Clock3,
   KeyRound,
@@ -11,9 +10,7 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
-  ShieldCheck,
   ShieldX,
-  UserRound,
   Users
 } from 'lucide-react'
 import {
@@ -281,7 +278,7 @@ export function EnterpriseControlPlane() {
           }
         }
       },
-      `Define Restriction ${id}`
+      `Define deny rule ${id}`
     ).then((saved) => { if (saved) form.reset() })
   }
 
@@ -312,8 +309,8 @@ export function EnterpriseControlPlane() {
       
       action={
         <div className="flex items-center gap-2">
-          <span className="rounded-full border border-positive/25 bg-positive/10 px-2 py-0.5 text-[10px] font-medium text-positive">
-            Native · in process
+          <span className="rounded-full border border-positive/25 bg-positive/10 px-2 py-0.5 text-[10px] font-medium text-positive whitespace-nowrap">
+            Local
           </span>
           <button
             type="button"
@@ -330,10 +327,8 @@ export function EnterpriseControlPlane() {
         <div className="flex items-start gap-2.5 rounded-lg border border-line bg-canvas/45 px-3 py-2.5">
           <LockKeyhole size={13} className="mt-0.5 shrink-0 text-accent" />
           <p className="text-[10px] leading-relaxed text-muted">
-            Default deny; a Restriction always overrides a grant. This enforces product policy inside
-            SelfImpulse and does not claim hosted SSO, sandboxed workloads, or hard tenant isolation.
-            Authorization semantics were adapted from SelfImpulse Enterprise (MIT) and independently
-            integrated here; upstream attribution is preserved in Third-Party Notices.
+            Default deny; a deny rule always overrides a grant. Local product policy only — not
+            hosted SSO or hard tenant isolation.
           </p>
         </div>
         {error ? <p className="rounded-lg border border-danger/25 bg-danger/10 px-3 py-2 text-[10.5px] text-danger">{error}</p> : null}
@@ -377,7 +372,7 @@ export function EnterpriseControlPlane() {
             {tab === 'Overview' ? (
               <div className="space-y-5">
                 <form onSubmit={testAuthorization} className="rounded-xl border border-line bg-panel-2/45 p-3">
-                  <p className="mb-3 flex items-center gap-2 text-[11.5px] font-medium text-ink"><KeyRound size={13} /> Authorization evaluator</p>
+                  <p className="mb-3 flex items-center gap-2 text-[11.5px] font-medium text-ink"><KeyRound size={13} /> Access test</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Principal">
                       <select name="principalId" required className={inputClass}>
@@ -463,11 +458,11 @@ export function EnterpriseControlPlane() {
                   </form>
                 </details>
                 <div>
-                  <p className="mb-2 text-[11px] font-medium text-ink">AccessBindings</p>
+                  <p className="mb-2 text-[11px] font-medium text-ink">Bindings</p>
                   <div className="space-y-2">{snapshot.state.bindings.map((binding) => <EntityCard key={binding.id} title={binding.id} subtitle={`${binding.principalId} → ${binding.roleId}`} lifecycle={binding.lifecycle} detail={`${binding.resource.kind}:${binding.resource.id ?? 'any'} · ${binding.resource.namespaceId}`} busy={busy} onLifecycle={(next) => lifecycle('binding', binding.id, next)} />)}</div>
                 </div>
                 <details className="rounded-xl border border-line bg-canvas/35 p-3">
-                  <summary className="cursor-pointer text-[11px] font-medium text-ink"><Plus size={12} className="mr-1 inline" /> Create AccessBinding</summary>
+                  <summary className="cursor-pointer text-[11px] font-medium text-ink"><Plus size={12} className="mr-1 inline" /> Create binding</summary>
                   <form onSubmit={submitBinding} className="mt-3 grid gap-3 sm:grid-cols-2">
                     <Field label="Binding id"><input name="id" required className={inputClass} placeholder="binding:researcher" /></Field>
                     <Field label="Principal"><select name="principalId" className={inputClass}>{snapshot.state.principals.map((principal) => <option key={principal.id} value={principal.id}>{principal.name}</option>)}</select></Field>
@@ -482,13 +477,13 @@ export function EnterpriseControlPlane() {
 
             {tab === 'Deny rules' ? (
               <div className="space-y-4">
-                <p className="text-[10.5px] leading-relaxed text-muted">Restrictions are evaluated before every grant. Disable one to test a temporary exception, or archive it to preserve its lifecycle in revision history.</p>
-                <div className="space-y-2">{snapshot.state.restrictions.length === 0 ? <p className="rounded-lg border border-dashed border-line px-3 py-5 text-center text-[10.5px] text-faint">No Restrictions. Default deny still applies wherever no grant exists.</p> : snapshot.state.restrictions.map((restriction) => <EntityCard key={restriction.id} title={restriction.name} subtitle={`${restriction.id} · ${restriction.principalId ?? 'all principals'}`} lifecycle={restriction.lifecycle} detail={`${restriction.actions.join(', ')} · ${restriction.resource.kind}:${restriction.resource.id ?? 'any'} · ${restriction.resource.namespaceId}`} busy={busy} onLifecycle={(next) => lifecycle('restriction', restriction.id, next)} />)}</div>
+                <p className="text-[10.5px] leading-relaxed text-muted">Deny rules are checked before every grant. Disable one for a temporary exception; archiving keeps it in history.</p>
+                <div className="space-y-2">{snapshot.state.restrictions.length === 0 ? <p className="rounded-lg border border-dashed border-line px-3 py-5 text-center text-[10.5px] text-faint">No deny rules. Default deny still applies wherever no grant exists.</p> : snapshot.state.restrictions.map((restriction) => <EntityCard key={restriction.id} title={restriction.name} subtitle={`${restriction.id} · ${restriction.principalId ?? 'all principals'}`} lifecycle={restriction.lifecycle} detail={`${restriction.actions.join(', ')} · ${restriction.resource.kind}:${restriction.resource.id ?? 'any'} · ${restriction.resource.namespaceId}`} busy={busy} onLifecycle={(next) => lifecycle('restriction', restriction.id, next)} />)}</div>
                 <details className="rounded-xl border border-line bg-canvas/35 p-3">
-                  <summary className="cursor-pointer text-[11px] font-medium text-ink"><Plus size={12} className="mr-1 inline" /> Create Restriction</summary>
+                  <summary className="cursor-pointer text-[11px] font-medium text-ink"><Plus size={12} className="mr-1 inline" /> Create deny rule</summary>
                   <form onSubmit={submitRestriction} className="mt-3 space-y-3">
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <Field label="Restriction id"><input name="id" required className={inputClass} placeholder="restriction:no-external-write" /></Field>
+                      <Field label="Deny rule id"><input name="id" required className={inputClass} placeholder="restriction:no-external-write" /></Field>
                       <Field label="Name"><input name="name" required className={inputClass} placeholder="Block memory writes" /></Field>
                       <Field label="Namespace"><select name="namespaceId" className={inputClass}>{snapshot.state.namespaces.map((namespace) => <option key={namespace.id} value={namespace.id}>{namespace.name}</option>)}</select></Field>
                       <Field label="Principal"><select name="principalId" className={inputClass}><option value="">All principals</option>{snapshot.state.principals.map((principal) => <option key={principal.id} value={principal.id}>{principal.name}</option>)}</select></Field>
@@ -496,7 +491,7 @@ export function EnterpriseControlPlane() {
                       <Field label="Resource id (blank = any in scope)"><input name="resourceId" className={inputClass} /></Field>
                     </div>
                     <div><p className="mb-2 text-[10px] text-muted">Denied actions</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{ENTERPRISE_ACTIONS.map((action) => <label key={action} className="flex items-center gap-1.5 text-[10px] text-muted"><input type="checkbox" name="actions" value={action} />{action}</label>)}</div></div>
-                    <Button type="submit" loading={busy}>Create Restriction</Button>
+                    <Button type="submit" loading={busy}>Create deny rule</Button>
                   </form>
                 </details>
               </div>
@@ -504,7 +499,7 @@ export function EnterpriseControlPlane() {
 
             {tab === 'Revisions' ? (
               <div className="space-y-3">
-                <p className="text-[10.5px] leading-relaxed text-muted">Every mutation appends a checksummed immutable snapshot. Restoring creates a new revision; history is never rewritten. The signed runtime audit separately records administrative and authorization decisions.</p>
+                <p className="text-[10.5px] leading-relaxed text-muted">History is append-only: restoring creates a new revision, it never rewrites past ones.</p>
                 {snapshot.revisions.map((revision) => (
                   <div key={revision.revision} className="flex items-center gap-3 rounded-lg border border-line bg-canvas/45 px-3 py-2.5">
                     <Clock3 size={14} className="shrink-0 text-faint" />
@@ -516,12 +511,6 @@ export function EnterpriseControlPlane() {
             ) : null}
           </>
         ) : null}
-        <div className="flex flex-wrap gap-3 border-t border-line pt-3 text-[10px] text-faint">
-          <span className="flex items-center gap-1"><ShieldCheck size={11} /> Default deny</span>
-          <span className="flex items-center gap-1"><Building2 size={11} /> Exact namespace scope</span>
-          <span className="flex items-center gap-1"><UserRound size={11} /> Per-agent identity</span>
-          <span className="flex items-center gap-1"><Archive size={11} /> Lifecycle governance</span>
-        </div>
       </div>
     </SettingsSection>
   )

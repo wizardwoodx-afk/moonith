@@ -3,13 +3,9 @@ import {
   AlertTriangle,
   ArrowRight,
   Check,
-  Eye,
-  FileSearch,
   LockKeyhole,
   ScanEye,
-  ScrollText,
-  ShieldCheck,
-  Wrench
+  ScrollText
 } from 'lucide-react'
 import type { PublicSettings } from '@shared/types'
 import {
@@ -32,14 +28,14 @@ import { EnterpriseControlPlane } from './EnterpriseControlPlane'
 const ROLE_DETAILS: Record<AgentRole, { description: string; grants: string }> = {
   executor: {
     description: 'Full agent work, with the existing approval gates still in force.',
-    grants: 'Read · write · execute · network · Crew'
+    grants: 'Read · write · execute · network · sub-agents'
   },
   researcher: {
     description: 'Research and read-only delegation without local writes or shell access.',
-    grants: 'Read · network · Crew · medium-risk ceiling'
+    grants: 'Read · network · sub-agents · medium-risk ceiling'
   },
   viewer: {
-    description: 'Local, low-risk reading only. No outbound tools or Crew delegation.',
+    description: 'Local, low-risk reading only. No outbound tools or sub-agent delegation.',
     grants: 'Read · low-risk ceiling'
   },
   custom: {
@@ -53,7 +49,7 @@ const CAPABILITIES: Array<{ id: AgentCapability; label: string; detail: string }
   { id: 'write', label: 'Write', detail: 'Create or change files and memory' },
   { id: 'execute', label: 'Execute', detail: 'Shell commands and MCP execution tools' },
   { id: 'network', label: 'Network', detail: 'Web, browser actions, and connectors' },
-  { id: 'delegate', label: 'Delegate', detail: 'Start Crew agents with inherited permissions' }
+  { id: 'delegate', label: 'Delegate', detail: 'Start sub-agents with inherited permissions' }
 ]
 
 const inputClass =
@@ -151,8 +147,7 @@ export function EnterprisePane({ settings }: { settings: PublicSettings }) {
           <div>
             <p className="text-[11.5px] font-medium text-ink">Default role for new tasks</p>
             <p className="mt-1 text-[10.5px] leading-relaxed text-faint">
-              Existing tasks keep their assigned role. Human approval mode remains a separate,
-              additional boundary.
+              Existing tasks keep their assigned role.
             </p>
           </div>
           <div className="grid gap-2.5 sm:grid-cols-2">
@@ -197,8 +192,8 @@ export function EnterprisePane({ settings }: { settings: PublicSettings }) {
           <div className="flex items-start gap-2.5 rounded-lg border border-line bg-canvas/45 px-3 py-2.5">
             <LockKeyhole size={13} className="mt-0.5 shrink-0 text-accent" />
             <p className="text-[10.5px] leading-relaxed text-muted">
-              Change an individual task’s role from its task menu. These are local agent
-              authorization roles; this control does not claim hosted SSO or directory sync.
+              Change a task&apos;s role from its task menu. These are local authorization roles —
+              not hosted SSO or directory sync.
             </p>
           </div>
         </div>
@@ -317,8 +312,8 @@ export function EnterprisePane({ settings }: { settings: PublicSettings }) {
                   {mode === 'off'
                     ? 'No scanning'
                     : mode === 'redact'
-                      ? 'Replace before egress'
-                      : 'Fail before egress'}
+                      ? 'Replace before sending'
+                      : 'Block before sending'}
                 </span>
               </button>
             ))}
@@ -355,9 +350,8 @@ export function EnterprisePane({ settings }: { settings: PublicSettings }) {
             </div>
           ) : null}
           <p className="text-[10.5px] leading-relaxed text-faint">
-            Detection covers credential formats, secret-bearing fields, PEM keys, JWTs, email
-            addresses, Luhn-validated payment cards, and optional phone numbers. The local task
-            transcript is not rewritten; protection is applied to the outbound copy.
+            Detection covers common credential, card and contact formats. Protection applies to the
+            outbound copy; your local task transcript is not rewritten.
           </p>
         </div>
       </SettingsSection>
@@ -374,7 +368,8 @@ export function EnterprisePane({ settings }: { settings: PublicSettings }) {
               setScanError(null)
             }}
             rows={4}
-            placeholder="Paste a synthetic sample, for example an email or test token…"
+            aria-label="Text to check for sensitive data"
+            placeholder="Paste a test sample, for example an email or test token…"
             className={cn(inputClass, 'resize-y')}
           />
           <div className="flex items-center gap-2">
@@ -422,28 +417,13 @@ export function EnterprisePane({ settings }: { settings: PublicSettings }) {
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <ScrollText size={16} className="mt-0.5 shrink-0 text-accent" />
             <p className="text-[11px] leading-relaxed text-muted">
-              Search recent events, verify live integrity, or export the combined engine and
-              runtime record as signed JSONL. Entries contain metadata and hashes, not raw prompts
-              or tool payloads.
+              Recent events, live integrity and a signed export — metadata and hashes only, never
+              raw prompts or tool payloads.
             </p>
           </div>
           <Button variant="secondary" onClick={() => openSettings('audit')}>
             Open audit log <ArrowRight size={13} />
           </Button>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4 text-[10px] text-faint">
-          <span className="inline-flex items-center gap-1.5">
-            <ShieldCheck size={12} /> Per-entry HMAC
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <FileSearch size={12} /> Searchable evidence
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Eye size={12} /> Privacy-safe metadata
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Wrench size={12} /> Action-time enforcement
-          </span>
         </div>
       </SettingsSection>
     </div>

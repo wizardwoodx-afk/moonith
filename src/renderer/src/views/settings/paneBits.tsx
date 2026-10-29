@@ -8,7 +8,7 @@
  * Keeping those three shapes in one place is what stops them drifting apart.
  */
 import type { ReactNode } from 'react'
-import { AlertTriangle, ShieldCheck } from 'lucide-react'
+import { Icon } from '../../components/icons'
 import { cn } from '../../lib/utils'
 import { EmptyPanel } from './settingParts'
 
@@ -32,9 +32,9 @@ export function OutcomeBanner({ outcome }: { outcome: Outcome }) {
       )}
     >
       {positive ? (
-        <ShieldCheck size={14} className="mt-0.5 shrink-0 text-positive" />
+        <Icon name="shield" size="sm" className="mt-0.5 text-positive" />
       ) : danger ? (
-        <AlertTriangle size={14} className="mt-0.5 shrink-0 text-danger" />
+        <Icon name="caution" size="sm" className="mt-0.5 text-danger" />
       ) : null}
       <p
         className={cn(

@@ -119,184 +119,150 @@ export function LearningPane() {
           <div className="flex items-start gap-2.5 rounded-lg border border-line bg-canvas/45 px-3 py-2.5">
             <ShieldCheck size={14} className="mt-0.5 shrink-0 text-accent" />
             <p className="text-[10.5px] leading-relaxed text-muted">
-              Non-parametric runtime and harness learning only. Learning never trains model weights,
-              rewrite SelfImpulse source, or bypass human approval. Numbers below are read from the
-              actual strategy, memory, skill, run, and receipt stores.
+              Learning here never trains model weights, rewrites SelfImpulse source, or bypasses
+              your approval. The numbers below are read from this device.
             </p>
           </div>
           {error ? <p className="rounded-lg border border-danger/25 bg-danger/10 px-3 py-2 text-[10.5px] text-danger">{error}</p> : null}
           {loading && !snapshot ? <div className="flex justify-center py-8"><Spin size={17} /></div> : null}
           {snapshot ? (
             <>
-              {/* Proprietary RSIRALS Header */}
               <div className="flex flex-col gap-2 rounded-xl border border-accent/25 bg-accent/5 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-accent/20 px-2 py-0.5 text-[10px] font-semibold tracking-wider text-accent uppercase">
+                    <span className="rounded bg-accent/20 px-2 py-0.5 text-[10px] font-semibold tracking-wider text-accent uppercase whitespace-nowrap">
                       {snapshot.proprietary?.license ?? 'PROPRIETARY'}
                     </span>
                     <span className="text-[12px] font-semibold text-ink">
-                      RSIRALS {snapshot.proprietary?.version ?? '2.0.0'}
+                      Self-improvement engine {snapshot.proprietary?.version ?? '2.0.0'}
                     </span>
                   </div>
-                  <p className="mt-1 text-[11px] text-muted">
-                    Tri-Loop Octa-Modular Cognitive Substrate & Meta-Evolution Engine
-                  </p>
-                </div>
-                <div className="text-right text-[10px] text-faint">
-                  <span className="font-mono">Security: {snapshot.proprietary?.securityFingerprint ?? 'SIP-RSIRALS-2026-OCTA-SEC-V2'}</span>
                 </div>
               </div>
 
-              {/* 8 Specialized Modules Tri-Loop Grid */}
               {snapshot.octa ? (
                 <div className="space-y-4">
-                  {/* Loop 1: Fast Execution Loop */}
                   <div className="rounded-xl border border-line bg-canvas/45 p-3.5">
                     <div className="flex items-center justify-between border-b border-line pb-2.5">
                       <div className="flex items-center gap-2">
                         <Zap size={15} className="text-amber-500" />
-                        <h4 className="text-[12px] font-semibold text-ink">1. Fast Loop (Every Action)</h4>
+                        <h4 className="text-[12px] font-semibold text-ink">1. Per-action learning</h4>
                       </div>
-                      <span className="text-[10px] text-faint">SENTRIX → AURIX → VORCIS → Reconcile</span>
                     </div>
                     <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                      {/* SENTRIX */}
                       <div className="rounded-lg border border-line/60 bg-panel-2/30 p-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-ink">SENTRIX</span>
-                          <span className="rounded bg-line/50 px-1.5 py-0.5 text-[9px] text-faint">Belief & Risk Gate</span>
+                          <span className="text-[11px] font-medium text-ink">Risk screening</span>
                         </div>
-                        <p className="mt-1.5 text-[10px] text-muted">
-                          Beliefs: <strong className="text-ink">{snapshot.octa.sentrix.activeBeliefsCount}</strong> · Risk: <strong className="text-ink">{snapshot.octa.sentrix.averageRiskScore}</strong>
+                        <p className="mt-1.5 text-[10px] whitespace-nowrap text-muted">
+                          Beliefs: <strong className="text-ink">{snapshot.octa.sentrix.activeBeliefsCount}</strong> · Avg risk: <strong className="text-ink">{snapshot.octa.sentrix.averageRiskScore}</strong>
                         </p>
-                        <p className="mt-1 text-[9.5px] text-faint">
-                          {snapshot.octa.sentrix.interceptedActions} actions intercepted · {snapshot.octa.sentrix.blockedActions} blocked
+                        <p className="mt-1 text-[10px] text-faint">
+                          {snapshot.octa.sentrix.interceptedActions} action{snapshot.octa.sentrix.interceptedActions === 1 ? '' : 's'} intercepted · {snapshot.octa.sentrix.blockedActions} blocked
                         </p>
                       </div>
 
-                      {/* AURIX */}
                       <div className="rounded-lg border border-line/60 bg-panel-2/30 p-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-ink">AURIX</span>
-                          <span className="rounded bg-line/50 px-1.5 py-0.5 text-[9px] text-faint">Tier Routing (T0-T3)</span>
+                          <span className="text-[11px] font-medium text-ink">Model routing</span>
                         </div>
-                        <p className="mt-1.5 text-[10px] text-muted">
-                          Envelopes: <strong className="text-ink">{snapshot.octa.aurix.routedEnvelopesCount}</strong> · Savings: <strong className="text-positive">${snapshot.octa.aurix.cumulativeCostSavingsUsd}</strong>
+                        <p className="mt-1.5 text-[10px] whitespace-nowrap text-muted">
+                          Routed: <strong className="text-ink">{snapshot.octa.aurix.routedEnvelopesCount}</strong> · Saved: <strong className="text-positive">${snapshot.octa.aurix.cumulativeCostSavingsUsd}</strong>
                         </p>
-                        <div className="mt-1 flex items-center gap-1.5 text-[9.5px] text-faint">
-                          <span>T0:{snapshot.octa.aurix.tierDistribution.T0}</span>
-                          <span>T1:{snapshot.octa.aurix.tierDistribution.T1}</span>
-                          <span>T2:{snapshot.octa.aurix.tierDistribution.T2}</span>
-                          <span>T3:{snapshot.octa.aurix.tierDistribution.T3}</span>
+                        <div className="mt-1 flex items-center gap-1.5 text-[10px] text-faint">
+                          <span className="whitespace-nowrap">Tiers: {snapshot.octa.aurix.tierDistribution.T0}</span>
+                          <span className="whitespace-nowrap">/ {snapshot.octa.aurix.tierDistribution.T1}</span>
+                          <span className="whitespace-nowrap">/ {snapshot.octa.aurix.tierDistribution.T2}</span>
+                          <span className="whitespace-nowrap">/ {snapshot.octa.aurix.tierDistribution.T3}</span>
                         </div>
                       </div>
 
-                      {/* VORCIS */}
                       <div className="rounded-lg border border-line/60 bg-panel-2/30 p-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-ink">VORCIS</span>
-                          <span className="rounded bg-line/50 px-1.5 py-0.5 text-[9px] text-faint">World Model & CoW</span>
+                          <span className="text-[11px] font-medium text-ink">Trial runs</span>
                         </div>
-                        <p className="mt-1.5 text-[10px] text-muted">
-                          Simulations: <strong className="text-ink">{snapshot.octa.vorcis.simulationsRun}</strong> · Sandboxes: <strong className="text-ink">{snapshot.octa.vorcis.cowSandboxesSpawned}</strong>
+                        <p className="mt-1.5 text-[10px] whitespace-nowrap text-muted">
+                          Trials: <strong className="text-ink">{snapshot.octa.vorcis.simulationsRun}</strong> · Sandboxes: <strong className="text-ink">{snapshot.octa.vorcis.cowSandboxesSpawned}</strong>
                         </p>
-                        <p className="mt-1 text-[9.5px] text-faint">
-                          Prediction accuracy: <span className="text-positive font-medium">{Math.round(snapshot.octa.vorcis.averagePredictionAccuracy * 100)}%</span>
+                        <p className="mt-1 text-[10px] text-faint">
+                          Predictions correct: <span className="text-positive font-medium">{Math.round(snapshot.octa.vorcis.averagePredictionAccuracy * 100)}%</span>
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Loop 2: Meso Learning Loop */}
                   <div className="rounded-xl border border-line bg-canvas/45 p-3.5">
                     <div className="flex items-center justify-between border-b border-line pb-2.5">
                       <div className="flex items-center gap-2">
                         <Activity size={15} className="text-sky-500" />
-                        <h4 className="text-[12px] font-semibold text-ink">2. Meso Loop (Per Episode / Task Cluster)</h4>
+                        <h4 className="text-[12px] font-semibold text-ink">2. Per-task learning</h4>
                       </div>
-                      <span className="text-[10px] text-faint">Trace → CORVEX → KAVYRA → NEXALIS</span>
                     </div>
                     <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                      {/* CORVEX */}
                       <div className="rounded-lg border border-line/60 bg-panel-2/30 p-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-ink">CORVEX</span>
-                          <span className="rounded bg-line/50 px-1.5 py-0.5 text-[9px] text-faint">Causal Diagnosis</span>
+                          <span className="text-[11px] font-medium text-ink">Failure diagnosis</span>
                         </div>
-                        <p className="mt-1.5 text-[10px] text-muted">
-                          Diagnosed: <strong className="text-ink">{snapshot.octa.corvex.diagnosedFailures}</strong> · Active graphs: <strong className="text-ink">{snapshot.octa.corvex.activeCausalGraphs}</strong>
+                        <p className="mt-1.5 text-[10px] whitespace-nowrap text-muted">
+                          Diagnosed: <strong className="text-ink">{snapshot.octa.corvex.diagnosedFailures}</strong> · Cause maps: <strong className="text-ink">{snapshot.octa.corvex.activeCausalGraphs}</strong>
                         </p>
-                        <p className="mt-1 text-[9.5px] text-faint">
-                          Reproduced fault interventions: {snapshot.octa.corvex.reproducedFaults}
+                        <p className="mt-1 text-[10px] text-faint">
+                          Faults reproduced: {snapshot.octa.corvex.reproducedFaults}
                         </p>
                       </div>
 
-                      {/* KAVYRA */}
                       <div className="rounded-lg border border-line/60 bg-panel-2/30 p-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-ink">KAVYRA</span>
-                          <span className="rounded bg-line/50 px-1.5 py-0.5 text-[9px] text-faint">Verified Skill Induction</span>
+                          <span className="text-[11px] font-medium text-ink">Skill proposals</span>
                         </div>
-                        <p className="mt-1.5 text-[10px] text-muted">
-                          Induced: <strong className="text-ink">{snapshot.octa.kavyra.inducedSkillsCount}</strong> · Verified: <strong className="text-positive">{snapshot.octa.kavyra.activeVerifiedSkills}</strong>
-                        </p>
-                        <p className="mt-1 text-[9.5px] text-faint">
-                          Multi-tier retrieval (L0, L1, L2 active)
+                        <p className="mt-1.5 text-[10px] whitespace-nowrap text-muted">
+                          Proposed: <strong className="text-ink">{snapshot.octa.kavyra.inducedSkillsCount}</strong> · Verified: <strong className="text-positive">{snapshot.octa.kavyra.activeVerifiedSkills}</strong>
                         </p>
                       </div>
 
-                      {/* NEXALIS */}
                       <div className="rounded-lg border border-line/60 bg-panel-2/30 p-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-ink">NEXALIS</span>
-                          <span className="rounded bg-line/50 px-1.5 py-0.5 text-[9px] text-faint">Signed Epistemic Claims</span>
+                          <span className="text-[11px] font-medium text-ink">Shared claims</span>
                         </div>
-                        <p className="mt-1.5 text-[10px] text-muted">
-                          Signed claims: <strong className="text-ink">{snapshot.octa.nexalis.signedClaimsCount}</strong> · Subscribers: <strong className="text-ink">{snapshot.octa.nexalis.activeSubscribers}</strong>
+                        <p className="mt-1.5 text-[10px] whitespace-nowrap text-muted">
+                          Signed: <strong className="text-ink">{snapshot.octa.nexalis.signedClaimsCount}</strong> · Subscribers: <strong className="text-ink">{snapshot.octa.nexalis.activeSubscribers}</strong>
                         </p>
-                        <p className="mt-1 text-[9.5px] text-faint">
-                          Revocations: {snapshot.octa.nexalis.revokedClaimsCount} · SHA-256 fingerprinting
+                        <p className="mt-1 text-[10px] text-faint">
+                          Revoked: {snapshot.octa.nexalis.revokedClaimsCount}
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Loop 3: Slow Meta-Evolution Loop */}
                   <div className="rounded-xl border border-line bg-canvas/45 p-3.5">
                     <div className="flex items-center justify-between border-b border-line pb-2.5">
                       <div className="flex items-center gap-2">
                         <GitBranch size={15} className="text-purple-500" />
-                        <h4 className="text-[12px] font-semibold text-ink">3. Slow Loop (Cross-Generation Meta-Evolution)</h4>
+                        <h4 className="text-[12px] font-semibold text-ink">3. Long-term improvement</h4>
                       </div>
-                      <span className="text-[10px] text-faint">Roadmap → VANTAGE → MIRALYX → Anchor Evaluator</span>
                     </div>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      {/* VANTAGE */}
                       <div className="rounded-lg border border-line/60 bg-panel-2/30 p-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-ink">VANTAGE / VANTEX</span>
-                          <span className="rounded bg-line/50 px-1.5 py-0.5 text-[9px] text-faint">Task Acquisition</span>
+                          <span className="text-[11px] font-medium text-ink">Work finding</span>
                         </div>
-                        <p className="mt-1.5 text-[10px] text-muted">
-                          Task charters: <strong className="text-ink">{snapshot.octa.vantage.acquiredChartersCount}</strong> · Gaps tracked: <strong className="text-ink">{snapshot.octa.vantage.roadmapGapsIdentified}</strong>
+                        <p className="mt-1.5 text-[10px] whitespace-nowrap text-muted">
+                          Work items: <strong className="text-ink">{snapshot.octa.vantage.acquiredChartersCount}</strong> · Gaps tracked: <strong className="text-ink">{snapshot.octa.vantage.roadmapGapsIdentified}</strong>
                         </p>
-                        <p className="mt-1 text-[9.5px] text-faint">
-                          Pending autonomous sandbox tasks: {snapshot.octa.vantage.pendingAutonomousTasks}
+                        <p className="mt-1 text-[10px] text-faint">
+                          Queued background tasks: {snapshot.octa.vantage.pendingAutonomousTasks}
                         </p>
                       </div>
 
-                      {/* MIRALYX */}
                       <div className="rounded-lg border border-line/60 bg-panel-2/30 p-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-ink">MIRALYX</span>
-                          <span className="rounded bg-line/50 px-1.5 py-0.5 text-[9px] text-faint">DGM Meta-Optimizer</span>
+                          <span className="text-[11px] font-medium text-ink">Policy tuning</span>
                         </div>
-                        <p className="mt-1.5 text-[10px] text-muted">
-                          Gen: <strong className="text-ink">{snapshot.octa.miralyx.currentGeneration}</strong> · Mutations: <strong className="text-positive">{snapshot.octa.miralyx.promotedMutations} promoted</strong> / {snapshot.octa.miralyx.rejectedMutations} rejected
+                        <p className="mt-1.5 text-[10px] whitespace-nowrap text-muted">
+                          Round: <strong className="text-ink">{snapshot.octa.miralyx.currentGeneration}</strong> · Changes: <strong className="text-positive">{snapshot.octa.miralyx.promotedMutations} kept</strong> / {snapshot.octa.miralyx.rejectedMutations} rejected
                         </p>
-                        <p className="mt-1 text-[9.5px] text-faint">
-                          Anchor Evaluator: <span className="font-mono text-positive">{snapshot.octa.miralyx.anchorEvaluatorHealth}</span>
+                        <p className="mt-1 text-[10px] text-faint">
+                          Evaluator: <span className="font-mono text-positive">{snapshot.octa.miralyx.anchorEvaluatorHealth}</span>
                         </p>
                       </div>
                     </div>
@@ -305,18 +271,18 @@ export function LearningPane() {
               ) : null}
 
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <Metric label="Adopted generation" value={snapshot.adopted?.gen ?? 1} />
-                <Metric label="Recent attributed runs" value={snapshot.runs.length} />
-                <Metric label="Memory records shown" value={snapshot.lessons.length} />
-                <Metric label="Learning receipts shown" value={snapshot.receipts.length} />
+                <Metric label="Current round" value={snapshot.adopted?.gen ?? 1} />
+                <Metric label="Recent learning runs" value={snapshot.runs.length} />
+                <Metric label="Lessons shown" value={snapshot.lessons.length} />
+                <Metric label="Receipts shown" value={snapshot.receipts.length} />
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-line bg-canvas/45 p-3.5">
-                  <p className="flex items-center gap-2 text-[11.5px] font-medium text-ink"><Gauge size={14} className="text-accent" /> Adopted runtime policy</p>
+                  <p className="flex items-center gap-2 text-[11.5px] font-medium text-ink"><Gauge size={14} className="text-accent" /> Active policy</p>
                   {snapshot.adopted ? (
                     <>
-                      <p className="mt-2 text-[11px] text-muted">{snapshot.adopted.id} · utility {snapshot.adopted.score?.toFixed(4) ?? 'unmeasured'} · {snapshot.adopted.evaluatedOn} scored runs</p>
+                      <p className="mt-2 text-[11px] text-muted">{snapshot.adopted.id} · score {snapshot.adopted.score?.toFixed(4) ?? 'unmeasured'} · {snapshot.adopted.evaluatedOn} scored runs</p>
                       <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[10px] text-faint">
                         <span>Review depth: {snapshot.adopted.params.reviewDepth}</span>
                         <span>Evidence bias: {snapshot.adopted.params.checkBias}</span>
@@ -329,19 +295,19 @@ export function LearningPane() {
                   ) : <p className="mt-2 text-[10.5px] text-faint">No adopted policy record.</p>}
                 </div>
                 <div className="rounded-xl border border-line bg-canvas/45 p-3.5">
-                  <p className="flex items-center gap-2 text-[11.5px] font-medium text-ink"><FlaskConical size={14} className="text-accent" /> Controlled candidate</p>
+                  <p className="flex items-center gap-2 text-[11.5px] font-medium text-ink"><FlaskConical size={14} className="text-accent" /> Candidate policy</p>
                   {snapshot.candidate ? (
                     <>
-                      <p className="mt-2 text-[11px] text-muted">{snapshot.candidate.id} · generation {snapshot.candidate.gen} · utility {snapshot.candidate.score?.toFixed(4) ?? 'unmeasured'}</p>
+                      <p className="mt-2 text-[11px] text-muted">{snapshot.candidate.id} · round {snapshot.candidate.gen} · score {snapshot.candidate.score?.toFixed(4) ?? 'unmeasured'}</p>
                       <p className="mt-3 text-[10px] leading-relaxed text-faint">{snapshot.candidate.note}</p>
                     </>
-                  ) : <p className="mt-2 text-[10.5px] leading-relaxed text-faint">No active candidate. The next settled mission proposes one sparse variation from the adopted policy.</p>}
+                  ) : <p className="mt-2 text-[10.5px] leading-relaxed text-faint">No candidate yet. The next finished task may propose one.</p>}
                   <div className="mt-4 border-t border-line pt-3 text-[10px] leading-relaxed text-muted">{snapshot.acceptanceRule}</div>
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
-                <Metric label="Proposed skills awaiting human decision" value={snapshot.skills.proposed} />
+                <Metric label="Skills awaiting your decision" value={snapshot.skills.proposed} />
                 <Metric label="Approved learned skills" value={snapshot.skills.approved} />
                 <Metric label="Discarded proposals" value={snapshot.skills.discarded} />
               </div>
@@ -374,9 +340,7 @@ export function LearningPane() {
               <Spin size={17} />
             </div>
           ) : pending.length === 0 ? (
-            <EmptyState icon={<ScrollText size={18} />} title="No knowledge proposals">
-              Nothing is awaiting your decision.
-            </EmptyState>
+            <EmptyState icon={<ScrollText size={18} />} title="No knowledge proposals" />
           ) : (
             <RowList>
               {pending.map((proposal) => (
@@ -424,13 +388,10 @@ export function LearningPane() {
 
       {snapshot ? (
         <>
-          <SettingsSection title="Attributed experiment runs">
+          <SettingsSection title="Learning runs">
             {snapshot.runs.length === 0 ? (
               <div className="px-3 py-5 text-center">
                 <p className="text-[11.5px] text-muted">No learning runs recorded yet.</p>
-                <p className="mt-1 text-[11px] text-faint">
-                  Complete a real mission to produce attributed evidence.
-                </p>
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -448,9 +409,9 @@ export function LearningPane() {
             )}
           </SettingsSection>
 
-          <SettingsSection title="Utility-aware organizational memory">
+          <SettingsSection title="Lessons learned">
             {snapshot.lessons.length === 0 ? (
-              <p className="px-3 py-5 text-center text-[11.5px] text-muted">No organizational lessons yet.</p>
+              <p className="px-3 py-5 text-center text-[11.5px] text-muted">No lessons yet.</p>
             ) : (
               <div className="space-y-2">
                 {snapshot.lessons.map((lesson) => (
@@ -459,7 +420,7 @@ export function LearningPane() {
                       <MemoryStick size={13} className="mt-0.5 shrink-0 text-accent" />
                       <div className="min-w-0 flex-1"><p className="text-[10.5px] leading-relaxed text-ink">{lesson.text}</p><p className="mt-1 text-[10px] text-faint">{lesson.kind} · {lesson.id} · evidence: {lesson.evidence.join(', ')}</p></div>
                     </div>
-                    <div className="mt-2 flex items-center gap-2"><div className="h-1 flex-1 overflow-hidden rounded-full bg-panel-3"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(lesson.utility * 100)}%` }} /></div><span className="text-[10px] text-faint">utility {lesson.utility.toFixed(2)} · {lesson.utilityCount} credited outcomes · {lesson.retrievalCount} retrievals</span></div>
+                    <div className="mt-2 flex items-center gap-2"><div className="h-1 flex-1 overflow-hidden rounded-full bg-panel-3"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(lesson.utility * 100)}%` }} /></div><span className="text-[10px] text-faint">score {lesson.utility.toFixed(2)} · {lesson.utilityCount} credited outcome{lesson.utilityCount === 1 ? '' : 's'} · {lesson.retrievalCount} retrieval{lesson.retrievalCount === 1 ? '' : 's'}</span></div>
                   </div>
                 ))}
               </div>
@@ -483,9 +444,9 @@ export function LearningPane() {
             )}
           </SettingsSection>
 
-          <SettingsSection title="Learning boundaries">
+          <SettingsSection title="Learning limits">
             <div className="space-y-2">{snapshot.boundaries.map((boundary) => <p key={boundary} className="flex items-start gap-2 text-[10.5px] leading-relaxed text-muted"><Sparkles size={12} className="mt-0.5 shrink-0 text-accent" />{boundary}</p>)}</div>
-            <p className="mt-4 flex items-center gap-2 border-t border-line pt-4 text-[10px] text-faint"><Brain size={13} /> Research-informed policy selection, utility memory, verified skill proposals, and replay controls are integrated beneath the existing mission authority.</p>
+            <p className="mt-4 flex items-center gap-2 border-t border-line pt-4 text-[10px] text-faint"><Brain size={13} /> Nothing learned here overrides your permissions or approvals.</p>
           </SettingsSection>
         </>
       ) : null}

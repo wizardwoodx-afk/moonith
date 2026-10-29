@@ -29,7 +29,7 @@ import type {
   SubAgentRun
 } from '@shared/types'
 import { Button, FieldGroup, IconButton, Modal, Spin, Toggle } from '../../components/ui'
-import { cn, errorMessage, timeAgo } from '../../lib/utils'
+import { cn, errorMessage, plural, timeAgo } from '../../lib/utils'
 import { SettingsSection } from './SettingsSection'
 import {
   ActionWord,
@@ -678,7 +678,7 @@ export function ConnectorsPane() {
                       <p className="text-[12.5px] font-medium text-ink">{toolkit.name}</p>
                       {toolkit.connected ? <Chip tone="positive">Account linked</Chip> : null}
                       {toolkit.enabled && toolkit.tools ? (
-                        <span className="text-[10px] text-faint">{toolkit.tools} tools</span>
+                        <span className="whitespace-nowrap text-[10px] text-faint">{plural(toolkit.tools, 'tool')}</span>
                       ) : null}
                     </div>
                     <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted" title={toolkit.description || undefined}>
@@ -699,7 +699,7 @@ export function ConnectorsPane() {
 
       {state?.configured && state.enabled ? (
         <SettingsSection
-          title="Tools in the prompt"
+          title="Available tools"
           
         >
           <div className="flex items-start justify-between gap-4">
@@ -1190,37 +1190,34 @@ export function SubAgentsPane() {
   return (
     <div className="space-y-9">
       <SettingsSection
-        title="Dedicated Crew Specialists"
+        title="Specialist sub-agents"
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-canvas/40 border-b border-line">
           <div className="rounded-lg border border-line bg-surface p-3.5 space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-ink">Techne</span>
+              <span className="text-[13px] font-semibold text-ink">Coding</span>
               <StatusChip tone="positive">Ready</StatusChip>
             </div>
-            <p className="text-[11px] font-medium text-accent-ink">Coding Specialist</p>
             <p className="text-[11px] leading-relaxed text-muted">
-              AST inspection, multi-hunk patch application, and pre-flight syntax gates.
+              Reads code structure, applies edits, and checks syntax before running.
             </p>
           </div>
           <div className="rounded-lg border border-line bg-surface p-3.5 space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-ink">Archon</span>
+              <span className="text-[13px] font-semibold text-ink">File navigation</span>
               <StatusChip tone="positive">Ready</StatusChip>
             </div>
-            <p className="text-[11px] font-medium text-accent-ink">File Navigator</p>
             <p className="text-[11px] leading-relaxed text-muted">
-              Streaming file chunking, directory indexing, and symbol outline extraction.
+              Reads and indexes files and folders, and outlines their contents.
             </p>
           </div>
           <div className="rounded-lg border border-line bg-surface p-3.5 space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-ink">Atropos</span>
+              <span className="text-[13px] font-semibold text-ink">Background work</span>
               <StatusChip tone="positive">Active</StatusChip>
             </div>
-            <p className="text-[11px] font-medium text-accent-ink">Durable Actor Engine</p>
             <p className="text-[11px] leading-relaxed text-muted">
-              Deterministic replayable steps, persistent awakeables, and durable wall-clock timers.
+              Runs steps and timers that survive app restarts and resume where they stopped.
             </p>
           </div>
         </div>
@@ -1256,7 +1253,7 @@ export function SubAgentsPane() {
           <div className="mt-4">
             <EmptyPanel
               icon={<Bot size={18} />}
-              title={<>No team runs yet. Ask for work that can be split; delegated runs land here.</>}
+              title={<>No team runs yet.</>}
             />
           </div>
         ) : (

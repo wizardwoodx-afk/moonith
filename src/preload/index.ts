@@ -305,6 +305,22 @@ const api: KnightApi = {
   rookSynthesizeResearch: (topic: string, sources: Array<{ title: string; url: string; snippet: string }>) =>
     ipcRenderer.invoke(IPC.rookSynthesizeResearch, topic, sources),
 
+  /* ── Promey: Proactive Executive Duet Substrate ──────────────────────────── */
+  promeyStatus: () => ipcRenderer.invoke(IPC.promeyStatus),
+  promeyGenerateBrief: (userName?: string, workspaceName?: string) =>
+    ipcRenderer.invoke(IPC.promeyGenerateBrief, userName, workspaceName),
+  promeyListTriage: () => ipcRenderer.invoke(IPC.promeyListTriage),
+  promeyTriageItem: (item: any) => ipcRenderer.invoke(IPC.promeyTriageItem, item),
+  promeyResolveTriage: (id: string, note?: string) =>
+    ipcRenderer.invoke(IPC.promeyResolveTriage, id, note),
+  promeyListApprovals: () => ipcRenderer.invoke(IPC.promeyListApprovals),
+  promeySubmitApproval: (id: string, decision: any, note?: string) =>
+    ipcRenderer.invoke(IPC.promeySubmitApproval, id, decision, note),
+  promeyListRoutines: () => ipcRenderer.invoke(IPC.promeyListRoutines),
+  promeyToggleRoutine: (id: string, active: boolean) =>
+    ipcRenderer.invoke(IPC.promeyToggleRoutine, id, active),
+  promeySanitize: (text: string) => ipcRenderer.invoke(IPC.promeySanitize, text),
+
   /* ── Cowork: Subsystem & Lobe Skills ─────────────────────────────────────── */
   coworkStatus: () => ipcRenderer.invoke(IPC.coworkStatus),
   coworkSearchSkills: (query: string) => ipcRenderer.invoke(IPC.coworkSearchSkills, query),

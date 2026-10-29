@@ -1199,7 +1199,7 @@ function ProvidersTab({
                     </span>
                   ))}
                   {provider.models.length > 8 ? (
-                    <span className="px-1 py-0.5 text-[10px] text-faint">
+                    <span className="px-1 py-0.5 whitespace-nowrap text-[10px] text-faint">
                       +{provider.models.length - 8} more
                     </span>
                   ) : null}

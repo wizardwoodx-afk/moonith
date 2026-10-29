@@ -630,25 +630,26 @@ function PlaybooksSection({
         <div className="flex items-center gap-2.5">
           <Sparkles className="text-accent-ink" size={18} />
           <div>
-            <h2 className="text-[13.5px] font-semibold text-ink">Save Squad Working as Playbook</h2>
-            <p className="text-[11px] text-muted">Capture current team roles, prompts, and steps into a reusable blueprint.</p>
+            <h2 className="text-[13.5px] font-semibold text-ink">Save session as playbook</h2>
           </div>
         </div>
 
         <form onSubmit={handleSnapshot} className="mt-4 flex flex-col gap-2.5">
           <input
             className="field w-full text-[12px]"
+            aria-label="Playbook name"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Playbook Title (e.g. Full-Stack Feature Sprint)"
+            placeholder="Playbook name"
             maxLength={100}
             required
           />
           <input
             className="field w-full text-[11.5px]"
+            aria-label="Playbook description"
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
-            placeholder="Description or mission goals (optional)"
+            placeholder="Description, optional"
             maxLength={250}
           />
           <div className="flex justify-end">
@@ -669,11 +670,10 @@ function PlaybooksSection({
         </div>
 
         {loading ? (
-          <p className="text-[11px] text-muted">Loading squad playbooks...</p>
+          <p className="text-[11px] text-muted">Loading playbooks…</p>
         ) : playbooks.length === 0 ? (
           <div className="rounded-xl border border-dashed border-line p-8 text-center">
             <p className="text-[12px] text-muted">No saved playbooks yet.</p>
-            <p className="text-[10px] text-faint mt-1">Snapshot your current team session above to create your first playbook.</p>
           </div>
         ) : (
           <div className="grid gap-3">
@@ -706,11 +706,12 @@ function PlaybooksSection({
                       disabled={instantiating === pb.id}
                     >
                       <Play size={11} className="mr-1" />
-                      {instantiating === pb.id ? 'Starting...' : 'Run in Squad'}
+                      {instantiating === pb.id ? 'Starting…' : 'Run playbook'}
                     </Button>
                     <button
                       onClick={() => handleDelete(pb.id)}
                       className="rounded p-1 text-faint hover:text-danger transition-colors"
+                      aria-label={`Delete ${pb.title}`}
                       title="Delete playbook"
                     >
                       <Trash2 size={13} />
@@ -789,10 +790,7 @@ function ProofOfWorkSection({ state }: { state: TableState }) {
             <ShieldCheck size={20} />
           </span>
           <div>
-            <h2 className="text-[14px] font-semibold text-ink">Cryptographic Proof of Work</h2>
-            <p className="text-[11px] leading-relaxed text-muted">
-              Tamper-evident Ed25519-signed verification receipts guaranteeing output authenticity.
-            </p>
+            <h2 className="text-[14px] font-semibold text-ink">Proof of work</h2>
           </div>
         </div>
 
@@ -807,16 +805,16 @@ function ProofOfWorkSection({ state }: { state: TableState }) {
         <section className="rounded-xl border border-line bg-surface p-4">
           <div className="flex items-center gap-2 text-positive text-[12px] font-semibold">
             <FileCheck2 size={16} />
-            <span>Certificate Generated: {cert.certificateId}</span>
+            <span>Certificate: {cert.certificateId}</span>
           </div>
           <p className="mt-1 font-mono text-[10px] text-faint break-all">
-            Merkle Root: {cert.merkleRoot}
+            Root hash: {cert.merkleRoot}
           </p>
           <p className="mt-0.5 font-mono text-[10px] text-faint break-all">
-            Ed25519 Sig: {cert.signature.slice(0, 32)}...
+            Signature: {cert.signature.slice(0, 32)}...
           </p>
           <p className="mt-2 text-[10px] text-positive font-medium">
-            {cert.verifiedCount} of {cert.totalProofs} milestones verified against cryptographic hash chain.
+            {cert.verifiedCount} of {cert.totalProofs} milestones verified.
           </p>
         </section>
       ) : null}
@@ -824,17 +822,14 @@ function ProofOfWorkSection({ state }: { state: TableState }) {
       {/* Proof of Work Ledger */}
       <section className="space-y-3">
         <h3 className="text-[12px] font-semibold tracking-wider text-faint uppercase">
-          Milestone Verification Ledger ({proofs.length})
+          Proof records ({proofs.length})
         </h3>
 
         {loading ? (
-          <p className="text-[11px] text-muted">Loading proof records...</p>
+          <p className="text-[11px] text-muted">Loading proof records…</p>
         ) : proofs.length === 0 ? (
           <div className="rounded-xl border border-dashed border-line p-8 text-center">
-            <p className="text-[12px] text-muted">No proof records recorded yet.</p>
-            <p className="text-[10px] text-faint mt-1">
-              As squad members and agents complete goals and joint actions, signed receipts appear here.
-            </p>
+            <p className="text-[12px] text-muted">No proof records yet.</p>
           </div>
         ) : (
           <div className="space-y-2.5">
@@ -1123,9 +1118,8 @@ export function SharedTable() {
                     <p className="text-[11.5px] font-semibold text-ink">
                       Waiting for the other agents
                     </p>
-                    <p className="mt-0.5 text-[10px] leading-relaxed text-faint">
-                      Share the code with the other machine on your network. Discovery finds this table
-                      automatically; the address works if it does not.
+                    <p className="mt-0.5 text-[10px] text-faint">
+                      Share this code with the other machine.
                     </p>
                     {state.address || state.port ? (
                       <p className="mt-0.5 font-mono text-[10px] text-faint">
@@ -1236,9 +1230,8 @@ export function SharedTable() {
                   </Button>
                 </form>
               )}
-              <p className="mt-1.5 text-center text-[10px] leading-relaxed text-faint">
-                Only the goal, joint actions and this ledger cross the link — every seated key is
-                needed, nothing else is shared.
+              <p className="mt-1.5 text-center text-[10px] text-faint">
+                Every joint action needs both keys.
               </p>
             </div>
           </footer>

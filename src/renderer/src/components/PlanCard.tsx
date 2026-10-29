@@ -17,6 +17,7 @@ export function PlanCard({ plan, live }: { plan: PlanItem[]; live: boolean }) {
       <button
         onClick={() => setCollapsed((value) => !value)}
         aria-expanded={!collapsed}
+        aria-label={collapsed ? 'Expand plan' : 'Collapse plan'}
         className="flex w-full items-center gap-3 px-4 py-3 text-left"
       >
         <motion.div
@@ -31,8 +32,7 @@ export function PlanCard({ plan, live }: { plan: PlanItem[]; live: boolean }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-[12.5px] font-semibold tracking-[-0.01em]">Plan</span>
-            <span className="text-[11px] text-faint">{done} of {plan.length} done</span>
-            <span className="ml-auto font-mono text-[10px] text-faint">{percent}%</span>
+            <span className="whitespace-nowrap text-[11px] text-faint">{done} of {plan.length} done</span>
           </div>
           <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-surface-2">
             <motion.div

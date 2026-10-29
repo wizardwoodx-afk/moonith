@@ -125,7 +125,7 @@ export function RookSettingsPane() {
           <div className="rounded-xl border border-line/80 bg-canvas/50 p-3">
             <span className="text-[10.5px] font-medium text-faint uppercase">Skills indexed</span>
             <div className="mt-1 text-[18px] font-semibold text-accent">
-              {coworkStatus?.totalSkills ? coworkStatus.totalSkills.toLocaleString() : '360,000+'}
+              {(coworkStatus?.totalSkills ?? 0).toLocaleString()}
             </div>
           </div>
         </div>
@@ -149,7 +149,7 @@ export function RookSettingsPane() {
             )}
           >
             <div className="flex items-center gap-2 font-medium text-[12px] text-ink">
-              <BookOpen size={14} className="text-accent" /> Plan Mode
+              <BookOpen size={14} className="text-accent" /> Plan
             </div>
             <p className="mt-1.5 text-[10.5px] text-faint leading-normal">
               Reads and plans only; changes nothing on this machine.
@@ -166,7 +166,7 @@ export function RookSettingsPane() {
             )}
           >
             <div className="flex items-center gap-2 font-medium text-[12px] text-amber-400">
-              <Wrench size={14} /> Build Mode
+              <Wrench size={14} /> Build
             </div>
             <p className="mt-1.5 text-[10.5px] text-faint leading-normal">
               Edits files freely; asks before running shell commands.
@@ -183,7 +183,7 @@ export function RookSettingsPane() {
             )}
           >
             <div className="flex items-center gap-2 font-medium text-[12px] text-rose-400">
-              <Flame size={14} /> YOLO Mode
+              <Flame size={14} /> Full access
             </div>
             <p className="mt-1.5 text-[10.5px] text-faint leading-normal">
               Runs file edits, terminal commands and background work without asking.

@@ -1539,6 +1539,18 @@ export interface KnightApi {
   rookResolveGate: (id: string, response: { selectedOption?: string; userAnswer?: string }) => Promise<any>
   rookSynthesizeResearch: (topic: string, sources: Array<{ title: string; url: string; snippet: string }>) => Promise<any>
 
+  /* ── Promey: Proactive Executive Duet Substrate ──────────────────────────── */
+  promeyStatus: () => Promise<any>
+  promeyGenerateBrief: (userName?: string, workspaceName?: string) => Promise<any>
+  promeyListTriage: () => Promise<any[]>
+  promeyTriageItem: (item: any) => Promise<any>
+  promeyResolveTriage: (id: string, note?: string) => Promise<boolean>
+  promeyListApprovals: () => Promise<any[]>
+  promeySubmitApproval: (id: string, decision: 'allow_once' | 'always_allowed' | 'refused', note?: string) => Promise<any>
+  promeyListRoutines: () => Promise<any[]>
+  promeyToggleRoutine: (id: string, active: boolean) => Promise<boolean>
+  promeySanitize: (text: string) => Promise<any>
+
   /* ── Cowork: Subsystem & Lobe Skills ─────────────────────────────────────── */
   coworkStatus: () => Promise<{ ready: boolean; activeSession: string; totalSkills: number }>
   coworkSearchSkills: (query: string) => Promise<any[]>

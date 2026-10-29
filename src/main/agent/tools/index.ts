@@ -30,6 +30,13 @@ import {
   rsiralsEvaluateRiskTool, 
   rsiralsSimulateActionTool 
 } from './rsiralsTools'
+import { 
+  promeyTools, 
+  promeyGenerateBriefTool, 
+  promeyTriageStreamTool, 
+  promeyRequestApprovalTool, 
+  promeyScanDlpTool 
+} from './promeyTools'
 
 export function getBuiltinTools(mode: TaskMode): AgentTool[] {
   if (mode === 'chat') {
@@ -72,7 +79,11 @@ export function getBuiltinTools(mode: TaskMode): AgentTool[] {
       rookAskClarificationTool,
       rsiralsQueryBeliefTool,
       rsiralsEvaluateRiskTool,
-      rsiralsSimulateActionTool
+      rsiralsSimulateActionTool,
+      promeyGenerateBriefTool,
+      promeyTriageStreamTool,
+      promeyRequestApprovalTool,
+      promeyScanDlpTool
     ]
   }
   return [
@@ -94,7 +105,8 @@ export function getBuiltinTools(mode: TaskMode): AgentTool[] {
     ...opendesignTools,
     ...coworkTools,
     ...rookTools,
-    ...rsiralsTools
+    ...rsiralsTools,
+    ...promeyTools
   ]
 }
 
@@ -102,4 +114,5 @@ export { creativeStudioTools } from './creativeStudio'
 export { coworkTools } from './coworkTools'
 export { rookTools } from './rookTools'
 export { rsiralsTools } from './rsiralsTools'
+export { promeyTools } from './promeyTools'
 export type { AgentTool } from './types'

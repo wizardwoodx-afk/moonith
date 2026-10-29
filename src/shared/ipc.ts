@@ -178,6 +178,17 @@ export const IPC = {
   rookResolveGate: 'rook:gates:resolve',
   rookSynthesizeResearch: 'rook:research:synthesize',
 
+  promeyStatus: 'promey:status',
+  promeyGenerateBrief: 'promey:brief:generate',
+  promeyListTriage: 'promey:triage:list',
+  promeyTriageItem: 'promey:triage:add',
+  promeyResolveTriage: 'promey:triage:resolve',
+  promeyListApprovals: 'promey:approvals:list',
+  promeySubmitApproval: 'promey:approvals:decide',
+  promeyListRoutines: 'promey:routines:list',
+  promeyToggleRoutine: 'promey:routines:toggle',
+  promeySanitize: 'promey:privacy:sanitize',
+
   coworkStatus: 'cowork:status',
   coworkSearchSkills: 'cowork:skills:search',
 

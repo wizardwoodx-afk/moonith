@@ -1,32 +1,35 @@
 # Third-party notices — the Studio engines
 
 SelfImpulse ships two tools, `studio_commands` and `studio_run`, that drive
-fourteen open-source desktop engines. The engines are **not bundled**. Each one
-is a separate application the user installs; SelfImpulse only spawns the
-command-line binary that the installed app provides.
+thirteen open-source desktop engines. The engines are **not bundled**. Each one
+is a separate application; SelfImpulse only spawns the command-line binary that
+its portable build provides, found in the Studio tools folder (`studio` under
+the profile directory), on PATH, or via `SELFIMPULSE_STUDIO_<ID>`.
 
 ## Attribution
 
 Every engine below is dual-licensed **MIT OR Apache-2.0** by the ArtCraft Team
 (`github.com/storytold`). They are used here under those licences.
 
-| Our name | Greek | Upstream | Repository | CLI verified |
-|---|---|---|---|---|
-| Techne | τέχνη | ArtCraft | `storytold/artcraft` | no |
-| Agora | ἀγορά | ArtCraft Launcher | `storytold/craft-launcher` | no |
-| Eikon | εἰκών | PhotoCraft | `storytold/photocraft` | yes |
-| Phos | φῶς | LightCraft | `storytold/lightcraft` | no |
-| Kinema | κίνημα | FilmCraft | `storytold/filmcraft` | no |
-| Schema | σχῆμα | DesignCraft | `storytold/designcraft` | no |
-| Gramme | γραμμή | VectorCraft | `storytold/vectorcraft` | yes |
-| Chartes | χάρτης | PdfCraft | `storytold/pdfcraft` | yes |
-| Drama | δρᾶμα | EffectCraft | `storytold/effectcraft` | no |
-| Logos | λόγος | WordCraft | `storytold/wordcraft` | yes |
-| Skene | σκηνή | DeckCraft | `storytold/deckcraft` | yes |
-| Pinax | πίναξ | GridCraft | `storytold/gridcraft` | yes |
-| Techton | τέκτων | CADCraft | `storytold/cadcraft` | yes |
-| Echo | ἠχώ | SoundCraft | `storytold/soundcraft` | no |
-| Eidos | εἶδος | FigCraft | `storytold/figcraft` | no |
+| Our name | Greek | Upstream | Repository |
+|---|---|---|---|
+| Eikon | εἰκών | PhotoCraft | `storytold/photocraft` |
+| Phos | φῶς | LightCraft | `storytold/lightcraft` |
+| Kinema | κίνημα | FilmCraft | `storytold/filmcraft` |
+| Schema | σχῆμα | DesignCraft | `storytold/designcraft` |
+| Gramme | γραμμή | VectorCraft | `storytold/vectorcraft` |
+| Chartes | χάρτης | PdfCraft | `storytold/pdfcraft` |
+| Drama | δρᾶμα | EffectCraft | `storytold/effectcraft` |
+| Logos | λόγος | WordCraft | `storytold/wordcraft` |
+| Skene | σκηνή | DeckCraft | `storytold/deckcraft` |
+| Pinax | πίναξ | GridCraft | `storytold/gridcraft` |
+| Techton | τέκτων | CADCraft | `storytold/cadcraft` |
+| Echo | ἠχώ | SoundCraft | `storytold/soundcraft` |
+| Eidos | εἶδος | FigCraft | `storytold/figcraft` |
+
+The main `storytold/artcraft` app and `storytold/craft-launcher` are **not**
+integrated: neither publishes a command-line binary (they ship installers and a
+GUI launcher only), so there is nothing for a headless engine to call.
 
 ## Why the names are ours
 
@@ -49,12 +52,5 @@ and can break the application's own resource lookup.
 If you ever bundle these engines with SelfImpulse instead of asking the user to
 install them, you must additionally ship each project's `LICENSE-MIT` /
 `LICENSE-APACHE` files and its `NOTICE` where present, and mark your
-modifications. Merely invoking an installed binary does not trigger that
+modifications. Merely invoking a binary the user installed does not trigger that
 obligation, which is why it is the chosen integration.
-
-## Unverified engines
-
-An engine marked `no` follows the same architecture — a command registry and a
-`{name}-cli` binary — but its command-line tool and Windows build were not
-confirmed when this table was written. `studio_run` says so rather than
-pretending the engine is ready.

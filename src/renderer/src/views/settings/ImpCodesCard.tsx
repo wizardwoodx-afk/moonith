@@ -171,7 +171,7 @@ export function ImpCodesCard() {
                     </span>
                   ))}
                   {models.length > 6 ? (
-                    <span className="px-1 py-0.5 text-[10px] text-faint">
+                    <span className="px-1 py-0.5 whitespace-nowrap text-[10px] text-faint">
                       +{models.length - 6} more
                     </span>
                   ) : null}

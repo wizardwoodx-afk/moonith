@@ -188,7 +188,7 @@ export function MarketspaceSection({ actionHost }: { actionHost: HTMLElement | n
                   </div>
                 </div>
                 <div className="mt-3 flex items-center gap-1.5 border-t border-line/70 pt-2.5">
-                  <span className="mr-auto text-[10px] text-faint">{entry.installed ? <><Check size={10} className="mr-1 inline text-positive" />Installed</> : 'Available'} · declarative</span>
+                  <span className="mr-auto text-[10px] text-faint whitespace-nowrap">{entry.installed ? <><Check size={10} className="mr-1 inline text-positive" />Installed</> : 'Available'}</span>
                   <Button size="sm" variant="ghost" loading={busy === `read:${entry.id}`} onClick={() => void inspect(entry.id)}><Eye size={12} /> Inspect</Button>
                   {!entry.installed ? <Button size="sm" variant="secondary" loading={busy === `install:${entry.id}`} disabled={Boolean(busy)} onClick={() => void install(entry.id)}><Download size={12} /> Install</Button> : <IconButton aria-label={`Remove ${entry.name}`} className="hover:text-danger" onClick={() => setRemoveTarget(entry)}><Trash2 size={12} /></IconButton>}
                 </div>
@@ -220,7 +220,7 @@ export function MarketspaceSection({ actionHost }: { actionHost: HTMLElement | n
               referrerPolicy="no-referrer"
               className="h-[280px] w-full rounded-xl border border-line bg-white"
             />
-            <p className="text-[10.5px] leading-relaxed text-faint">The preview is isolated without scripts, forms, navigation, or network access. The specification below is the portable artifact {agentName()} reads.</p>
+            <p className="text-[10.5px] leading-relaxed text-faint">The preview runs isolated, without scripts or network. The specification below is what {agentName()} reads.</p>
             <pre className="scroll-thin max-h-[32vh] overflow-auto rounded-xl border border-line bg-canvas px-4 py-3 font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap text-ink/85">{detail.design}</pre>
           </div>
         ) : null}
@@ -230,7 +230,7 @@ export function MarketspaceSection({ actionHost }: { actionHost: HTMLElement | n
         open={creating}
         onClose={() => setCreating(false)}
         title="New local design system"
-        subtitle="A portable DESIGN.md specification with a generated static preview. No executable capabilities."
+        subtitle="A portable DESIGN.md specification with a generated static preview."
         footer={<><Button variant="ghost" onClick={() => setCreating(false)}>Cancel</Button><Button variant="primary" loading={busy === 'create'} onClick={() => void create()}>Save system</Button></>}
       >
         <div className="space-y-4">

@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ShieldAlert,
   GitPullRequest,
   CheckCircle2,
   XCircle,
@@ -32,6 +30,13 @@ const CR_STATUS = {
   approved: 'Approved',
   pending_review: 'Awaiting review',
   rejected: 'Rejected'
+} as Record<string, string>
+
+const DELIVERABLE_TYPE = {
+  code_patch: 'Code patch',
+  research_report: 'Research report',
+  workflow_automation: 'Automation',
+  document: 'Document'
 } as Record<string, string>
 
 export function RookWorkerPanel() {
@@ -127,7 +132,7 @@ export function RookWorkerPanel() {
 
   return (
     <div className="flex-1 overflow-y-auto px-3 py-3 scroll-thin space-y-4">
-      {/* 1. Header & Permission Regime Control */}
+      {/* Access level */}
       <div className="rounded-xl border border-line bg-surface/50 p-3 shadow-xs">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -136,8 +141,19 @@ export function RookWorkerPanel() {
             </span>
             <h3 className="text-[11.5px] font-semibold text-ink">Autonomous worker</h3>
           </div>
-          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-positive/10 px-2 py-0.5 text-[10px] font-medium text-positive">
-            <span className="h-1.5 w-1.5 rounded-full bg-positive animate-pulse" /> Active
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium',
+              status?.ready ? 'bg-positive/10 text-positive' : 'bg-surface-2 text-faint'
+            )}
+          >
+            <span
+              className={cn(
+                'h-1.5 w-1.5 rounded-full',
+                status?.ready ? 'animate-pulse bg-positive' : 'bg-faint'
+              )}
+            />
+            {status?.ready ? 'Active' : 'Idle'}
           </span>
         </div>
 
@@ -189,12 +205,12 @@ export function RookWorkerPanel() {
         </div>
       </div>
 
-      {/* 2. Interactive Decision Gates (Human-in-the-Loop) */}
+      {/* Decisions waiting on the user */}
       {pendingGates.length > 0 && (
         <section className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
-          <div className="flex items-center gap-1.5 text-amber-400 mb-2">
+          <div className="mb-2 flex items-center gap-1.5 text-amber-400">
             <HelpCircle size={13} />
-            <span className="text-[11px] font-semibold">Human Decision Gate Paused</span>
+            <span className="text-[11px] font-semibold">Your answer needed</span>
           </div>
           {pendingGates.map((gate) => (
             <div key={gate.id} className="rounded-lg border border-amber-500/20 bg-surface/70 p-2.5 space-y-2">
@@ -218,58 +234,58 @@ export function RookWorkerPanel() {
         </section>
       )}
 
-      {/* 3. GitOps Change Requests */}
+      {/* Change requests */}
       <section>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5">
-            <GitPullRequest size={13} className="text-accent" />
-            <h4 className="text-[11px] font-semibold text-ink uppercase tracking-wider">Change Requests</h4>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <GitPullRequest size={13} className="shrink-0 text-accent" />
+            <h4 className="truncate text-[11px] font-semibold uppercase tracking-wider text-ink">Change requests</h4>
           </div>
-          <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[9.5px] text-muted">
+          <span className="shrink-0 whitespace-nowrap rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-muted">
             {changeRequests.length} total
           </span>
         </div>
 
         {changeRequests.length === 0 ? (
           <div className="rounded-xl border border-dashed border-line p-3 text-center text-[10.5px] text-faint">
-            No active Change Requests. Automated modifications will appear here.
+            No change requests
           </div>
         ) : (
           <div className="space-y-2">
             {changeRequests.map((cr) => (
               <div key={cr.id} className="rounded-xl border border-line bg-surface/40 p-2.5 text-[10.5px]">
                 <div className="flex items-start justify-between gap-1.5">
-                  <span className="font-medium text-ink">{cr.title}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink" title={cr.title}>{cr.title}</span>
                   <span className={cn(
-                    'rounded px-1.5 py-0.2 text-[9px] font-medium uppercase',
+                    'shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-medium',
                     cr.status === 'applied' && 'bg-positive/10 text-positive',
                     cr.status === 'approved' && 'bg-blue-500/10 text-blue-400',
                     cr.status === 'pending_review' && 'bg-amber-500/10 text-amber-400',
                     cr.status === 'rejected' && 'bg-danger/10 text-danger'
                   )}>
-                    {cr.status}
+                    {CR_STATUS[cr.status] ?? cr.status}
                   </span>
                 </div>
                 <p className="mt-1 text-[10px] text-muted line-clamp-2">{cr.description}</p>
-                <div className="mt-1.5 flex items-center gap-2 text-[9.5px] text-faint">
-                  <span>Branch: <code className="font-mono text-ink/80">{cr.targetBranch}</code></span>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-faint">
+                  <span className="whitespace-nowrap">Branch: <code className="font-mono text-ink/80">{cr.targetBranch}</code></span>
                   <span>•</span>
-                  <span>Risk: <span className={cn(
+                  <span className="whitespace-nowrap">Risk: <span className={cn(
                     cr.riskAssessment === 'high' ? 'text-rose-400' : 'text-positive'
-                  )}>{cr.riskAssessment}</span></span>
+                  )}>{cr.riskAssessment === 'high' ? 'High' : 'Low'}</span></span>
                 </div>
 
                 {cr.status === 'pending_review' && (
                   <div className="mt-2.5 flex items-center gap-1.5 pt-1.5 border-t border-line/60">
                     <button
-                      onClick={() => handleReviewCr(cr.id, 'approved')}
-                      className="inline-flex items-center gap-1 rounded bg-positive/15 px-2 py-0.5 text-[10px] font-medium text-positive hover:bg-positive/25 transition-colors"
+                      onClick={() => void handleReviewCr(cr.id, 'approved')}
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-positive/15 px-2 py-0.5 text-[10px] font-medium text-positive hover:bg-positive/25 transition-colors"
                     >
                       <CheckCircle2 size={10} /> Approve
                     </button>
                     <button
-                      onClick={() => handleReviewCr(cr.id, 'rejected')}
-                      className="inline-flex items-center gap-1 rounded bg-danger/15 px-2 py-0.5 text-[10px] font-medium text-danger hover:bg-danger/25 transition-colors"
+                      onClick={() => void handleReviewCr(cr.id, 'rejected')}
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-danger/15 px-2 py-0.5 text-[10px] font-medium text-danger hover:bg-danger/25 transition-colors"
                     >
                       <XCircle size={10} /> Reject
                     </button>
@@ -279,10 +295,10 @@ export function RookWorkerPanel() {
                 {cr.status === 'approved' && (
                   <div className="mt-2.5 pt-1.5 border-t border-line/60">
                     <button
-                      onClick={() => handleApplyCr(cr.id)}
-                      className="inline-flex items-center gap-1 rounded bg-accent/20 px-2 py-0.5 text-[10px] font-medium text-accent hover:bg-accent/30 transition-colors"
+                      onClick={() => void handleApplyCr(cr.id)}
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-accent/20 px-2 py-0.5 text-[10px] font-medium text-accent hover:bg-accent/30 transition-colors"
                     >
-                      <Layers size={10} /> Apply to Workspace
+                      <Layers size={10} /> Apply to workspace
                     </button>
                   </div>
                 )}
@@ -292,41 +308,44 @@ export function RookWorkerPanel() {
         )}
       </section>
 
-      {/* 4. Verified Deliverables & Research */}
+      {/* Deliverables */}
       <section>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5">
-            <Package size={13} className="text-accent" />
-            <h4 className="text-[11px] font-semibold text-ink uppercase tracking-wider">Deliverables</h4>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <Package size={13} className="shrink-0 text-accent" />
+            <h4 className="truncate text-[11px] font-semibold uppercase tracking-wider text-ink">Deliverables</h4>
           </div>
-          <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[9.5px] text-muted">
+          <span className="shrink-0 whitespace-nowrap rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-muted">
             {deliverables.length} verified
           </span>
         </div>
 
         {deliverables.length === 0 ? (
           <div className="rounded-xl border border-dashed border-line p-3 text-center text-[10.5px] text-faint">
-            No sealed deliverables registered yet. Reports, patches, and artifacts will show here.
+            No deliverables yet
           </div>
         ) : (
           <div className="space-y-2">
             {deliverables.map((deliv) => (
               <div key={deliv.id} className="rounded-xl border border-line bg-surface/40 p-2.5 text-[10.5px]">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-ink">{deliv.title}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 flex-1 truncate text-ink" title={deliv.title}>{deliv.title}</span>
                   <button
                     onClick={() => copyContent(deliv.id, deliv.content)}
-                    className="flex items-center gap-1 text-[9.5px] text-faint hover:text-ink transition-colors"
+                    aria-label={`Copy the ${deliv.title} deliverable`}
+                    className="flex shrink-0 items-center gap-1 whitespace-nowrap text-[10px] text-faint hover:text-ink transition-colors"
                     title="Copy deliverable content"
                   >
                     {copiedId === deliv.id ? <Check size={11} className="text-positive" /> : <Copy size={11} />}
                     {copiedId === deliv.id ? 'Copied' : 'Copy'}
                   </button>
                 </div>
-                <span className="mt-0.5 inline-block text-[9.5px] text-accent uppercase font-mono">{deliv.type}</span>
-                <pre className="mt-1.5 max-h-24 overflow-y-auto scroll-thin rounded border border-line/50 bg-canvas/80 p-1.5 font-mono text-[9px] text-muted whitespace-pre-wrap">
+                <span className="mt-0.5 inline-block whitespace-nowrap text-[10px] uppercase text-accent">
+                  {DELIVERABLE_TYPE[deliv.type] ?? String(deliv.type).replace(/_/g, ' ')}
+                </span>
+                <pre className="mt-1.5 max-h-24 overflow-y-auto scroll-thin rounded border border-line/50 bg-canvas/80 p-1.5 font-mono text-[10px] text-muted whitespace-pre-wrap">
                   {deliv.content.slice(0, 300)}
-                  {deliv.content.length > 300 ? '...' : ''}
+                  {deliv.content.length > 300 ? '…' : ''}
                 </pre>
               </div>
             ))}
@@ -334,13 +353,13 @@ export function RookWorkerPanel() {
         )}
       </section>
 
-      {/* 5. VLA GUI Perception Sensor */}
-      <div className="rounded-xl border border-line/70 bg-canvas-deep/40 p-2.5 text-[10px] text-faint flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Monitor size={12} className="text-accent" />
-          <span>Screen Viewport: 1920 × 1080 · Natural Bézier Mouse</span>
+      {/* Screen control */}
+      <div className="flex items-center justify-between gap-2 rounded-xl border border-line/70 bg-canvas-deep/40 p-2.5 text-[10px] text-faint">
+        <div className="flex min-w-0 items-center gap-2">
+          <Monitor size={12} className="shrink-0 text-accent" />
+          <span className="truncate">Screen control · 1920 × 1080</span>
         </div>
-        <span className="text-[9px] bg-surface px-1.5 py-0.5 rounded border border-line">Secrets Shielded</span>
+        <span className="shrink-0 whitespace-nowrap rounded border border-line bg-surface px-1.5 py-0.5">Secrets protected</span>
       </div>
     </div>
   )

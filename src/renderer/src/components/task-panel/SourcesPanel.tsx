@@ -20,14 +20,17 @@ export function SourcesPanel({ task }: { task: Task }) {
       <div className="flex items-center gap-2 px-1">
         {/* Filled while the task holds at least one source; the outline is the
             detached state the empty list below describes. */}
-        <Icon name="folderOpen" size="sm" active={count > 0} className="text-accent" />
-        <div>
+        <Icon name="folderOpen" size="sm" active={count > 0} className="shrink-0 text-accent" />
+        <div className="min-w-0">
           <h3 className="text-[10px] font-semibold tracking-[0.11em] text-muted uppercase">Sources</h3>
-          <p className="mt-0.5 text-[10px] text-faint">{count} explicitly attached or granted</p>
+          <p className="mt-0.5 whitespace-nowrap text-[10px] text-faint">
+            {task.folders.length} folder{task.folders.length === 1 ? '' : 's'} · {attachments.length} file
+            {attachments.length === 1 ? '' : 's'}
+          </p>
         </div>
         <button
           onClick={() => void addFolder()}
-          className="ml-auto flex h-7 items-center gap-1 rounded-lg border border-line px-2 text-[10px] text-muted hover:bg-surface-2 hover:text-ink"
+          className="ml-auto flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-line px-2 text-[10px] text-muted hover:bg-surface-2 hover:text-ink"
         >
           <Icon name="add" size="xs" /> Add folder
         </button>
@@ -53,7 +56,7 @@ export function SourcesPanel({ task }: { task: Task }) {
                     <p className="truncate text-[10.5px] font-medium text-ink">{folderName(folder)}</p>
                     <p className="truncate font-mono text-[10px] text-faint" title={folder}>{folder}</p>
                   </div>
-                  <span className="shrink-0 text-[10px] text-faint">Workspace</span>
+                  <span className="shrink-0 whitespace-nowrap text-[10px] text-faint">Workspace</span>
                   <IconButton
                     onClick={() => void removeFolder(folder)}
                     aria-label={`Remove access to ${folderName(folder)}`}
@@ -71,16 +74,15 @@ export function SourcesPanel({ task }: { task: Task }) {
                     <p className="truncate text-[10.5px] font-medium text-ink">{file.name}</p>
                     <p className="truncate font-mono text-[10px] text-faint" title={file.path}>{file.path}</p>
                   </div>
-                  <span className="shrink-0 text-[10px] text-faint">{file.size ? formatBytes(file.size) : 'Attached'}</span>
+                  <span className="shrink-0 whitespace-nowrap text-[10px] text-faint">{file.size ? formatBytes(file.size) : 'Attached'}</span>
                 </div>
               ))}
               {!count ? (
                 <p className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-[10px] leading-relaxed text-faint">
-                  No sources yet. Add a folder or attach files in the composer.
+                  No sources attached
                 </p>
               ) : null}
             </div>
-            <p className="mt-1.5 px-1 text-[10px] leading-relaxed text-faint">Removing a folder revokes its grant; it never deletes the folder.</p>
           </motion.div>
         ) : null}
       </AnimatePresence>

@@ -14,9 +14,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../../components/ui'
-import { useLocalProfile } from '../../lib/localProfile'
 import { StatusLight } from '../../motion/StatusLight'
-import { cn, errorMessage, kindLabel, timeAgo } from '../../lib/utils'
+import { cn, errorMessage, kindLabel, plural, timeAgo } from '../../lib/utils'
 import { useApp } from '../../store'
 import type { Task, TaskStatus } from '@shared/types'
 import {
@@ -85,9 +84,7 @@ function Workboard() {
           <div className="flex h-10 w-10 items-center justify-center rounded-[var(--r-card)] border border-line bg-canvas text-faint">
             <ListChecks size={17} />
           </div>
-          <p className="mt-3 max-w-[300px] text-[12px] leading-relaxed text-muted">
-            Nothing is running yet. Ask for something in chat and it appears here.
-          </p>
+          <p className="mt-3 text-[12px] text-muted">Nothing running yet.</p>
         </div>
       ) : (
         <div className="scroll-thin max-h-[520px] overflow-y-auto">
@@ -120,16 +117,16 @@ function Workboard() {
                     >
                       {task.title}
                     </span>
-                    <span className="hidden shrink-0 rounded-md border border-line bg-canvas px-1.5 py-0.5 text-[10px] text-muted sm:inline">
+                    <span className="hidden shrink-0 whitespace-nowrap rounded-md border border-line bg-canvas px-1.5 py-0.5 text-[10px] text-muted sm:inline">
                       {task.mode === 'cowork' ? 'Cowork' : 'Chat'}
                     </span>
                     {task.artifactsCount > 0 ? (
-                      <span className="flex shrink-0 items-center gap-1 font-mono text-[10px] text-faint">
+                      <span className="flex shrink-0 items-center gap-1 whitespace-nowrap font-mono text-[10px] text-faint">
                         <FileText size={9} />
                         {task.artifactsCount}
                       </span>
                     ) : null}
-                    <span className="w-16 shrink-0 text-right font-mono text-[10px] text-faint">
+                    <span className="min-w-[96px] shrink-0 whitespace-nowrap text-right font-mono text-[10px] text-faint">
                       {timeAgo(task.updatedAt)}
                     </span>
                     <ChevronRight
@@ -219,7 +216,7 @@ function PlanCard({ tasks }: { tasks: Task[] }) {
           </ul>
           {task.plan.length > 6 ? (
             <p className="mt-2 font-mono text-[10px] text-faint">
-              +{task.plan.length - 6} more steps
+              +{plural(task.plan.length - 6, 'more step')}
             </p>
           ) : null}
           <button
@@ -246,7 +243,7 @@ function FilesCard({ artifacts }: { artifacts: ArtifactRow[] }) {
       </div>
 
       {artifacts.length === 0 ? (
-        <p className="mt-3 text-[10px] leading-relaxed text-faint">Files appear here.</p>
+        <p className="mt-3 text-[10px] text-faint">No files yet.</p>
       ) : (
         <div className="mt-2.5 space-y-1">
           {artifacts.slice(0, 5).map((artifact) => (
@@ -409,7 +406,7 @@ function ActivityCard({ rows }: { rows: ActivityRow[] }) {
         <span className="font-mono text-[10px] text-faint">{rows.length ? rows.length : null}</span>
       </div>
       {rows.length === 0 ? (
-        <p className="px-4 py-6 text-center text-[10px] text-faint">Nothing yet.</p>
+        <p className="px-4 py-6 text-center text-[10px] text-faint">No activity.</p>
       ) : (
         <div className="divide-y divide-line/60">
           {rows.map((row) => (
@@ -440,7 +437,6 @@ export function CompanySurface() {
   const refreshTasks = useApp((state) => state.refreshTasks)
   const openSurface = useApp((state) => state.openSurface)
   const openSettings = useApp((state) => state.openSettings)
-  const profile = useLocalProfile()
 
   const [details, setDetails] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
@@ -493,9 +489,6 @@ export function CompanySurface() {
             <h1 className="text-[22px] font-semibold leading-none tracking-[-0.01em] text-ink">
               Company
             </h1>
-            <p className="mt-2 max-w-[560px] text-[12px] leading-relaxed text-muted">
-              Everything {profile.name} is working on, and what it needs from you.
-            </p>
           </div>
           <div className="flex items-center gap-2">
             {!engine.ready ? (

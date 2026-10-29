@@ -8,7 +8,7 @@ import { ICON_SIZES, Icon, type IconName } from '../icons'
 import { TaskOrb } from '../../motion/TaskOrb'
 import { AnimatedCheck } from '../../motion/AnimatedCheck'
 import { ArtifactChip } from '../Artifacts'
-import { cn, statusLabel, timeAgo } from '../../lib/utils'
+import { cn, timeAgo } from '../../lib/utils'
 import { crewRunsForTask, mcpExposure } from '../../lib/taskOperations'
 import { CrewRunCard, useCrewTicker } from './CrewRuns'
 import type { TaskCapabilities } from './useTaskCapabilities'
@@ -51,9 +51,9 @@ export function NowPanel({
   const planDone = task.plan.filter((item) => item.status === 'done').length
   const stepDone = task.steps.filter((step) => step.status === 'ok' || step.status === 'error').length
   const progress = task.plan.length
-    ? { complete: planDone, total: task.plan.length, label: 'plan items complete' }
+    ? { complete: planDone, total: task.plan.length, label: 'plan item' }
     : task.steps.length
-      ? { complete: stepDone, total: task.steps.length, label: 'steps finished' }
+      ? { complete: stepDone, total: task.steps.length, label: 'step' }
       : null
   const pendingApproval = approval?.taskId === task.id ? approval : null
   const capabilitiesUnavailable = Boolean(
@@ -63,21 +63,21 @@ export function NowPanel({
 
   const stateHeadline =
     task.status === 'running'
-      ? current?.title ?? (live ? `Coordinating ${live} Crew run${live === 1 ? '' : 's'}` : `${agentName()} is working`)
+      ? current?.title ?? (live ? `Coordinating ${live} team run${live === 1 ? '' : 's'}` : `${agentName()} is working`)
       : task.status === 'waiting'
         ? pendingApproval?.title ?? 'Waiting for your input'
         : task.status === 'done'
-          ? 'This task is complete'
+          ? 'Task complete'
           : task.status === 'error'
-            ? 'This task needs attention'
+            ? 'Task needs attention'
             : task.status === 'paused'
-              ? 'This task is paused'
+              ? 'Task paused'
               : 'Ready for your instructions'
 
   const metrics: { label: string; value: string | number; detail: string; icon: IconName; tab: 'crew' | 'tools' | 'files' }[] = [
-    { label: 'Crew', value: `${live}/${runs.length}`, detail: 'live / total', icon: 'crew', tab: 'crew' },
+    { label: 'Team', value: `${live}/${runs.length}`, detail: `${live} running`, icon: 'crew', tab: 'crew' },
     { label: 'Skills', value: capabilities.loading ? '…' : capabilitiesUnavailable ? '—' : capabilities.skills.length, detail: 'installed', icon: 'spark', tab: 'tools' },
-    { label: 'MCP', value: capabilities.loading ? '…' : capabilitiesUnavailable ? '—' : `${ready}/${capabilities.configs.length}`, detail: `${exposedTools} tools exposed`, icon: 'connector', tab: 'tools' },
+    { label: 'MCP', value: capabilities.loading ? '…' : capabilitiesUnavailable ? '—' : `${ready}/${capabilities.configs.length}`, detail: `${exposedTools} tools available`, icon: 'connector', tab: 'tools' },
     { label: 'Files', value: task.artifacts.length, detail: 'created', icon: 'output', tab: 'files' }
   ]
 
@@ -97,10 +97,11 @@ export function NowPanel({
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <p className="text-[10px] font-semibold tracking-[0.12em] text-faint uppercase">{statusLabel(task.status)}</p>
-              <span className="ml-auto shrink-0 text-[10px] text-faint">Updated {timeAgo(task.updatedAt)}</span>
+              <h2 className="min-w-0 flex-1 truncate text-[12.5px] leading-snug font-medium text-ink" title={stateHeadline}>
+                {stateHeadline}
+              </h2>
+              <span className="shrink-0 whitespace-nowrap text-[10px] text-faint">Updated {timeAgo(task.updatedAt)}</span>
             </div>
-            <h2 className="mt-1 text-[12.5px] leading-snug font-medium text-ink">{stateHeadline}</h2>
             {current?.detail && task.status === 'running' ? (
               <p className="mt-0.5 truncate font-mono text-[10px] text-faint" title={current.detail}>
                 {current.detail}
@@ -111,8 +112,10 @@ export function NowPanel({
         {progress ? (
           <div className="mt-3">
             <div className="flex items-center justify-between text-[10px] text-faint">
-              <span>{progress.complete}/{progress.total} {progress.label}</span>
-              <span>{Math.round((progress.complete / progress.total) * 100)}%</span>
+              <span>
+                {progress.complete} of {progress.total} {progress.label}
+                {progress.total === 1 ? '' : 's'} done
+              </span>
             </div>
             <div className="mt-1 h-1 overflow-hidden rounded-full bg-line/70">
               <motion.div
@@ -145,8 +148,8 @@ export function NowPanel({
       {capabilities.error ? (
         <div className="mt-2 flex items-center gap-2 rounded-lg border border-danger/20 bg-danger/5 px-2.5 py-2 text-[10px] text-danger">
           <Icon name="alert" size="xs" />
-          <span className="min-w-0 flex-1 truncate">Capability data could not be refreshed.</span>
-          <button onClick={() => void capabilities.refresh()} className="shrink-0 underline">Retry</button>
+          <span className="min-w-0 flex-1 truncate">Skills and MCP could not be read.</span>
+          <button onClick={() => void capabilities.refresh()} className="shrink-0 whitespace-nowrap underline">Retry</button>
         </div>
       ) : null}
 
@@ -165,10 +168,7 @@ export function NowPanel({
       <section className="mt-4">
         <div className="mb-2 flex items-center gap-2 px-1">
           <Icon name="crew" size="sm" active={live > 0} className="text-accent" />
-          <div>
-            <h3 className="text-[10px] font-semibold tracking-[0.11em] text-muted uppercase">Team runs</h3>
-            <p className="mt-0.5 text-[10px] text-faint">Actual supervised runs for this task</p>
-          </div>
+          <h3 className="text-[10px] font-semibold tracking-[0.11em] text-muted uppercase">Team runs</h3>
           {runs.length ? <button onClick={() => onNavigate('crew')} className="ml-auto text-[10px] text-faint hover:text-ink">View all</button> : null}
         </div>
         {runs.length ? (
@@ -178,7 +178,6 @@ export function NowPanel({
         ) : (
           <div className="rounded-xl border border-dashed border-line px-4 py-5 text-center">
             <p className="text-[10.5px] font-medium text-ink">{agentName()} is handling this task directly</p>
-            <p className="mx-auto mt-1 max-w-[260px] text-[10px] leading-relaxed text-faint">Delegated runs appear automatically when {agentName()} uses Crew for parallel or specialized work.</p>
           </div>
         )}
       </section>

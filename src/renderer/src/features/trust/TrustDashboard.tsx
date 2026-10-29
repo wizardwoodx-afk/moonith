@@ -15,7 +15,7 @@ import {
   Award
 } from 'lucide-react'
 import { Button } from '../../components/ui'
-import { cn } from '../../lib/utils'
+import { cn, plural } from '../../lib/utils'
 
 export function TrustDashboard() {
   const [killSwitchActive, setKillSwitchActive] = useState(false)
@@ -23,7 +23,7 @@ export function TrustDashboard() {
 
   const autonomyLevels = [
     {
-      agent: 'Daedalus Coder',
+      agent: 'Coding agent',
       level: 'Level 2: Semi-Autonomous',
       score: 88,
       proofCount: 8,
@@ -31,7 +31,7 @@ export function TrustDashboard() {
       badgeColor: 'text-sky-400 bg-sky-500/10 border-sky-500/20'
     },
     {
-      agent: 'Kubernis Watcher',
+      agent: 'Monitoring agent',
       level: 'Level 3: Autonomous',
       score: 96,
       proofCount: 22,
@@ -39,7 +39,7 @@ export function TrustDashboard() {
       badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
     },
     {
-      agent: 'Theatron Creative',
+      agent: 'Design agent',
       level: 'Level 1: Supervised',
       score: 82,
       proofCount: 2,
@@ -50,22 +50,22 @@ export function TrustDashboard() {
 
   const recentApprovals = [
     {
-      tool: 'opendesign_generate_prototype',
-      agent: 'Theatron Creative',
+      tool: 'Prototype generator',
+      agent: 'Design agent',
       tier: 'safe',
       status: 'auto-approved',
       timestamp: '2m ago'
     },
     {
-      tool: 'apply_code_patch',
-      agent: 'Daedalus Coder',
+      tool: 'Code patch',
+      agent: 'Coding agent',
       tier: 'warn',
       status: 'approved by Owner',
       timestamp: '14m ago'
     },
     {
-      tool: 'run_command (rm -rf /)',
-      agent: 'Daedalus Coder',
+      tool: 'Delete command',
+      agent: 'Coding agent',
       tier: 'danger',
       status: 'blocked outright',
       timestamp: '1h ago'
@@ -79,12 +79,8 @@ export function TrustDashboard() {
         <div>
           <h2 className="text-base font-semibold tracking-tight text-ink flex items-center gap-2">
             <ShieldCheck size={18} className="text-emerald-400" />
-            Trust & Safety, Autonomy, and Egress Ledger
+            Trust &amp; Autonomy
           </h2>
-          <p className="mt-1 text-xs text-muted leading-relaxed max-w-xl">
-            Hardware-grade OS-level sandboxing, tiered approval gates, per-agent quarantine,
-            cryptographic flight-recorder replay, and earned autonomy profiles.
-          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -116,10 +112,8 @@ export function TrustDashboard() {
           <div className="flex items-center gap-3">
             <ShieldAlert size={20} className="shrink-0 animate-pulse text-danger" />
             <div>
-              <p className="font-semibold text-danger">EMERGENCY KILL SWITCH ENGAGED</p>
-              <p className="text-muted mt-0.5">
-                All background agent turns and tool dispatches are paused. No external or local actions can execute.
-              </p>
+              <p className="font-semibold text-danger">Kill switch engaged</p>
+              <p className="text-muted mt-0.5">All agent work and tool runs are paused.</p>
             </div>
           </div>
           <Button
@@ -139,7 +133,7 @@ export function TrustDashboard() {
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-faint flex items-center gap-1.5">
               <Award size={13} className="text-amber-400" />
-              Earned Progressive Autonomy
+              Autonomy
             </h3>
             <span className="text-[11px] text-muted">Reliability Gate: &ge;90%</span>
           </div>
@@ -158,7 +152,7 @@ export function TrustDashboard() {
                     </span>
                   </div>
                   <div className="mt-1 flex items-center gap-3 text-[11px] text-faint">
-                    <span>{item.proofCount} Verified Proofs</span>
+                    <span>{plural(item.proofCount, 'verified proof')}</span>
                     <span>·</span>
                     <span>Override Rate: {item.overrideRate}</span>
                   </div>
@@ -220,22 +214,17 @@ export function TrustDashboard() {
         </div>
       </div>
 
-      {/* Local-First Egress & Sandbox Ledger */}
+      {/* Network */}
       <div className="rounded-xl border border-line bg-surface/30 p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-faint flex items-center gap-1.5">
             <Lock size={13} className="text-emerald-400" />
-            Provable Egress Ledger & Sandboxing
+            Network
           </h3>
           <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 border border-emerald-500/20">
-            0 Localhost Ports Open
+            No open ports
           </span>
         </div>
-        <p className="text-xs text-muted leading-relaxed">
-          SelfImpulse operates strictly in-process with 0 listening TCP ports. Every outbound request is
-          hashed and logged in the immutable Egress Ledger. API keys and passwords never enter LLM prompt contexts
-          and are managed exclusively through AES-256-GCM opaque handles.
-        </p>
       </div>
     </div>
   )

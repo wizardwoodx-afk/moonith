@@ -515,18 +515,24 @@ export function Popover({
 export function FieldGroup({
   label,
   hint,
+  htmlFor,
   children,
   className
 }: {
   label: ReactNode
   hint?: ReactNode
+  /** When the field has an id, this makes the visible label its real accessible name. */
+  htmlFor?: string
   children: ReactNode
   className?: string
 }) {
+  const Label = htmlFor ? 'label' : 'span'
   return (
     <div className={cn('space-y-2', className)}>
       <div className="flex items-baseline justify-between gap-3">
-        <label className="text-[12px] font-medium text-ink">{label}</label>
+        <Label {...(htmlFor ? { htmlFor } : {})} className="text-[12px] font-medium text-ink">
+          {label}
+        </Label>
         {hint ? <span className="text-[11px] text-faint">{hint}</span> : null}
       </div>
       {children}

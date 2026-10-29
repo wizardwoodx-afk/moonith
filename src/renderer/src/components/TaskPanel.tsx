@@ -7,7 +7,8 @@ import {
   FolderOpen,
   PanelRightClose,
   RefreshCw,
-  Wrench
+  Wrench,
+  Sun
 } from 'lucide-react'
 import type { Task } from '@shared/types'
 import { useApp } from '../store'
@@ -19,16 +20,18 @@ import { NowPanel } from './task-panel/NowPanel'
 import { SourcesPanel } from './task-panel/SourcesPanel'
 import { ToolsPanel } from './task-panel/ToolsPanel'
 import { RookWorkerPanel } from './task-panel/RookWorkerPanel'
+import { PromeyDuetPanel } from './task-panel/PromeyDuetPanel'
 import { useTaskCapabilities } from './task-panel/useTaskCapabilities'
 
-type PanelTab = 'now' | 'crew' | 'tools' | 'files' | 'rook'
+type PanelTab = 'now' | 'crew' | 'tools' | 'files' | 'rook' | 'promey'
 
 const TABS = [
   { id: 'now', label: 'Now', icon: Activity },
   { id: 'crew', label: 'Team', icon: Bot },
   { id: 'tools', label: 'Tools', icon: Wrench },
   { id: 'files', label: 'Files', icon: FolderOpen },
-  { id: 'rook', label: 'Worker', icon: Cpu }
+  { id: 'rook', label: 'Worker', icon: Cpu },
+  { id: 'promey', label: 'Promey', icon: Sun }
 ] as const
 
 const FOOTER: Record<PanelTab, string | null> = {
@@ -36,7 +39,8 @@ const FOOTER: Record<PanelTab, string | null> = {
   crew: 'Runs stored on this device',
   tools: 'Installed skills and ready tool servers',
   files: 'Created files stay in this task',
-  rook: 'Background jobs and approvals'
+  rook: 'Background jobs and approvals',
+  promey: 'Proactive briefing, triage, and human-in-the-loop approvals'
 }
 
 export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }) {
@@ -83,9 +87,8 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
         </div>
       </div>
 
-      {/* Five tabs in four columns put 'Worker' on a second row, and a count in
-          the slot wrapped 'Tools 4' mid-label. One row, no wrapping: the count
-          rides on the accessible name instead. */}
+      {/* A count inside the tab slot wrapped 'Tools 4' mid-label, so the number
+          rides on the accessible name and the label stays on one line. */}
       <div className="grid shrink-0 grid-cols-5 border-b border-line px-2" role="tablist" aria-label="Task workspace sections">
         {TABS.map((item) => {
           const Icon = item.icon
@@ -131,6 +134,7 @@ export function TaskPanel({ task, onClose }: { task: Task; onClose: () => void }
             </div>
           ) : null}
           {tab === 'rook' ? <RookWorkerPanel /> : null}
+          {tab === 'promey' ? <PromeyDuetPanel /> : null}
         </motion.div>
       </AnimatePresence>
 

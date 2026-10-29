@@ -116,6 +116,7 @@ export function CaptainComposer({
     (provider) => provider.enabled && provider.models.length > 0
   )
   const permission = PERMISSION_CHOICES.find((item) => item.value === permissionMode) ?? PERMISSION_CHOICES[0]
+  const fullAccess = PERMISSION_CHOICES.find((item) => item.value === 'skip') ?? PERMISSION_CHOICES[3]
   const PermissionIcon = permissionIcon(permissionMode)
   const canSend = Boolean(draft.trim() || attachments.length) && !busy && !submitting
 
@@ -235,17 +236,17 @@ export function CaptainComposer({
       id: 'captain-command-rook-worker',
       kind: '/' as const,
       label: 'Run an autonomous job',
-      detail: 'Deploy dual-engine agent: GUI Vision Grounding + Software ADE + 360K+ skills',
-      keywords: 'rook worker agent yolo autonomous build',
+      detail: 'Long-running work that keeps going without step-by-step approvals',
+      keywords: 'autonomous job agent build',
       icon: <Cpu size={13} />,
       insert: 'Autonomous job: '
     },
     {
       id: 'captain-command-rook-yolo',
       kind: '/' as const,
-      label: 'Permissions: YOLO Mode',
-      detail: 'Unrestricted autonomous execution and file delivery without manual gating',
-      keywords: 'yolo autonomous permission rook',
+      label: `Permissions: ${fullAccess.label}`,
+      detail: fullAccess.blurb,
+      keywords: 'permission approval mode',
       icon: <Zap size={13} />,
       run: () => {
         void window.knight.rookSetPermission('yolo')
@@ -255,9 +256,9 @@ export function CaptainComposer({
     {
       id: 'captain-command-rook-research',
       kind: '/' as const,
-      label: 'Synthesize research',
-      detail: 'Formulate multi-source research report with citations and executive deliverable',
-      keywords: 'research report sources synthesis deliverable',
+      label: 'Research a topic',
+      detail: 'Gather sources and write a brief with links',
+      keywords: 'research report sources brief',
       icon: <Sparkles size={13} />,
       insert: 'Research: in-depth report on '
     },
@@ -265,10 +266,37 @@ export function CaptainComposer({
       id: 'captain-command-rook-cr',
       kind: '/' as const,
       label: 'File a change request',
-      detail: 'Execute modifications and package into reviewable Change Request',
+      detail: 'Make the changes and leave them ready for your review',
       keywords: 'cr git pull request changerequest gitops',
       icon: <Command size={13} />,
       insert: 'Change request for '
+    },
+    {
+      id: 'captain-command-promey-brief',
+      kind: '/' as const,
+      label: 'Daily brief',
+      detail: 'Generate your proactive morning brief with triage items & approvals',
+      keywords: 'brief morning daily summary executive promey',
+      icon: <Sparkles size={13} />,
+      insert: 'Generate morning brief'
+    },
+    {
+      id: 'captain-command-promey-triage',
+      kind: '/' as const,
+      label: 'Triage inbox & stream',
+      detail: 'Sort priority tasks and surface items requiring your decision',
+      keywords: 'triage inbox stream priority alerts promey',
+      icon: <Command size={13} />,
+      insert: 'Triage inbox and prioritize tasks'
+    },
+    {
+      id: 'captain-command-promey-duet',
+      kind: '/' as const,
+      label: 'Duet mode',
+      detail: 'Proactive executive assistant co-steering and smart approvals',
+      keywords: 'duet proactive copilot executive promey',
+      icon: <Command size={13} />,
+      insert: 'Start duet session with Promey'
     },
     ...PERMISSION_CHOICES.map((choice) => ({
       id: `captain-command-permission-${choice.value}`,
@@ -315,7 +343,7 @@ export function CaptainComposer({
           {commands.menu}
           <textarea
           ref={textareaRef}
-          aria-label={`Message ${name}`}
+          aria-label={`Message ${agentName()}`}
           value={draft}
           onChange={commands.onChange}
           onSelect={commands.onSelect}
@@ -458,7 +486,7 @@ export function CaptainComposer({
                   )
                 })}
                 <p className="mt-1 border-t border-line px-2 pt-2 pb-1 text-[10px] leading-relaxed text-faint">
-                  Table's two-key gates ignore this setting.
+                  Table approvals ignore this setting.
                 </p>
               </div>
             )}

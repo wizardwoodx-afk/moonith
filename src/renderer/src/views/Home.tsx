@@ -1,17 +1,10 @@
 import { useState } from 'react'
-import {
-  ArrowUpRight,
-  CheckCircle2,
-  FileText,
-  Presentation,
-  ShieldCheck,
-  Sparkles,
-  Table2
-} from 'lucide-react'
+import { FileText, Presentation, Table2 } from 'lucide-react'
+import { Icon } from '../components/icons'
 import { BrandMark } from '../components/BrandMarks'
 import type { AttachmentRef, PermissionMode, TaskMode } from '@shared/types'
 import { useApp } from '../store'
-import { cn, statusLabel, timeAgo } from '../lib/utils'
+import { cn, plural, statusLabel, timeAgo } from '../lib/utils'
 import { Composer } from '../components/Composer'
 import { Button } from '../components/ui'
 import { TaskDeck } from '../motion/TaskDeck'
@@ -133,7 +126,7 @@ export function Home() {
         {noModel ? (
           <div className="mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-accent/25 bg-accent-soft/40 px-4 py-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface text-accent">
-              <Sparkles size={15} />
+              <Icon name="spark" size="md" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[12.5px] font-medium text-ink">Connect a model to get started</p>
@@ -186,8 +179,9 @@ export function Home() {
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-soft/80 text-accent-ink">
                     <Icon size={14} />
                   </span>
-                  <ArrowUpRight
-                    size={13}
+                  <Icon
+                    name="arrowUpRight"
+                    size="md"
                     className="text-faint opacity-0 transition-opacity group-hover:opacity-100"
                   />
                 </div>
@@ -206,7 +200,7 @@ export function Home() {
               <h2 className="text-[11px] font-semibold tracking-[0.13em] text-faint uppercase">
                 Pick up where you left off
               </h2>
-              <span className="text-[10.5px] text-faint">{tasks.length} tasks</span>
+              <span className="whitespace-nowrap text-[10.5px] text-faint">{plural(tasks.length, 'task')}</span>
             </div>
             <TaskDeck tasks={recent} />
           </div>
@@ -214,7 +208,7 @@ export function Home() {
 
         <div className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-line/70 pt-4 text-[10.5px] text-faint">
           <span className="flex items-center gap-1.5">
-            <ShieldCheck size={12} />
+            <Icon name="shield" size="xs" />
             Files stay local. Keys are encrypted on this device.
           </span>
           <span className="flex items-center gap-1.5">

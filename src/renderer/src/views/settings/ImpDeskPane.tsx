@@ -66,7 +66,8 @@ function PaneLink({ pane, label }: { pane: SettingsPaneId; label: string }) {
 
 interface ConnectionTile {
   pane: SettingsPaneId
-  label: string
+  labelOne: string
+  labelMany: string
   line: string
   count: number
   icon: typeof Cpu
@@ -111,21 +112,24 @@ export function ImpDeskPane({ settings }: { settings: PublicSettings }) {
   const connections: ConnectionTile[] = [
     {
       pane: 'providers',
-      label: 'Models',
+      labelOne: 'Model',
+      labelMany: 'Models',
       line: 'Model endpoints',
       count: settings.providers.length,
       icon: Cpu
     },
     {
       pane: 'mcp',
-      label: 'Tool servers',
+      labelOne: 'Tool server',
+      labelMany: 'Tool servers',
       line: 'MCP tools',
       count: settings.mcpServers.length,
       icon: Wrench
     },
     {
       pane: 'channels',
-      label: 'Channels',
+      labelOne: 'Channel',
+      labelMany: 'Channels',
       line: 'Remote reach',
       count: settings.channels.length,
       icon: Radio
@@ -301,7 +305,9 @@ export function ImpDeskPane({ settings }: { settings: PublicSettings }) {
                     <span className="font-data text-[20px] leading-none font-semibold text-ink">
                       {tile.count}
                     </span>
-                    <span className="text-[11.5px] text-muted">{tile.label}</span>
+                    <span className="whitespace-nowrap text-[11.5px] text-muted">
+                      {tile.count === 1 ? tile.labelOne : tile.labelMany}
+                    </span>
                   </span>
                   <span className="text-[10.5px] leading-[1.5] text-faint">{tile.line}</span>
                 </button>

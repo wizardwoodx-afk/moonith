@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Sparkles, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { Button } from '../../components/ui'
 import { BrandGlyph } from '../../components/BrandMarks'
 import { hasNamedAgent, saveLocalProfile, useLocalProfile } from '../../lib/localProfile'
@@ -67,28 +67,20 @@ export function NameYourAgent() {
         </span>
 
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.14em] text-faint uppercase">
-            <Sparkles size={9} />
-            Before we start
-          </p>
-          <h2 className="mt-1.5 text-[14px] leading-snug font-semibold text-ink">
-            It answers to whatever you call it.
-          </h2>
-          <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
-            This is your side of yourself in SelfImpulse — the one that reads the files, does the work,
-            and replies in your voice. Name it, and it stops being a feature in an app.
-          </p>
+          <label
+            className="block text-[12.5px] font-semibold text-ink"
+            htmlFor="name-your-agent"
+          >
+            Name your agent
+          </label>
 
           <form
             onSubmit={(event) => {
               event.preventDefault()
               void commit()
             }}
-            className="mt-3.5 flex items-center gap-2"
+            className="mt-3 flex items-center gap-2"
           >
-            <label className="sr-only" htmlFor="name-your-agent">
-              Name your agent
-            </label>
             <input
               id="name-your-agent"
               className="field h-9 min-w-0 flex-1"

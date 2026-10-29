@@ -101,8 +101,8 @@ export function TaskChanges({ taskId, running }: { taskId: string; running: bool
             <span className="min-w-0 flex-1 truncate font-mono text-ink/80" title={entry.path}>
               {folderName(entry.path)}
             </span>
-            <span className="shrink-0 text-faint">
-              {entry.skipped ? entry.state === 'directory' ? 'not recoverable' : 'no undo' : 'undoable'}
+            <span className="shrink-0 whitespace-nowrap text-faint">
+              {entry.skipped ? (entry.state === 'directory' ? 'Not recoverable' : 'No undo') : 'Undoable'}
             </span>
           </li>
         ))}

@@ -8,6 +8,7 @@ import {
   Plus,
   Search,
   Settings,
+  Sun,
   X
 } from 'lucide-react'
 import { BrandGlyph, BrandWordmark } from '../components/BrandMarks'
@@ -78,6 +79,7 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
   const openSurface = useApp((state) => state.openSurface)
   const openTask = useApp((state) => state.openTask)
   const openSchedules = useApp((state) => state.openSchedules)
+  const openPromey = useApp((state) => state.openPromey)
   const openSettings = useApp((state) => state.openSettings)
   const profile = useLocalProfile()
   const searchRef = useRef<HTMLInputElement>(null)
@@ -169,6 +171,13 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
               collapsed
               onClick={openSchedules}
             />
+            <RailNavRow
+              icon={Sun}
+              label="Promey"
+              active={view.kind === 'promey'}
+              collapsed
+              onClick={openPromey}
+            />
           </nav>
 
           {tasks.length ? (
@@ -254,6 +263,13 @@ export function AppRail({ collapsed = false }: { collapsed?: boolean }) {
               active={view.kind === 'schedules'}
               collapsed={false}
               onClick={openSchedules}
+            />
+            <RailNavRow
+              icon={Sun}
+              label="Promey"
+              active={view.kind === 'promey'}
+              collapsed={false}
+              onClick={openPromey}
             />
           </nav>
 

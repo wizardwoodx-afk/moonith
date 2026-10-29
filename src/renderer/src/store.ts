@@ -26,6 +26,7 @@ export type View =
   | { kind: 'task'; taskId: string }
   | { kind: 'settings'; tab: SettingsTab }
   | { kind: 'schedules' }
+  | { kind: 'promey' }
 
 export interface StartTaskRequest {
   text: string
@@ -54,6 +55,7 @@ interface AppState {
   openSurface: (surface: Surface) => void
   openTask: (id: string) => Promise<void>
   openSchedules: () => void
+  openPromey: () => void
   openSettings: (tab?: SettingsTab) => void
   refreshTasks: () => Promise<void>
   refreshSettings: () => Promise<PublicSettings | null>
@@ -177,6 +179,8 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   openSchedules: () => set({ view: { kind: 'schedules' }, currentTask: null }),
+
+  openPromey: () => set({ view: { kind: 'promey' }, currentTask: null }),
 
   openSettings: (tab = 'general') => set({ view: { kind: 'settings', tab }, currentTask: null }),
 

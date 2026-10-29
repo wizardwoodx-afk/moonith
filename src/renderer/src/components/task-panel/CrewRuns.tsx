@@ -68,8 +68,8 @@ export function CrewRunCard({
       : run.status === 'done'
         ? `${progress.completed} step${progress.completed === 1 ? '' : 's'} finished`
         : run.status === 'error'
-          ? 'Run needs attention'
-          : 'Stopped with the parent task'
+          ? 'Run failed'
+          : 'Run stopped'
 
   return (
     <motion.article
@@ -141,22 +141,22 @@ export function CrewRunCard({
           >
             <div className="px-3 pt-2.5 pb-3">
               <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                <span className="rounded-md border border-line bg-canvas/70 px-1.5 py-0.5 font-mono text-[10px] text-faint">
+                <span className="rounded-md border border-line bg-canvas/70 px-1.5 py-0.5 font-mono text-[10px] whitespace-nowrap text-faint">
                   {agentPath}
                 </span>
                 {run.isolation ? (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-positive/20 bg-positive/5 px-1.5 py-0.5 text-[10px] text-positive">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-positive/20 bg-positive/5 px-1.5 py-0.5 text-[10px] whitespace-nowrap text-positive">
                     {/* Filled: the private workspace is live for this run. */}
                     <Icon name="shield" size="xs" active /> Private workspace · scoped browser
                   </span>
                 ) : null}
                 {(run.batchSize ?? 1) > 1 ? (
-                  <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent-ink">
+                  <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-accent-ink">
                     Team of {run.batchSize}
                   </span>
                 ) : null}
                 {run.usage && run.usage.total > 0 ? (
-                  <span className="rounded-md border border-line px-1.5 py-0.5 font-mono text-[10px] text-faint">
+                  <span className="rounded-md border border-line px-1.5 py-0.5 font-mono text-[10px] whitespace-nowrap text-faint">
                     {run.usage.total.toLocaleString()} tokens
                   </span>
                 ) : null}
@@ -201,7 +201,7 @@ export function CrewRunCard({
 
               {recentEvents.length ? (
                 <div className="mt-3 border-t border-line/70 pt-2">
-                  <p className="text-[10px] font-semibold tracking-[0.1em] text-faint uppercase">Forwarded activity</p>
+                  <p className="text-[10px] font-semibold tracking-[0.1em] text-faint uppercase">Latest activity</p>
                   <ol className="mt-1.5 space-y-1">
                     {recentEvents.map((event) => (
                       <li key={event.id} className="flex items-center gap-1.5 text-[10px] text-faint">
@@ -219,13 +219,23 @@ export function CrewRunCard({
                   <p className="mt-1 text-[10.5px] leading-[1.65] whitespace-pre-wrap text-muted">{run.summary}</p>
                 </div>
               ) : null}
-              {run.error ? <p className="mt-2.5 text-[10px] leading-relaxed text-danger/90">{run.error}</p> : null}
+              {run.error ? (
+                <p className="mt-2.5 line-clamp-2 text-[10px] leading-relaxed text-danger/90" title={run.error}>
+                  {run.error}
+                </p>
+              ) : null}
             </div>
           </motion.div>
         ) : null}
       </AnimatePresence>
     </motion.article>
   )
+}
+
+const EMPTY_FILTER_LABEL: Record<CrewFilter, string> = {
+  all: 'No team runs for this task',
+  running: 'Nothing running now',
+  finished: 'No finished runs'
 }
 
 export function CrewPanel({ taskId }: { taskId: string }) {
@@ -243,11 +253,11 @@ export function CrewPanel({ taskId }: { taskId: string }) {
         <div className="flex items-center gap-2">
           <div>
             <p className="text-[11.5px] font-medium text-ink">Team runs</p>
-            <p className="mt-0.5 text-[10px] text-faint">{live} running · {runs.length} recorded</p>
+            <p className="mt-0.5 whitespace-nowrap text-[10px] text-faint">{live} running · {runs.length} total</p>
           </div>
           <button
             onClick={() => openSettings('sub-agents')}
-            className="ml-auto flex h-7 items-center gap-1.5 rounded-lg border border-line px-2 text-[10px] text-muted hover:bg-surface-2 hover:text-ink"
+            className="ml-auto flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-line px-2 text-[10px] text-muted hover:bg-surface-2 hover:text-ink"
           >
             <Icon name="settingsFine" size="xs" /> Full history
           </button>
@@ -273,16 +283,13 @@ export function CrewPanel({ taskId }: { taskId: string }) {
       {runs.length === 0 ? (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-7 text-center">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface text-faint"><Icon name="crew" size="xl" /></div>
-          <p className="mt-3 text-[12px] font-medium text-ink">Nothing delegated to the team yet</p>
-          <p className="mt-1 max-w-[240px] text-[10.5px] leading-relaxed text-faint">
-            When {agentName()} delegates part of this task, the run, model, tools, elapsed time, and report appear here.
-          </p>
+          <p className="mt-3 text-[12px] font-medium text-ink">No team runs yet</p>
         </div>
       ) : (
         <div className="scroll-thin min-h-0 flex-1 space-y-2 overflow-y-auto px-2.5 pb-3">
           {visible.length ? visible.map((run, index) => <CrewRunCard key={run.id} run={run} now={now} index={index} />) : (
             <p className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-[10.5px] text-faint">
-              No {filter} team runs for this task.
+              {EMPTY_FILTER_LABEL[filter]}
             </p>
           )}
         </div>
